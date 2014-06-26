@@ -1,0 +1,4 @@
+#!/bin/sh
+AISLINN_ROOT=`dirname $0`/..
+gcc -I${AISLINN_ROOT}/include -I${AISLINN_ROOT}/valgrind/include $@
+

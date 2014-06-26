@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python `dirname $0`/../src/aislinn/aislinn.py $@
