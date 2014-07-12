@@ -70,6 +70,8 @@ class Generator:
         self.vg_states = base.resource.ResourceManager("vg_state")
         self.vg_buffers = base.resource.ResourceManager("vg_buffer")
 
+        self.vg_state_cache = {}
+
         self.send_protocol = aislinn_args.send_protocol
         self.send_protocol_eager_threshold = \
                 aislinn_args.send_protocol_eager_threshold
@@ -135,6 +137,7 @@ class Generator:
             # Check there is no memory leak
             assert self.vg_states.resource_count == 0
             assert self.vg_buffers.resource_count == 0
+            assert len(self.vg_state_cache) == 0
         finally:
             self.controller.kill()
         return True
@@ -143,6 +146,8 @@ class Generator:
         if self.vg_states.not_used_resources:
             vg_states = self.vg_states.pickup_resources_to_clean()
             for vg_state in vg_states:
+                if vg_state.hash:
+                    del self.vg_state_cache[vg_state.hash]
                 self.controller.free_state(vg_state.id)
 
         if self.vg_buffers.not_used_resources:
@@ -185,6 +190,7 @@ class Generator:
         return False
 
     def fork_standard_sends(self, node, gstate):
+        new_state_created = False
         for state in gstate.states:
             if state.status == State.StatusWait or \
                     state.status == State.StatusTest:
@@ -227,11 +233,14 @@ class Generator:
                         new_state.set_request_as_synchronous(r)
                     new_node = self.add_node(node, new_gstate)
                     node.add_arc(Arc(new_node, ()))
-                return True
+                    new_state_created = True
+                if new_state_created:
+                    return True
         return False
 
     def expand_node(self, node, gstate):
-        logging.debug("Expanding node %s", node)
+        logging.debug("Expanding node %s", node.uid)
+
         if self.fast_expand_node(node, gstate):
             # Do not dispose state because we have reused gstate
             return
@@ -306,11 +315,16 @@ class Generator:
     def save_state(self, make_hash):
         if make_hash:
             hash = self.controller.hash_state()
+            vg_state = self.vg_state_cache.get(hash)
+            if vg_state:
+                vg_state.inc_ref()
+                return vg_state
         else:
             hash = None
 
         vg_state = self.vg_states.new(self.controller.save_state())
         vg_state.hash = hash
+        self.vg_state_cache[hash] = vg_state
         return vg_state
 
     def make_error_message_from_report(self, parts):
@@ -457,9 +471,7 @@ class Generator:
 
         uids = [ state.vg_state.id if state.vg_state is not None else "F"
                  for state in gstate.states ]
-        uids += [ state.vg_state.hash[:4]
-                  if state.vg_state is not None and state.vg_state.hash else "-"
-                  for state in gstate.states ]
+        #uids += [ [ m.vg_buffer.id for m in s.messages ] for s in gstate.states ]
 
         node = Node(str(uids), hash)
         if prev:

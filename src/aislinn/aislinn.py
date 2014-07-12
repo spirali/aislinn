@@ -113,7 +113,7 @@ def parse_args():
 def main():
     args, valgrind_args = parse_args()
 
-    logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
+    logging.basicConfig(format="==AN== %(levelname)s: %(message)s", level=logging.INFO)
 
     run_args = [ args.program ] + args.args
     generator = Generator(run_args,

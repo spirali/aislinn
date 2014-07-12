@@ -43,6 +43,8 @@ class State:
     def copy(self):
         if self.status == State.StatusFinished:
             assert self.vg_state is None
+            for message in self.messages:
+                message.vg_buffer.inc_ref()
             # Process cannot evolve anymore so we can see it as immutable
             return self
         if self.vg_state:

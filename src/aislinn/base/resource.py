@@ -26,11 +26,15 @@ class Resource:
         self.id = id
 
     def inc_ref(self):
+        if self.ref_count == 0:
+            self.manager.not_used_resources.remove(self)
         self.ref_count += 1
 
     def dec_ref(self):
         self.ref_count -= 1
         if self.ref_count < 1:
+            #import traceback
+            #traceback.print_stack()
             assert self.ref_count == 0
             self.manager.add_not_used_resource(self)
 
