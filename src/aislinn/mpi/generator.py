@@ -26,10 +26,14 @@ from base.statespace import StateSpace
 from collections import deque
 from globalstate import GlobalState
 from base.report import Report
+from base.utils import convert_types
+import consts
+
 import event
 import base.resource
 import logging
 import sys
+
 
 class ExecutionContext:
 
@@ -44,6 +48,13 @@ class ExecutionContext:
         if self.error_messages is None:
             self.error_messages = []
         self.error_messages.append(error_message)
+
+class ValidateException(Exception):
+
+    def __init__(self, value, arg_position):
+        Exception.__init__(self)
+        self.value = value
+        self.arg_position = arg_position
 
 
 class Generator:
@@ -336,29 +347,37 @@ class Generator:
             state.vg_state.dec_ref()
             state.vg_state = None
         context = ExecutionContext()
-
-        while True:
-            call = self.controller.run_process().split()
-            if call[0] == "EXIT":
-                exitcode = int(call[1])
-                e = event.ExitEvent("Exit", state.rank, exitcode)
-                context.add_event(e)
-                state.set_finished()
-                if exitcode != 0:
+        try:
+            while True:
+                call = self.controller.run_process().split()
+                if call[0] == "EXIT":
+                    exitcode = int(call[1])
+                    e = event.ExitEvent("Exit", state.rank, exitcode)
+                    context.add_event(e)
+                    state.set_finished()
+                    if exitcode != 0:
+                        context.add_error_message(
+                                errormsg.NonzeroExitCode(exitcode))
+                    return context
+                if call[0] == "REPORT":
                     context.add_error_message(
-                            errormsg.NonzeroExitCode(exitcode))
-                return context
-            if call[0] == "REPORT":
-                context.add_error_message(
-                        self.make_error_message_from_report(call))
-                self.fatal_error = True
-                return context
-            fn = self.calls.get(call[1])
-            if fn is not None:
-                if fn(call[2:], gstate, state, context):
-                    break
-            else:
-                raise Exception("Unkown function call: " + repr(call))
+                            self.make_error_message_from_report(call))
+                    self.fatal_error = True
+                    return context
+                fn = self.calls.get(call[1])
+                if fn is not None:
+                    if fn(call[2:], gstate, state, context):
+                        break
+                else:
+                    raise Exception("Unkown function call: " + repr(call))
+        except ValidateException as e:
+            emsg = errormsg.InvalidArgument(call[1], e.value, e.arg_position)
+            emsg.stacktrace = self.controller.get_stacktrace()
+
+            context.add_error_message(emsg)
+            # TODO: It is not necessary to stop everything, just expansion of
+            # this state
+            self.fatal_error = True
 
         state.vg_state = self.save_state(True)
         return context
@@ -368,14 +387,46 @@ class Generator:
         event.stacktrace = stacktrace
         context.add_event(event)
 
+    def validate_rank(self,
+                      rank,
+                      arg_position,
+                      any_source_allowed):
+
+        if rank == consts.MPI_ANY_SOURCE:
+            if not any_source_allowed:
+                raise ValidateException("MPI_ANY_SOURCE", arg_position)
+        elif rank < 0 or rank >= self.process_count:
+            raise ValidateException(rank, arg_position)
+
+    def validate_count(self, size, arg_position):
+        if size < 0:
+            raise ValidateException(size, arg_position)
+
+    def validate_request_ids(self, state, request_ids):
+        for request_id in request_ids:
+            if not state.is_request_id_valid(request_id):
+                raise Exception("Invalid request id {0}, rank {1} ({2})"
+                        .format(request_id, state.rank, state.requests))
+
     def call_MPI_Comm_rank(self, args, gstate, state, context):
         assert len(args) == 2
         self.controller.write_int(args[1], state.rank)
         return False
 
     def call_MPI_ISend(self, args, gstate, state, context):
-        buf_ptr, count, datatype, target, tag, comm, request_ptr \
-                = map(int, args)
+        buf_ptr, datatype, count, target, tag, comm, request_ptr = \
+            convert_types(args,
+                          ("ptr", # buf_ptr
+                           "int", # datatype
+                           "int", # count
+                           "int", # target
+                           "int", # tag
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+        self.validate_count(count, 3)
+        self.validate_rank(target, 4, True)
+
         size = count * 4
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
         vg_buffer = self.vg_buffers.new(buffer_id)
@@ -411,8 +462,20 @@ class Generator:
         return False
 
     def call_MPI_IRecv(self, args, gstate, state, context):
-        buf_ptr, count, datatype, source, tag, comm, request_ptr = \
-            map(int, args)
+        buf_ptr, datatype, count, source, tag, comm, request_ptr = \
+            convert_types(args,
+                          ("ptr", # buf_ptr
+                           "int", # datatype
+                           "int", # count
+                           "int", # source
+                           "int", # tag
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+
+        self.validate_count(count, 2)
+        self.validate_rank(source, 4, True)
+
         size = count * 4
         request_id = state.add_recv_request(source, tag, buf_ptr, size)
         self.controller.write_int(request_ptr, request_id)
@@ -451,12 +514,6 @@ class Generator:
         e = event.WaitEvent("Waitall", state.rank, request_ids)
         self.add_call_event(context, e)
         return True
-
-    def validate_request_ids(self, state, request_ids):
-        for request_id in request_ids:
-            if not state.is_request_id_valid(request_id):
-                raise Exception("Invalid request id {0}, rank {1} ({2})"
-                        .format(request_id, state.rank, state.requests))
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:

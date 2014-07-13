@@ -19,6 +19,7 @@
 
 
 import re
+import ctypes # Used for int type conversions
 
 
 class EqMixin(object):
@@ -53,3 +54,13 @@ def sizestr_to_int(s):
     if not is_integer(s):
         return None
     return int(s) * m
+
+def convert_type(value, target_type):
+    if target_type == "ptr":
+        return int(value)
+    if target_type == "int":
+        return ctypes.c_int(int(value)).value
+
+def convert_types(values, target_types):
+    assert len(values) == len(target_types)
+    return [ convert_type(v, t) for v, t in zip(values, target_types) ]

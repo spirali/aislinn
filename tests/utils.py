@@ -31,13 +31,15 @@ class TestCase(unittest.TestCase):
             names = [ e.name for e in self.report.errors ]
             raise AssertionError("No error expected, got " + repr(names))
 
-    def single_error(self, error_name):
+    def single_error(self, error_name, rank=None):
         if self.report is None:
             self.read_report()
         errors = self.report.errors
         self.assertEquals(len(errors), 1)
         error = errors[0]
         self.assertEquals(error.name, error_name)
+        if rank is not None:
+            self.assertEquals(error.rank, rank)
         return error
 
     def check_child(self, element, name, value):
@@ -49,8 +51,7 @@ class TestCase(unittest.TestCase):
     def exit_code_error(self, rank, exitcode=0):
         if self.report is None:
             self.read_report()
-        error = self.single_error("exitcode")
-        self.assertEquals(error.rank, rank)
+        error = self.single_error("exitcode", rank=rank)
         self.assertEquals(error.find_int("exitcode"), exitcode)
 
     def program(self, *args, **kw):

@@ -60,5 +60,17 @@ class BaseTests(TestCase):
         self.execute(1)
         self.no_errors()
 
+    def test_args(self):
+        self.program("args")
+        args = [ "isend_rank_1",
+                 "isend_rank_2",
+                 "irecv_rank",
+                 "isend_count",
+                 "irecv_count", ]
+
+        for arg in args:
+            self.execute(2, (arg,))
+            self.single_error("invalidarg", rank=0)
+
 if __name__ == "__main__":
     unittest.main()
