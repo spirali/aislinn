@@ -71,6 +71,8 @@ class Generator:
         self.error_messages = []
         self.calls = {
                 "MPI_Comm_rank" : self.call_MPI_Comm_rank,
+                "MPI_Send" : self.call_MPI_Send,
+                "MPI_Recv" : self.call_MPI_Recv,
                 "MPI_Isend" : self.call_MPI_ISend,
                 "MPI_Irecv" : self.call_MPI_IRecv,
                 "MPI_Wait" : self.call_MPI_Wait,
@@ -271,7 +273,7 @@ class Generator:
                 raise Exception("Unknown status")
 
         if not node.arcs and \
-                any(state.status != State.StatusFinished 
+                any(state.status != State.StatusFinished
                     for state in gstate.states):
             message = errormsg.Deadlock()
             message.node = node
@@ -293,7 +295,7 @@ class Generator:
         for matching in matches:
             covered = state.is_matching_covers_active_requests(matching)
             if not covered and not any(r.is_receive() for r, m in matching):
-                # Not all request is completed and no new receive request 
+                # Not all request is completed and no new receive request
                 # matched so there is no reason to create new state
                 continue
             new_gstate = gstate.copy()
@@ -408,53 +410,110 @@ class Generator:
                 raise Exception("Invalid request id {0}, rank {1} ({2})"
                         .format(request_id, state.rank, state.requests))
 
+    def make_send_request(self, gstate, state, message):
+        if self.send_protocol == "randezvous":
+            return state.add_synchronous_send_request(message)
+        elif self.send_protocol == "eager":
+            return state.add_completed_request()
+        elif self.send_protocol == "dynamic":
+            eager_threshold, randezvous_threshold = \
+                    gstate.send_protocol_thresholds
+            if message.size < eager_threshold:
+                return state.add_completed_request()
+            elif message.size >= randezvous_threshold:
+                return state.add_synchronous_send_request(message)
+            else:
+                return state.add_standard_send_request(message)
+        elif self.send_protocol == "threshold":
+            print message.size
+            if message.size < self.send_protocol_eager_threshold:
+                return state.add_completed_request()
+            elif message.size >= self.send_protocol_randezvous_threshold:
+                return state.add_synchronous_send_request(message)
+            else:
+                return state.add_standard_send_request(message)
+        else:
+            assert self.send_protocol == "full"
+            return state.add_standard_send_request(message)
+
+
     def call_MPI_Comm_rank(self, args, gstate, state, context):
         assert len(args) == 2
         self.controller.write_int(args[1], state.rank)
         return False
 
-    def call_MPI_ISend(self, args, gstate, state, context):
-        buf_ptr, datatype, count, target, tag, comm, request_ptr = \
+    def call_MPI_Send(self, args, gstate, state, context):
+        buf_ptr, count, datatype, target, tag, comm = \
             convert_types(args,
                           ("ptr", # buf_ptr
-                           "int", # datatype
                            "int", # count
+                           "int", # datatype
                            "int", # target
                            "int", # tag
                            "int", # comm
-                           "ptr", # request_ptr
                           ))
-        self.validate_count(count, 3)
-        self.validate_rank(target, 4, True)
+        self.validate_count(count, 2)
+        self.validate_rank(target, 4, False)
 
         size = count * 4
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
         vg_buffer = self.vg_buffers.new(buffer_id)
         message = gstate.get_state(target).add_message(
                 state.rank, target, tag, vg_buffer, size, hash)
-        if self.send_protocol == "randezvous":
-            request_id = state.add_synchronous_send_request(message)
-        elif self.send_protocol == "eager":
-            request_id = state.add_completed_request()
-        elif self.send_protocol == "dynamic":
-            eager_threshold, randezvous_threshold = \
-                    gstate.send_protocol_thresholds
-            if size < eager_threshold:
-                request_id = state.add_completed_request()
-            elif size >= randezvous_threshold:
-                request_id = state.add_synchronous_send_request(message)
-            else:
-                request_id = state.add_standard_send_request(message)
-        elif self.send_protocol == "threshold":
-            if size < self.send_protocol_eager_threshold:
-                request_id = state.add_completed_request()
-            elif size >= self.send_protocol_randezvous_threshold:
-                request_id = state.add_synchronous_send_request(message)
-            else:
-                request_id = state.add_standard_send_request(message)
-        else:
-            request_id = state.add_standard_send_request(message)
 
+        e = event.CommEvent("Send", state.rank, target, tag)
+        self.add_call_event(context, e)
+
+        request_ids = (self.make_send_request(gstate, state, message),)
+        state.set_wait(request_ids)
+        # TODO: Optimization : If message use eager protocol then nonblock
+        return True
+
+    def call_MPI_Recv(self, args, gstate, state, context):
+        buf_ptr, count, datatype, source, tag, comm = \
+            convert_types(args,
+                          ("ptr", # buf_ptr
+                           "int", # count
+                           "int", # datatype
+                           "int", # source
+                           "int", # tag
+                           "int", # comm
+                          ))
+
+        self.validate_count(count, 2)
+        self.validate_rank(source, 4, True)
+
+        size = count * 4
+
+        e = event.CommEvent("Recv", state.rank, source, tag)
+        self.add_call_event(context, e)
+
+        request_ids = (state.add_recv_request(source, tag, buf_ptr, size),)
+        state.set_wait(request_ids)
+        # TODO: Optimization : If message is already here,
+        # then non block and continue
+        return True
+
+    def call_MPI_ISend(self, args, gstate, state, context):
+        buf_ptr, count, datatype, target, tag, comm, request_ptr = \
+            convert_types(args,
+                          ("ptr", # buf_ptr
+                           "int", # count
+                           "int", # datatype
+                           "int", # target
+                           "int", # tag
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+        self.validate_count(count, 2)
+        self.validate_rank(target, 4, False)
+
+        size = count * 4
+        buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
+        vg_buffer = self.vg_buffers.new(buffer_id)
+        message = gstate.get_state(target).add_message(
+                state.rank, target, tag, vg_buffer, size, hash)
+        request_id = self.make_send_request(gstate, state, message)
         self.controller.write_int(request_ptr, request_id)
 
         e = event.CommEvent("Isend", state.rank, target, tag, request_id)
@@ -462,11 +521,11 @@ class Generator:
         return False
 
     def call_MPI_IRecv(self, args, gstate, state, context):
-        buf_ptr, datatype, count, source, tag, comm, request_ptr = \
+        buf_ptr, count, datatype, source, tag, comm, request_ptr = \
             convert_types(args,
                           ("ptr", # buf_ptr
-                           "int", # datatype
                            "int", # count
+                           "int", # datatype
                            "int", # source
                            "int", # tag
                            "int", # comm

@@ -14,15 +14,17 @@ int main(int argc, char **argv)
 	int data;
 	MPI_Request r;
 	if (!strcmp(argv[1], "isend_rank_1")) {
-		MPI_Isend(&data, MPI_INT, 1, -1, 1, MPI_COMM_WORLD, &r);
+		MPI_Isend(&data, 1, MPI_INT, -1, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "isend_rank_2")) {
-		MPI_Isend(&data, MPI_INT, 1, 1000, 1, MPI_COMM_WORLD, &r);
+		MPI_Isend(&data, 1, MPI_INT, 1000, 1, MPI_COMM_WORLD, &r);
+	} else if(!strcmp(argv[1], "isend_rank_3")) {
+		MPI_Isend(&data, 1, MPI_INT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "irecv_rank")) {
-		MPI_Irecv(&data, MPI_INT, 1, 1000, 1, MPI_COMM_WORLD, &r);
+		MPI_Irecv(&data, 1, MPI_INT, 1000, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "isend_count")) {
-		MPI_Isend(&data, MPI_INT, -500, 1, 1, MPI_COMM_WORLD, &r);
+		MPI_Isend(&data, -500, MPI_INT, 1, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "irecv_count")) {
-		MPI_Irecv(&data, MPI_INT, -1, 1, 1, MPI_COMM_WORLD, &r);
+		MPI_Irecv(&data, -1, MPI_INT, 1, 1, MPI_COMM_WORLD, &r);
 	} else {
 		return 1;
 	}

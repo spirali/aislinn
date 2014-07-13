@@ -6,6 +6,15 @@ class CommTests(TestCase):
 
     category = "comm"
 
+    def test_sendrecv(self):
+        self.program("sendrecv")
+
+        self.execute(2, ("1",))
+        self.no_errors()
+
+        self.execute(2, ("0",))
+        self.single_error("deadlock")
+
     def test_isend_irecv(self):
         self.program("isir")
 

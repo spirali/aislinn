@@ -35,7 +35,7 @@ class Event:
 
 class CommEvent(Event):
 
-    def __init__(self, name, rank, target, tag, request_id):
+    def __init__(self, name, rank, target, tag, request_id=None):
         Event.__init__(self, name, rank)
         self.target = target
         self.tag = tag

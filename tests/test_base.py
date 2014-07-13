@@ -64,6 +64,7 @@ class BaseTests(TestCase):
         self.program("args")
         args = [ "isend_rank_1",
                  "isend_rank_2",
+                 "isend_rank_3",
                  "irecv_rank",
                  "isend_count",
                  "irecv_count", ]
