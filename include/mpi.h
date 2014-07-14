@@ -35,6 +35,11 @@ inline int MPI_Comm_rank(MPI_Comm comm, int *rank) {
 	return 0;
 }
 
+inline int MPI_Comm_size(MPI_Comm comm, int *size) {
+	AISLINN_CALL_2("MPI_Comm_size", comm, size);
+	return 0;
+}
+
 int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,
     int tag, MPI_Comm comm)
 {

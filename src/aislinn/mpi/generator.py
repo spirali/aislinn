@@ -71,6 +71,7 @@ class Generator:
         self.error_messages = []
         self.calls = {
                 "MPI_Comm_rank" : self.call_MPI_Comm_rank,
+                "MPI_Comm_size" : self.call_MPI_Comm_size,
                 "MPI_Send" : self.call_MPI_Send,
                 "MPI_Recv" : self.call_MPI_Recv,
                 "MPI_Isend" : self.call_MPI_ISend,
@@ -440,6 +441,11 @@ class Generator:
     def call_MPI_Comm_rank(self, args, gstate, state, context):
         assert len(args) == 2
         self.controller.write_int(args[1], state.rank)
+        return False
+
+    def call_MPI_Comm_size(self, args, gstate, state, context):
+        assert len(args) == 2
+        self.controller.write_int(args[1], self.process_count)
         return False
 
     def call_MPI_Send(self, args, gstate, state, context):
