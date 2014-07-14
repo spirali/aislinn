@@ -151,6 +151,7 @@ class Program:
                   send_protocol=None):
         run_args = [ AISLINN,
                     "--output=xml",
+                    "--verbose=0",
                     "-p={0}".format(processes) ]
 
         if heapsize is not None:

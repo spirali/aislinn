@@ -53,6 +53,11 @@ def parse_args():
                         type=int,
                         default=1,
                         help="Number of processes")
+    parser.add_argument("--verbose",
+                        metavar="N",
+                        type=int,
+                        default=1,
+                        help="Verbosity level (default: 1)")
     parser.add_argument("--vgv",
                         metavar="N",
                         type=int,
@@ -76,20 +81,33 @@ def parse_args():
                        action="store_true")
     args = parser.parse_args()
 
+    if args.verbose == 0:
+        level = logging.ERROR
+    elif args.verbose == 1:
+        level = logging.INFO
+    elif args.verbose == 2:
+        level = logging.DEBUG
+    else:
+        print "Invalid verbose level (parameter --verbose)"
+        sys.exit(1)
+
+    logging.basicConfig(format="==AN== %(levelname)s: %(message)s",
+                        level=level)
+
     if args.p <= 0:
-        sys.stderr.write("Invalid number of processes\n")
+        logging.error("Invalid number of processes (parameter -p)")
         sys.exit(1)
 
     if args.output not in ("xml", "html", "none"):
-        print "Invalid output type"
+        logging.error("Invalid output type (parameter --output)")
         sys.exit(1)
 
     valgrind_args = []
 
     if args.heapsize:
         size = utils.sizestr_to_int(args.heapsize)
-        if size is None:
-            print "Invalid size"
+        if size is None or size < 1:
+            logging.error("Invalid heap size (parameter --heapsize)")
             sys.exit(1)
         valgrind_args.append("--heapsize={0}".format(size))
 
@@ -99,7 +117,7 @@ def parse_args():
     if args.send_protocol not in ("full", "eager", "randezvous", "dynamic"):
         threshold = parse_threshold(args.send_protocol)
         if threshold is None:
-            sys.stderr.write("Invalid send protocol\n")
+            logging.error("Invalid send protocol (parameter -S or --send-protocol)")
             sys.exit(1)
         args.send_protocol = "threshold"
         args.send_protocol_eager_threshold = threshold[0]
@@ -113,21 +131,29 @@ def parse_args():
 def main():
     args, valgrind_args = parse_args()
 
-    logging.basicConfig(format="==AN== %(levelname)s: %(message)s", level=logging.INFO)
-
     run_args = [ args.program ] + args.args
     generator = Generator(run_args,
                           valgrind_args,
                           args)
+
+    logging.debug("Run args: %s", run_args)
+    logging.debug("Valgrind args: %s", valgrind_args)
+
     if not generator.run(args.p):
         sys.exit(1)
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
-    #if generator.error_messages:
-    #    print "{0} error(s) found".format(len(generator.error_messages))
+        logging.info("Statespace graph written into 'statespace.dot'")
+
     if args.output == "xml":
         generator.create_report().write_xml("report.xml")
+        logging.info("Report written into 'report.xml'")
     elif args.output == "html":
         generator.create_report().write_html("report.html")
+        logging.info("Report written into 'report.html'")
+    if generator.error_messages:
+        logging.info("%s error(s) found", len(generator.error_messages))
+    else:
+        logging.info("No errors found")
 
 main()

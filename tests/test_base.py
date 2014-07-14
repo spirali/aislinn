@@ -34,8 +34,9 @@ class BaseTests(TestCase):
 
     def test_arg_p(self):
         self.program("exitcode")
-        self.execute(-1, exitcode=1, stderr="Invalid number of processes\n")
-        self.execute(0, exitcode=1, stderr="Invalid number of processes\n")
+        errmsg = "==AN== ERROR: Invalid number of processes (parameter -p)\n"
+        self.execute(-1, exitcode=1, stderr=errmsg)
+        self.execute(0, exitcode=1, stderr=errmsg)
 
     def test_heapsize(self):
         self.program("malloc")
