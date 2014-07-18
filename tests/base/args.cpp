@@ -25,6 +25,8 @@ int main(int argc, char **argv)
 		MPI_Isend(&data, -500, MPI_INT, 1, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "irecv_count")) {
 		MPI_Irecv(&data, -1, MPI_INT, 1, 1, MPI_COMM_WORLD, &r);
+    } else if(!strcmp(argv[1], "irecv_datatype")) {
+		MPI_Irecv(&data, 100, 0, 1, 1, MPI_COMM_WORLD, &r);
 	} else {
 		return 1;
 	}

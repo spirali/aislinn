@@ -33,7 +33,7 @@ import event
 import base.resource
 import logging
 import sys
-
+import types
 
 class ExecutionContext:
 
@@ -405,6 +405,12 @@ class Generator:
         if size < 0:
             raise ValidateException(size, arg_position)
 
+    def get_datatype_size(self, datatype, arg_position):
+        size = types.get_datatype_size(datatype)
+        if size is None:
+            raise ValidateException(datatype, arg_position)
+        return size
+
     def validate_request_ids(self, state, request_ids):
         for request_id in request_ids:
             if not state.is_request_id_valid(request_id):
@@ -460,8 +466,7 @@ class Generator:
                           ))
         self.validate_count(count, 2)
         self.validate_rank(target, 4, False)
-
-        size = count * 4
+        size = count * self.get_datatype_size(datatype, 3)
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
         vg_buffer = self.vg_buffers.new(buffer_id)
         message = gstate.get_state(target).add_message(
@@ -488,8 +493,7 @@ class Generator:
 
         self.validate_count(count, 2)
         self.validate_rank(source, 4, True)
-
-        size = count * 4
+        size = count * self.get_datatype_size(datatype, 3)
 
         e = event.CommEvent("Recv", state.rank, source, tag)
         self.add_call_event(context, e)
@@ -513,8 +517,8 @@ class Generator:
                           ))
         self.validate_count(count, 2)
         self.validate_rank(target, 4, False)
+        size = count * self.get_datatype_size(datatype, 3)
 
-        size = count * 4
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
         vg_buffer = self.vg_buffers.new(buffer_id)
         message = gstate.get_state(target).add_message(
@@ -540,8 +544,8 @@ class Generator:
 
         self.validate_count(count, 2)
         self.validate_rank(source, 4, True)
+        size = count * self.get_datatype_size(datatype, 3)
 
-        size = count * 4
         request_id = state.add_recv_request(source, tag, buf_ptr, size)
         self.controller.write_int(request_ptr, request_id)
 

@@ -68,7 +68,8 @@ class BaseTests(TestCase):
                  "isend_rank_3",
                  "irecv_rank",
                  "isend_count",
-                 "irecv_count", ]
+                 "irecv_count",
+                 "irecv_datatype" ]
 
         for arg in args:
             self.execute(2, (arg,))

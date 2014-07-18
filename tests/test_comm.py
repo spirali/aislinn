@@ -100,6 +100,20 @@ class CommTests(TestCase):
         self.execute(2)
         self.no_errors()
 
+    def test_types(self):
+        self.program("types")
+        self.execute(2, ("INT",))
+        self.no_errors()
+
+        self.execute(2, ("LONG",))
+        self.no_errors()
+
+        self.execute(2, ("FLOAT",))
+        self.no_errors()
+
+        self.execute(2, ("DOUBLE",))
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()
