@@ -281,4 +281,5 @@ class State:
         while i >= 0:
             if self.requests[i] is not None:
                 return i + 1
+            i -= 1
         return 0
