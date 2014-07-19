@@ -88,16 +88,17 @@ int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
 }
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
-        int source, int tag, MPI_Comm comm)
+        int source, int tag, MPI_Comm comm, MPI_Status *status)
 {
-	AislinnArgType args[6];
+	AislinnArgType args[7];
 	args[0] = (AislinnArgType) buf;
 	args[1] = (AislinnArgType) count;
 	args[2] = (AislinnArgType) datatype;
 	args[3] = (AislinnArgType) source;
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
-	AISLINN_CALL_ARGS("MPI_Recv", args, 6);
+	args[6] = (AislinnArgType) status;
+	AISLINN_CALL_ARGS("MPI_Recv", args, 7);
 	return 0;
 }
 

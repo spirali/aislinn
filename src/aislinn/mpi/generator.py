@@ -481,7 +481,7 @@ class Generator:
         return True
 
     def call_MPI_Recv(self, args, gstate, state, context):
-        buf_ptr, count, datatype, source, tag, comm = \
+        buf_ptr, count, datatype, source, tag, comm, status_ptr = \
             convert_types(args,
                           ("ptr", # buf_ptr
                            "int", # count
@@ -489,6 +489,7 @@ class Generator:
                            "int", # source
                            "int", # tag
                            "int", # comm
+                           "ptr", # status
                           ))
 
         self.validate_count(count, 2)

@@ -70,7 +70,7 @@ int main(int argc, char **argv)
 	}
 	if (rank == 1) {
 		void *rbuffer = malloc(datasize);
-		MPI_Recv(rbuffer, COUNT, type, 0, 10, MPI_COMM_WORLD);
+		MPI_Recv(rbuffer, COUNT, type, 0, 10, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
 		char *x = (char*) rbuffer; char *y = (char*) mem;
 		if (memcmp(rbuffer, mem, datasize)) {
 			return 2;

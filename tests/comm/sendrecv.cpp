@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 		MPI_Send(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD);
 	}
 	if (rank == 1) {
-		MPI_Recv(&d, 1, MPI_INT, 0, 10, MPI_COMM_WORLD);
+		MPI_Recv(&d, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
 	MPI_Finalize();
 	return 0;
