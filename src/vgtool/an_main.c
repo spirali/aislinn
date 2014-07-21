@@ -83,7 +83,7 @@ typedef
       BLOCK_END
    } AllocationBlockType;
 
-typedef 
+typedef
    struct {
       Addr address;
       AllocationBlockType type;
@@ -185,7 +185,7 @@ static void memspace_init(void)
 {
    /* It should be allocated with mmap with PROT_NONE to just reserse address space,
     * and change protection as necessary.
-    * but I am not sure how to do it in valgrind libc in a way that address space is 
+    * but I am not sure how to do it in valgrind libc in a way that address space is
     * placed into clients arena */
    Addr heap_space = (Addr) VG_(cli_malloc)(SM_SIZE, heap_max_size);
    tl_assert(heap_space != 0);
@@ -205,10 +205,22 @@ static void memspace_init(void)
    current_memspace = ms;
 }
 
-/*static
+/*
+static
 void memspace_dump(void)
 {
    VG_(printf)("========== MEMSPACE DUMP ===========\n");
+   VG_(OSetGen_ResetIter)(current_memspace->auxmap);
+   AuxMapEnt *elem;
+   while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
+	   Word i;
+	for (i = 0; i < SM_SIZE; i++) {
+	      if (elem->sm->vabits8[i]) {
+		      break;
+	      }
+	   }
+      VG_(printf)("Auxmap %lu-%lu %lu\n", elem->base, elem->base + SM_SIZE, elem->base + i);
+   }
 
    XArray *a = current_memspace->allocation_blocks;
    Word i;
@@ -254,7 +266,7 @@ Addr memspace_alloc(SizeT alloc_size)
 
 
    // No sufficient block found, create a new one
-   Addr address = block->address;      
+   Addr address = block->address;
    block->type = BLOCK_USED;
    AllocationBlock new_block;
    new_block.type = BLOCK_END;
@@ -294,7 +306,7 @@ SizeT memspace_free(Addr address)
         if (prev->type == BLOCK_FREE) {
             VG_(removeIndexXA)(a, i);
         }
-    }    
+    }
     return size;
 }
 
@@ -431,11 +443,14 @@ void set_address_range_perms (
       lenA--;
    }
 
+   a = start_of_this_sm (a) + SM_SIZE;
+
 part2:
    while (lenB >= SM_SIZE) {
       sm_ptr = get_secmap_ptr(a);
       VG_(memset)(&((*sm_ptr)->vabits8), perm, SM_CHUNKS);
       lenB -= SM_SIZE;
+      a += SM_SIZE;
    }
 
    tl_assert(lenB < SM_SIZE);
@@ -454,6 +469,11 @@ static INLINE void make_mem_undefined(Addr a, SizeT len)
    set_address_range_perms(a, len, 1);
 }
 
+static INLINE void make_mem_defined(Addr a, SizeT len)
+{
+   set_address_range_perms(a, len, 1);
+}
+
 static INLINE void make_mem_noaccess(Addr a, SizeT len)
 {
    set_address_range_perms(a, len, 0);
@@ -462,6 +482,13 @@ static INLINE void make_mem_noaccess(Addr a, SizeT len)
 static void secmap_hash_content(AN_(MD5_CTX) *ctx, Addr base, SecMap *sm)
 {
    UWord i;
+   /*for (i = 0; i < SM_SIZE; i++) {
+      if (sm->vabits8[i]) {
+	      VG_(printf)("First %lu %lu", i, base + i);
+	      break;
+      }
+   }*/
+
    UChar *d = (UChar*) base;
    for (i = 0; i < SM_SIZE; i++) {
       if (sm->vabits8[i]) {
@@ -546,12 +573,14 @@ static void memimage_restore_current(MemoryImage *memimage)
                                                       memimage->allocation_blocks);
 }
 
-static void memimage_hash(AN_(MD5_CTX) *ctx)
+static void memspace_hash(AN_(MD5_CTX) *ctx)
 {
+   //memspace_dump();
    VG_(OSetGen_ResetIter)(current_memspace->auxmap);
    AuxMapEnt *elem;
    while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
       AN_(MD5_Update)(ctx, elem->sm, sizeof(SecMap));
+      //VG_(printf)("Updating secmap %lu\n", elem->base);
       secmap_hash_content(ctx, elem->base, elem->sm);
    }
 }
@@ -625,7 +654,7 @@ static void state_hash(AN_(MD5_CTX) *ctx)
    size -= offsetof(VexGuestArchState, guest_RAX);
    AN_(MD5_Update)(ctx, &tst->arch.vex.guest_RAX, size);
 
-   memimage_hash(ctx);
+   memspace_hash(ctx);
 }
 
 static void state_restore(State *state)
@@ -798,7 +827,7 @@ static void process_commands_init(void) {
 
 static
 void process_commands(CommandsEnterType cet)
-{   
+{
    process_commands_init();
    char command[MAX_MESSAGE_BUFFER_LENGTH + 1];
 
@@ -1027,6 +1056,52 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
    return True;
 }
 
+static
+void new_mem_mmap (Addr a, SizeT len, Bool rr, Bool ww, Bool xx,
+                   ULong di_handle)
+{
+   //VG_(printf)("MMAP %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+
+   if (rr && ww) {
+      make_mem_defined(a, len);
+   } else {
+      make_mem_noaccess(a, len);
+   }
+}
+
+static
+void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
+{
+   //VG_(printf)("MPROTECT %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+   //
+   if (rr && ww) {
+      make_mem_defined(a, len);
+   } else {
+      make_mem_noaccess(a, len);
+   }
+}
+
+static
+void mem_unmap(Addr a, SizeT len)
+{
+   //VG_(printf)("UNMAP %lu-%lu %lu %d %d %d\n", a, a + len, len);
+   make_mem_noaccess(a, len);
+}
+
+static
+void copy_address_range_state ( Addr src, Addr dst, SizeT len )
+{
+   VG_(printf)("COPY_ADDRESS_RANGE_STATE: not implemented yet %lu", src);
+   tl_assert(0);
+}
+
+static
+void new_mem_startup(Addr a, SizeT len,
+                     Bool rr, Bool ww, Bool xx, ULong di_handle)
+{
+   new_mem_mmap(a, len, rr, ww, xx, di_handle);
+}
+
 static void new_mem_stack (Addr a, SizeT len)
 {
    //VG_(printf)("NEW STACK %p %lu\n", (void*) a, len);
@@ -1111,9 +1186,9 @@ static void print_debug_usage(void)
 static void* user_malloc (ThreadId tid, SizeT n)
 {
    //memspace_dump();
-   //VG_(printf)("!!! MALLOC %lu\n", n);
     Addr addr = memspace_alloc(n);
     make_mem_undefined(addr, n);
+    //VG_(printf)("!!! MALLOC %lu %lu\n", addr,  n);
     return (void*) addr;
 }
 
@@ -1156,8 +1231,15 @@ static void an_pre_clo_init(void)
                                    NULL, //MC_(realloc),
                                    NULL, //MC_(malloc_usable_size),
                                    0);
-   /*VG_(track_new_mem_startup) (an_new_mem_startup);
-   VG_(track_new_mem_mmap)    (an_new_mem_mmap);
+   VG_(track_new_mem_startup) (new_mem_startup);
+   VG_(track_change_mem_mprotect) (new_mem_mprotect);
+
+   VG_(track_copy_mem_remap)      (copy_address_range_state);
+   VG_(track_die_mem_stack_signal)(mem_unmap);
+   VG_(track_die_mem_brk)         (mem_unmap);
+   VG_(track_die_mem_munmap)      (mem_unmap);
+
+   /*VG_(track_new_mem_mmap)    (an_new_mem_mmap);
    VG_(track_new_mem_brk)     (an_new_mem_brk);
    VG_(needs_client_requests) (an_handle_client_request);
 

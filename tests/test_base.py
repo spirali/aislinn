@@ -75,5 +75,10 @@ class BaseTests(TestCase):
             self.execute(2, (arg,))
             self.single_error("invalidarg", rank=0)
 
+    def test_globals(self):
+        self.program("globals")
+        self.execute(2)
+        self.no_errors()
+
 if __name__ == "__main__":
     unittest.main()
