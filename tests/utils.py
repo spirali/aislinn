@@ -12,6 +12,7 @@ AISLINN_BIN = os.path.join(AISLINN_ROOT, "bin")
 
 AISLINN = os.path.join(AISLINN_BIN, "aislinn")
 AISLINN_CC = os.path.join(AISLINN_BIN, "aislinn-cc")
+AISLINN_CPP = os.path.join(AISLINN_BIN, "aislinn-c++")
 
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.controller
@@ -58,8 +59,12 @@ class TestCase(unittest.TestCase):
         error = self.single_error("exitcode", rank=rank)
         self.assertEquals(error.find_int("exitcode"), exitcode)
 
-    def program(self, *args, **kw):
-        self.program_instance = Program(self.category, *args, **kw)
+    def program(self, test_name, files=None, **kw):
+        if files is None:
+            files = (os.path.join(AISLINN_TESTS, self.category, test_name + ".cpp"),)
+        else:
+            files = [ os.path.join(AISLINN_TESTS, self.category, test_name, n) for n in files ]
+        self.program_instance = Program(files, **kw)
 
     def execute(self, *args, **kw):
         self.assertTrue(self.program_instance is not None)
@@ -144,16 +149,15 @@ def run_and_check(args,
 
 class Program:
 
-    def __init__(self, *args):
-        self.path = os.path.join(*((AISLINN_TESTS,) + args))
+    def __init__(self, files):
+        self.files = tuple(files)
         self.is_built = False
 
     def build(self):
         cleanup_build_dir()
-        args = (AISLINN_CC,
+        args = (AISLINN_CPP,
                 "-g",
-                "-O3",
-                self.path + ".cpp")
+                "-O3") + self.files
         run_and_check(args, cwd=AISLINN_BUILD)
         self.is_built = True
 
