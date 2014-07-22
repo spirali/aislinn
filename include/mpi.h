@@ -11,7 +11,7 @@ struct aislinn_status;
 /* Public MPI types */
 typedef int MPI_Request;
 typedef int MPI_Comm;
-typedef aislinn_status *MPI_Status;
+typedef struct aislinn_status *MPI_Status;
 typedef int MPI_Datatype;
 
 /* Constants */
@@ -40,7 +40,7 @@ const MPI_Datatype MPI_LONG_DOUBLE = 0xFF00111;
 #define MPI_ANY_SOURCE 0xFFFF
 
 inline void MPI_Init(int *argc, char ***argv) {
-	AISLINN_CALL_0("MPI_Init");
+	aislinn_call_0("MPI_Init");
 }
 
 inline int MPI_Finalize() {
@@ -49,12 +49,18 @@ inline int MPI_Finalize() {
 }
 
 inline int MPI_Comm_rank(MPI_Comm comm, int *rank) {
-	AISLINN_CALL_2("MPI_Comm_rank", comm, rank);
+	aislinn_call_2(
+		"MPI_Comm_rank", 
+		(AislinnArgType) comm, 
+		(AislinnArgType) rank);
 	return 0;
 }
 
 inline int MPI_Comm_size(MPI_Comm comm, int *size) {
-	AISLINN_CALL_2("MPI_Comm_size", comm, size);
+	aislinn_call_2(
+		"MPI_Comm_size", 
+		(AislinnArgType) comm, 
+		(AislinnArgType) size);
 	return 0;
 }
 
@@ -68,7 +74,7 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,
 	args[3] = (AislinnArgType) dest;
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
-	AISLINN_CALL_ARGS("MPI_Send", args, 6);
+	aislinn_call_args("MPI_Send", args, 6);
 	return 0;
 }
 
@@ -83,7 +89,7 @@ int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
-	AISLINN_CALL_ARGS("MPI_Isend", args, 7);
+	aislinn_call_args("MPI_Isend", args, 7);
 	return 0;
 }
 
@@ -98,7 +104,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) status;
-	AISLINN_CALL_ARGS("MPI_Recv", args, 7);
+	aislinn_call_args("MPI_Recv", args, 7);
 	return 0;
 }
 
@@ -113,29 +119,37 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
-	AISLINN_CALL_ARGS("MPI_Irecv", args, 7);
+	aislinn_call_args("MPI_Irecv", args, 7);
 	return 0;
 }
 
 int MPI_Wait(MPI_Request *request, MPI_Status *status)
 {
-	AISLINN_CALL_2("MPI_Wait", request, status);
+	aislinn_call_2(
+		"MPI_Wait", 
+		(AislinnArgType) request, 
+		(AislinnArgType) status);
 	return 0;
 }
 
 int MPI_Waitall(int count, MPI_Request array_of_requests[],
                MPI_Status array_of_statuses[])
 {
-	AISLINN_CALL_3("MPI_Waitall",
-			count,
-			array_of_requests,
-			array_of_statuses);
+	aislinn_call_3(
+		"MPI_Waitall",
+		(AislinnArgType) count,
+		(AislinnArgType) array_of_requests,
+		(AislinnArgType) array_of_statuses);
 	return 0;
 }
 
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
 {
-	AISLINN_CALL_3("MPI_Test", request, flag, status);
+	aislinn_call_3(
+		"MPI_Test", 
+		(AislinnArgType) request, 
+		(AislinnArgType) flag, 
+		(AislinnArgType) status);
 	return 0;
 }
 

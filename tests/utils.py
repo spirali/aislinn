@@ -3,6 +3,7 @@ import subprocess
 import shutil
 import unittest
 import xml.etree.ElementTree as xml
+import sys
 
 AISLINN_TESTS = os.path.dirname(os.path.abspath(__file__))
 AISLINN_ROOT = os.path.dirname(AISLINN_TESTS)
@@ -11,6 +12,9 @@ AISLINN_BIN = os.path.join(AISLINN_ROOT, "bin")
 
 AISLINN = os.path.join(AISLINN_BIN, "aislinn")
 AISLINN_CC = os.path.join(AISLINN_BIN, "aislinn-cc")
+
+sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
+import base.controller
 
 class TestCase(unittest.TestCase):
 
@@ -61,6 +65,12 @@ class TestCase(unittest.TestCase):
         self.assertTrue(self.program_instance is not None)
         self.report = None
         self.program_instance.run(*args, **kw)
+
+    def controller(self, verbose=False):
+        self.assertTrue(self.program_instance is not None)
+        self.report = None
+        return self.program_instance.controller(verbose)
+
 
 def cleanup_build_dir():
     if os.path.isdir(AISLINN_BUILD):
@@ -142,6 +152,7 @@ class Program:
         cleanup_build_dir()
         args = (AISLINN_CC,
                 "-g",
+                "-O3",
                 self.path + ".cpp")
         run_and_check(args, cwd=AISLINN_BUILD)
         self.is_built = True
@@ -173,6 +184,13 @@ class Program:
                       stdout,
                       stderr)
 
+    def controller(self, verbose):
+        if not self.is_built:
+            self.build()
+        controller = base.controller.Controller(("./a.out",), AISLINN_BUILD)
+        if verbose:
+           controller.valgrind_args = ("--verbose=1",)
+        return controller
 
 class Error(object):
 

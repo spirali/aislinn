@@ -1,4 +1,4 @@
 #!/bin/sh
 AISLINN_ROOT=`dirname $0`/..
-gcc -I${AISLINN_ROOT}/include -I${AISLINN_ROOT}/valgrind/include $@
+gcc -I${AISLINN_ROOT}/include -I${AISLINN_ROOT}/valgrind/include -L${AISLINN_ROOT}/build/src/libs/aislinn $@ -laislinn
 

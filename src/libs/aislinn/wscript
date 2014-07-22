@@ -1,0 +1,11 @@
+source_files =  (
+    "aislinn.c",
+)
+
+def build(ctx):
+    ctx.stlib(source=source_files,
+              includes=['#/valgrind/include'],
+              target="aislinn",
+              name="aislinn")
+
+

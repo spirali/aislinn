@@ -18,7 +18,7 @@ int main(int argc, char **argv)
 		}
 	}
 	if (rank == 1) {
-		MPI_Send(&data, 1, MPI_INT, 0, 1000, MPI_COMM_WORLD);
+		MPI_Send(&rank, 1, MPI_INT, 0, 1000, MPI_COMM_WORLD);
 		if (global != 1001) {
 			return 3;
 		}

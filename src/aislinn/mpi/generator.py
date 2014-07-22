@@ -152,6 +152,10 @@ class Generator:
             assert self.vg_states.resource_count == 0
             assert self.vg_buffers.resource_count == 0
             assert len(self.vg_state_cache) == 0
+            stats = self.controller.get_stats()
+            # All pages are active, i.e. we have freed everyhing else
+            assert stats["pages"] == stats["active-pages"]
+
         finally:
             self.controller.kill()
         return True

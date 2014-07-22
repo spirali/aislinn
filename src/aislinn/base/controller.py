@@ -25,11 +25,12 @@ import time
 
 class Controller:
 
-    def __init__(self, args):
+    def __init__(self, args, cwd=None):
         self.process = None
         self.conn = None
         self.recv_buffer = ""
         self.args = tuple(args)
+        self.cwd = cwd
         self.valgrind_args = ()
 
     def start(self):
@@ -60,8 +61,7 @@ class Controller:
         self.send_and_receive_ok("FREE {0}\n".format(state_id))
 
     def run_process(self):
-        self.send_command("RUN\n")
-        return self.receive_line()
+        return self.send_and_receive("RUN\n")
 
     def restore_state(self, state_id):
         assert state_id is not None
@@ -95,10 +95,22 @@ class Controller:
         return results
 
     def hash_state(self):
-        return self.send_and_receive("HASH\n")
+        #s = time.time()
+        h = self.send_and_receive("HASH\n")
+        #e = time.time()
+        #print e - s
+        return h
 
     def get_stacktrace(self):
         return self.send_and_receive("STACKTRACE\n")
+
+    def get_stats(self):
+        self.send_command("STATS\n")
+        result = {}
+        for entry in self.receive_line().split("|"):
+            name, value = entry.split()
+            result[name] = int(value)
+        return result
 
     ### Semi-internal functions
 
@@ -146,7 +158,7 @@ class Controller:
             "--tool=aislinn",
             "--port={0}".format(port)
         ) + tuple(self.valgrind_args) + tuple(self.args)
-        self.process = subprocess.Popen(args)
+        self.process = subprocess.Popen(args, cwd=self.cwd)
 
     def _start_server(self):
         HOST = "127.0.0.1" # Connection only from localhost

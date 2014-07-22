@@ -42,7 +42,7 @@
 #include "pub_tool_debuginfo.h"
 #include "pub_tool_stacktrace.h"
 #include "pub_tool_replacemalloc.h"
-
+#include "pub_tool_machine.h"     // VG_(fnptr_to_fnentry)
 #include "../../include/aislinn.h"
 #include "md5/md5.h"
 
@@ -56,23 +56,34 @@
 
 #define INLINE    inline __attribute__((always_inline))
 
-#define SM_SIZE 65536            /* DO NOT CHANGE */
-#define SM_MASK (SM_SIZE-1)      /* DO NOT CHANGE */
+#define VPRINT(level, ...) if (verbosity_level >= (level)) { VG_(printf)(__VA_ARGS__); }
 
-//#define SM_CHUNKS 16384
-#define SM_CHUNKS 65536
-#define SM_OFF(a) ((a) & SM_MASK)
+#define PAGE_SIZE 65536            /* DO NOT CHANGE */
+#define PAGE_MASK (PAGE_SIZE-1)      /* DO NOT CHANGE */
+
+//#define VA_CHUNKS 16384
+#define VA_CHUNKS 65536
+#define PAGE_OFF(a) ((a) & PAGE_MASK)
 
 typedef
    struct {
-      UChar vabits8[SM_CHUNKS];
-   }
-   SecMap;
+      UChar vabits[VA_CHUNKS];
+   } VA;
+
+typedef
+   struct {
+      Addr base;
+      Int ref_count;
+      VA *va;
+      UChar *data;
+      Bool has_hash;
+      MD5_Digest hash;
+   } Page;
 
 typedef
    struct {
       Addr    base;
-      SecMap* sm;
+      Page* page;
    }
    AuxMapEnt;
 
@@ -98,16 +109,8 @@ typedef
 
 typedef
    struct {
-      Addr base;
-      SecMap sm;
-      UChar data[SM_SIZE];
-   } MemoryImagePart;
-
-
-typedef
-   struct {
-      MemoryImagePart *parts;
-      UWord parts_size;
+      Page **pages;
+      UWord pages_count;
       XArray *allocation_blocks;
    } MemoryImage;
 
@@ -134,9 +137,9 @@ Int message_buffer_size = 0;
 
 Int server_port = -1;
 
-/*static struct {
-   UWord number_of_states;
-} stats;*/
+static struct {
+   Word pages; // Number of currently allocated pages
+} stats;
 
 typedef
    enum {
@@ -157,12 +160,17 @@ static INLINE UWord make_new_id(void) {
    return unique_id_counter++;
 }
 
-static INLINE Addr start_of_this_sm ( Addr a ) {
-   return (a & (~SM_MASK));
+static INLINE Addr start_of_this_page ( Addr a ) {
+   return (a & (~PAGE_MASK));
 }
-static INLINE Bool is_start_of_sm ( Addr a ) {
-   return (start_of_this_sm(a) == a);
+
+static INLINE Bool is_start_of_page ( Addr a ) {
+   return (start_of_this_page(a) == a);
 }
+
+/*static INLINE Bool is_distinguished_sm (SecMap* sm) {
+   return sm >= &sm_distinguished[0] && sm <= &sm_distinguished[1];
+}*/
 
 /* --------------------------------------------------------
  *  Reports
@@ -187,7 +195,7 @@ static void memspace_init(void)
     * and change protection as necessary.
     * but I am not sure how to do it in valgrind libc in a way that address space is
     * placed into clients arena */
-   Addr heap_space = (Addr) VG_(cli_malloc)(SM_SIZE, heap_max_size);
+   Addr heap_space = (Addr) VG_(cli_malloc)(PAGE_SIZE, heap_max_size);
    tl_assert(heap_space != 0);
 
    MemorySpace *ms = VG_(malloc)("an.memspace", sizeof(MemorySpace));
@@ -205,21 +213,15 @@ static void memspace_init(void)
    current_memspace = ms;
 }
 
-/*
-static
+
+/*static
 void memspace_dump(void)
 {
    VG_(printf)("========== MEMSPACE DUMP ===========\n");
    VG_(OSetGen_ResetIter)(current_memspace->auxmap);
    AuxMapEnt *elem;
    while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
-	   Word i;
-	for (i = 0; i < SM_SIZE; i++) {
-	      if (elem->sm->vabits8[i]) {
-		      break;
-	      }
-	   }
-      VG_(printf)("Auxmap %lu-%lu %lu\n", elem->base, elem->base + SM_SIZE, elem->base + i);
+      VG_(printf)("Auxmap %lu-%lu %d %lu\n", elem->base, elem->base + PAGE_SIZE, elem->ref_count, (Addr) elem->data);
    }
 
    XArray *a = current_memspace->allocation_blocks;
@@ -316,7 +318,7 @@ static INLINE AuxMapEnt* maybe_find_in_auxmap ( Addr a )
    AuxMapEnt* res;
 
    //tl_assert(a > MAX_PRIMARY_ADDRESS);
-   a &= ~(Addr) SM_MASK;
+   a &= ~(Addr) PAGE_MASK;
 
    /* First search the front-cache, which is a self-organising
       list containing the most popular entries. */
@@ -361,7 +363,6 @@ static INLINE AuxMapEnt* maybe_find_in_auxmap ( Addr a )
 
    /* First see if we already have it. */
    key.base = a;
-   key.sm   = 0;
 
    res = VG_(OSetGen_Lookup)(current_memspace->auxmap, &key);
    /*if (res)
@@ -369,9 +370,46 @@ static INLINE AuxMapEnt* maybe_find_in_auxmap ( Addr a )
    return res;
 }
 
-static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
+static Page *page_new(Addr a)
 {
+    stats.pages++;
+
+    Page *page = (Page*) VG_(malloc)("an.page", sizeof(Page));
+    page->base = a;
+    page->ref_count = 1;
+    page->has_hash = False;
+    page->data = NULL;
+    page->va = VG_(malloc)("an.va", sizeof(VA));
+    VPRINT(2, "page_new base=%lu %p\n", a, page);
+    return page;
+}
+
+// Page is cloned without data and hash
+static Page* page_clone(Page *page)
+{
+   Page *new_page = page_new(page->base);
+   VG_(memcpy)(new_page->va, page->va, sizeof(VA));
+   return new_page;
+}
+
+static void page_dispose(Page *page)
+{
+   page->ref_count--;
+   if (page->ref_count <= 0) {
+      tl_assert(page->ref_count == 0);
+      stats.pages--;
+      if (page->data) {
+         VG_(free)(page->data);
+      }
+      VG_(free)(page->va);
+      VG_(free)(page);
+   }
+}
+
+static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
+{   
    AuxMapEnt *nyu, *res;
+   Page *page;
 
    /* First see if we already have it. */
    res = maybe_find_in_auxmap( a );
@@ -380,86 +418,100 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
 
    /* Ok, there's no entry in the secondary map, so we'll have
       to allocate one. */
-   a &= ~(Addr) SM_MASK;
+   a &= ~(Addr) PAGE_MASK;
 
    nyu = (AuxMapEnt*) VG_(OSetGen_AllocNode)(
-      current_memspace->auxmap, sizeof(AuxMapEnt) );
+      current_memspace->auxmap, sizeof(AuxMapEnt));
    tl_assert(nyu);
    nyu->base = a;
-   nyu->sm = VG_(malloc)("an.secmap", sizeof(SecMap));
-   VG_(memset(nyu->sm, 0, sizeof(SecMap)));
-   //nyu->sm   = &sm_distinguished[SM_DIST_NOACCESS];
-   VG_(OSetGen_Insert)(current_memspace->auxmap, nyu );
+   page = page_new(a);
+   nyu->page = page;
+   //nyu->sm = &sm_distinguished[SM_DIST_NOACCESS];
+   /*nyu->sm = VG_(malloc)("an.secmap", sizeof(SecMap));
+   VG_(memset(nyu->sm, 0, sizeof(SecMap)));*/
+   VG_(OSetGen_Insert)(current_memspace->auxmap, nyu);
    /*insert_into_auxmap_L1_at( AUXMAP_L1_INSERT_IX, nyu );
    n_auxmap_L2_nodes++;*/
    return nyu;
 }
 
-
-static INLINE SecMap** get_secmap_high_ptr (Addr a)
-{
-   AuxMapEnt* am = find_or_alloc_in_auxmap(a);
-   return &am->sm;
+static void INLINE page_prepare_for_write(Page **page) {
+   VPRINT(2, "page_prepare_for_write base=%lu refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
+   if (UNLIKELY((*page)->ref_count >= 2)) {
+      (*page)->ref_count--;
+      Page *new_page = page_clone(*page);
+      *page = new_page;
+   } else {
+    (*page)->has_hash = False;
+   }
 }
 
-static INLINE SecMap** get_secmap_ptr (Addr a)
+static INLINE Page** get_page_ptr (Addr a)
 {
    /*return ( a <= MAX_PRIMARY_ADDRESS
           ? get_secmap_low_ptr(a)
           : get_secmap_high_ptr(a));*/
-   return get_secmap_high_ptr(a);
+   //return get_secmap_high_ptr(a);
+   return &find_or_alloc_in_auxmap(a)->page;
 }
 
 static
 void set_address_range_perms (
                 Addr a, SizeT lenT, UChar perm)
-{
-   SecMap** sm_ptr;
-   UWord    sm_off;
+{  
+   VA* va;
+   Page **page_ptr;
+   UWord pg_off;
 
-   UWord aNext = start_of_this_sm(a) + SM_SIZE;
+   UWord aNext = start_of_this_page(a) + PAGE_SIZE;
    UWord len_to_next_secmap = aNext - a;
    UWord lenA, lenB;
 
-   // lenT = lenA + lenB (lenA upto first sm, lenB is rest)
-   if ( lenT <= len_to_next_secmap ) {
-      lenA = lenT;
-      lenB = 0;
-   } else if (is_start_of_sm(a)) {
+   // lenT = lenA + lenB (lenA upto first page, lenB is rest)
+   if (is_start_of_page(a)) {
       lenA = 0;
       lenB = lenT;
       goto part2;
+   } else if ( lenT <= len_to_next_secmap ) {
+      lenA = lenT;
+      lenB = 0;
    } else {
       lenA = len_to_next_secmap;
       lenB = lenT - lenA;
    }
 
-   sm_ptr = get_secmap_ptr(a);
-
-   sm_off = SM_OFF(a);
+   page_ptr = get_page_ptr(a);
+   page_prepare_for_write(page_ptr);
+   va = (*page_ptr)->va;
+   pg_off = PAGE_OFF(a);
    while (lenA > 0) {
-      (*sm_ptr)->vabits8[sm_off] = perm;
-      sm_off++;
+      va->vabits[pg_off] = perm;
+      pg_off++;
       lenA--;
    }
 
-   a = start_of_this_sm (a) + SM_SIZE;
+   a = start_of_this_page (a) + PAGE_SIZE;
 
 part2:
-   while (lenB >= SM_SIZE) {
-      sm_ptr = get_secmap_ptr(a);
-      VG_(memset)(&((*sm_ptr)->vabits8), perm, SM_CHUNKS);
-      lenB -= SM_SIZE;
-      a += SM_SIZE;
+   while (lenB >= PAGE_SIZE) {
+      page_ptr = get_page_ptr(a);
+      page_prepare_for_write(page_ptr);
+      va = (*page_ptr)->va;
+
+      VG_(memset)(&((va)->vabits), perm, VA_CHUNKS);
+      lenB -= PAGE_SIZE;
+      a += PAGE_SIZE;
    }
 
-   tl_assert(lenB < SM_SIZE);
+   tl_assert(lenB < PAGE_SIZE);
 
-   sm_ptr = get_secmap_ptr(a);
-   sm_off = 0;
+   page_ptr = get_page_ptr(a);
+   page_prepare_for_write(page_ptr);
+   va = (*page_ptr)->va;
+   pg_off = 0;
    while (lenB > 0) {
-      (*sm_ptr)->vabits8[sm_off] = perm;
-      sm_off++;
+      va->vabits[pg_off] = perm;
+      pg_off++;
       lenB--;
    }
 }
@@ -479,66 +531,123 @@ static INLINE void make_mem_noaccess(Addr a, SizeT len)
    set_address_range_perms(a, len, 0);
 }
 
-static void secmap_hash_content(AN_(MD5_CTX) *ctx, Addr base, SecMap *sm)
+static void hash_to_string(MD5_Digest *digest, char *out);
+
+static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
+{
+   if (!page->has_hash) {
+      //VPRINT(2, "rehashing page %lu\n", page->base);
+      page->has_hash = True;
+      AN_(MD5_CTX) ctx2;
+      AN_(MD5_Init)(&ctx2);
+      UWord i;
+      /* This is quite performance critical
+       * It needs benchmarking before changing this code */
+      UChar *d = (UChar*) page->base;
+      SizeT s = 0;
+      UChar *b = d;
+      for (i = 0; i < PAGE_SIZE; i++) {
+         if (page->va->vabits[i]) {
+            if (s == 0) {
+               b = d + i;
+            }
+            s++;
+         } else if (s != 0) {
+            /*int xx;
+            for (xx = 0; xx < s; xx++) {
+                VG_(printf)("%d,", b[xx]);
+            }*/
+            AN_(MD5_Update)(&ctx2, b, s);
+            s = 0;
+         }
+      }
+      if (s != 0) {
+         AN_(MD5_Update)(&ctx2, b, s);
+      }
+      AN_(MD5_Final)(&page->hash, &ctx2);      
+      char tmp[33];
+      hash_to_string(&page->hash, tmp);
+   }
+   AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
+}
+
+/*static void page_dump(Page *page)
+{
+   VG_(printf)("~~~ Page %p addr=%lu ~~~\n", page, page->base);
+   int chunk_size = 0;
+   UWord i;
+   VA *va = page->va;
+   for (i = 0; i < PAGE_SIZE; i++) {
+      if (va->vabits[i]) {
+         chunk_size++;
+      } else {
+         if (chunk_size != 0) {
+            VG_(printf)("Chunk %lu-%lu %d\n",
+                        page->base + i - chunk_size,
+                        page->base + i,
+                        chunk_size);
+            chunk_size = 0;
+         }
+      }
+   }
+   if (chunk_size != 0) {
+      VG_(printf)("Chunk %lu-%lu %d\n",
+                  page->base + i - chunk_size,
+                  page->base + i,
+                  chunk_size);
+   }
+}*/
+
+static void memimage_save_page_content(Page *page)
 {
    UWord i;
-   /*for (i = 0; i < SM_SIZE; i++) {
-      if (sm->vabits8[i]) {
-	      VG_(printf)("First %lu %lu", i, base + i);
-	      break;
-      }
-   }*/
+   //UWord c = 0;
 
-   UChar *d = (UChar*) base;
-   for (i = 0; i < SM_SIZE; i++) {
-      if (sm->vabits8[i]) {
-         AN_(MD5_Update)(ctx, &d[i], 1);
+   if (page->data == NULL) {
+      page->data = VG_(malloc)("an.page.data", PAGE_SIZE);
+   }
+
+   UChar *src = (UChar*) page->base;
+   UChar *dst = page->data;
+   VA *va = page->va;
+   for (i = 0; i < PAGE_SIZE; i++) {
+      if (va->vabits[i]) {
+         dst[i] = src[i];
+         //c++;
       }
    }
 }
 
-static void memimage_part_save_content(Addr base, SecMap *sm, MemoryImagePart *mpart)
+static void memimage_restore_page_content(Page *page)
 {
-   mpart->base = base;
-   VG_(memcpy)(&mpart->sm, sm, sizeof(SecMap));
-
+   //page_dump(page);
+   VPRINT(2, "memimage_restore_page_content base=%lu\n", page->base);
    UWord i;
-   UChar *d = (UChar*) base;
-   UWord c = 0;
-   UChar *data = &mpart->data[0];
-   for (i = 0; i < SM_SIZE; i++) {
-      if (sm->vabits8[i]) {
-         data[i] = d[i];
-         c++;
+   UChar *dst = (UChar*) page->base;
+   VA *va = page->va;
+   tl_assert(page->data);
+   UChar *src = page->data;
+   for (i = 0; i < PAGE_SIZE; i++) {
+      if (va->vabits[i]) {
+          dst[i] = src[i];
       }
    }
 }
 
-static void memimage_part_restore_content(MemoryImagePart *mpart)
-{
-   UWord i;
-   UChar *d = (UChar*) mpart->base;
-   SecMap *sm = &mpart->sm;
-   UChar *data = &mpart->data[0];
-   for (i = 0; i < SM_SIZE; i++) {
-      if (sm->vabits8[i]) {
-          d[i] = data[i];
-      }
-   }
-}
-
-static void memimage_save_current(MemoryImage *memimage)
+static void memimage_save(MemoryImage *memimage)
 {
    Word size = VG_(OSetGen_Size)(current_memspace->auxmap);
-   memimage->parts_size = size;
-   MemoryImagePart *mpart = VG_(malloc)("an.memimage", size * sizeof(MemoryImagePart));
-   memimage->parts = mpart;
+   memimage->pages_count = size;
+   Page **pages = (Page**) VG_(malloc)("an.memimage", size * sizeof(Page*));
+   memimage->pages = pages;
 
    VG_(OSetGen_ResetIter)(current_memspace->auxmap);
    AuxMapEnt *elem;
    while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
-      memimage_part_save_content(elem->base, elem->sm, mpart);
-      mpart++;
+      *pages++ = elem->page;
+      if (elem->page->ref_count++ < 2) {
+         memimage_save_page_content(elem->page);
+      }
    }
    memimage->allocation_blocks = VG_(cloneXA)("an.memimage",
                                               current_memspace->allocation_blocks);
@@ -546,31 +655,48 @@ static void memimage_save_current(MemoryImage *memimage)
 
 static void memimage_free(MemoryImage *memimage)
 {
-   VG_(free)(memimage->parts);
+   UWord i;
+   for (i = 0; i < memimage->pages_count; i++)
+   {
+      page_dispose(memimage->pages[i]);
+   }
+   VG_(free)(memimage->pages);
    VG_(deleteXA)(memimage->allocation_blocks);
 }
 
-static void memimage_restore_current(MemoryImage *memimage)
+static void memimage_restore(MemoryImage *memimage)
 {
-   OSet *auxmap = VG_(OSetGen_EmptyClone)(current_memspace->auxmap);
-   VG_(OSetGen_Destroy(current_memspace->auxmap));
-   current_memspace->auxmap = auxmap;
+   OSet *old_auxmap = current_memspace->auxmap;
+   OSet *auxmap = VG_(OSetGen_EmptyClone)(old_auxmap);
 
    UWord i;
-   for (i = 0; i < memimage->parts_size; i++) {
-      MemoryImagePart *mpart = &memimage->parts[i];
-      AuxMapEnt *nyu;
-      nyu = (AuxMapEnt*) VG_(OSetGen_AllocNode)(auxmap, sizeof(AuxMapEnt));
-      nyu->base = mpart->base;
-      memimage_part_restore_content(mpart);
-      nyu->sm = VG_(malloc)("an.secmap", sizeof(SecMap));
-      VG_(memcpy)(nyu->sm, &mpart->sm, sizeof(SecMap));
+   for (i = 0; i < memimage->pages_count; i++) {
+      Page *page = memimage->pages[i];
+      AuxMapEnt *nyu = (AuxMapEnt*) VG_(OSetGen_AllocNode)(auxmap, sizeof(AuxMapEnt));
+      nyu->base = page->base;
+      nyu->page = page;
       VG_(OSetGen_Insert)(auxmap, nyu);
+      AuxMapEnt *ent = VG_(OSetGen_Lookup)(old_auxmap, nyu);
+      if (ent) {
+         page->ref_count++;
+         if (ent->page == page) {
+             continue; // We are replacing the page by the same page
+         }
+      }
+      memimage_restore_page_content(page);
    }
 
    VG_(deleteXA)(current_memspace->allocation_blocks);
    current_memspace->allocation_blocks = VG_(cloneXA)("an.allocations",
                                                       memimage->allocation_blocks);
+
+   VG_(OSetGen_ResetIter)(old_auxmap);
+   AuxMapEnt *elem;
+   while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
+      page_dispose(elem->page);
+   }
+   VG_(OSetGen_Destroy(old_auxmap));
+   current_memspace->auxmap = auxmap;
 }
 
 static void memspace_hash(AN_(MD5_CTX) *ctx)
@@ -579,9 +705,8 @@ static void memspace_hash(AN_(MD5_CTX) *ctx)
    VG_(OSetGen_ResetIter)(current_memspace->auxmap);
    AuxMapEnt *elem;
    while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
-      AN_(MD5_Update)(ctx, elem->sm, sizeof(SecMap));
       //VG_(printf)("Updating secmap %lu\n", elem->base);
-      secmap_hash_content(ctx, elem->base, elem->sm);
+      page_hash(ctx, elem->page);
    }
 }
 
@@ -628,7 +753,7 @@ static State* state_save_current(void)
    VG_(memcpy)(&state->threadstate, tst, sizeof(ThreadState));
 
    /* Save memory state */
-   memimage_save_current(&state->memimage);
+   memimage_save(&state->memimage);
 
    return state;
 }
@@ -668,8 +793,33 @@ static void state_restore(State *state)
    VG_(memcpy)(tst, &state->threadstate, sizeof(ThreadState));
 
    /* Restore memory image */
-   memimage_restore_current(&state->memimage);
+   memimage_restore(&state->memimage);
 }
+
+
+/* --------------------------------------------------------
+ *  Events
+ * --------------------------------------------------------*/
+
+static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
+{
+   //VG_(printf)("TRACE WRITE %lu\n", addr);
+   AuxMapEnt *ent = maybe_find_in_auxmap(addr);
+   page_prepare_for_write(&ent->page);
+
+   // Overlap test
+   Addr offset = (addr & PAGE_MASK) + size;
+   if (UNLIKELY(offset > PAGE_SIZE)) {
+      trace_write(start_of_this_page(addr) + PAGE_SIZE, offset - PAGE_SIZE);
+   }
+}
+
+// This function should be called when write from controller occurs ("WRITE" commands)
+static void extern_write(Addr addr, SizeT size)
+{
+   trace_write(addr, size);
+}
+
 
 /* --------------------------------------------------------
  *  CONTROLL
@@ -730,9 +880,8 @@ ret:
 
 static void write_message(const char *str)
 {
-   if (verbosity_level > 0) {
-      VG_(printf)("AN>> %s", str);
-   }
+   VPRINT(1, "AN>> %s", str);
+
    Int len = VG_(strlen)(str);
    Int r = VG_(write_socket)(control_socket, str, len);
    if (r == -1) {
@@ -784,13 +933,13 @@ static const char hex_chars[16] = {
 
 /* Convert 16B MD5 hash digest to 32B human readable string
  * "out" has to be 33B length buffer, because functions add \0 */
-static void hash_to_string(unsigned char *digest, char *out)
+static void hash_to_string(MD5_Digest *digest, char *out)
 {
    int i = 0;
    for (i = 0; i < 16; ++i) {
-      char Byte = digest[i];
-      out[i*2] = hex_chars[(Byte & 0xF0) >> 4];
-      out[i*2+1] = hex_chars[Byte & 0x0F];
+      unsigned char byte = digest->data[i];
+      out[i*2] = hex_chars[(byte & 0xF0) >> 4];
+      out[i*2+1] = hex_chars[byte & 0x0F];
    }
    out[32] = 0;
 }
@@ -835,9 +984,7 @@ void process_commands(CommandsEnterType cet)
       if (!read_command(command)) {
          VG_(exit)(1);
       }
-      if (verbosity_level > 0) {
-        VG_(printf)("AN<< %s\n", command);
-      }
+      VPRINT(1, "AN<< %s\n", command);
       char *cmd = VG_(strtok(command, " "));
 
       if (!VG_(strcmp(cmd, "SAVE"))) {
@@ -864,10 +1011,12 @@ void process_commands(CommandsEnterType cet)
          void *addr = (void*) next_token_uword();
          char *param = next_token();
          if (!VG_(strcmp)(param, "int")) {
+            extern_write((Addr)addr, sizeof(int));
             *((Int*) addr) = next_token_uword();
          } else if (!VG_(strcmp(param, "buffer"))) {
             UWord *buffer = (UWord*) next_token_uword();
             UWord size = *buffer;
+            extern_write((Addr)addr, size);
             VG_(memcpy(addr, buffer + 1, size));
          } else {
             write_message("Error: Invalid argument\n");
@@ -932,13 +1081,13 @@ void process_commands(CommandsEnterType cet)
          void* addr = (void*) next_token_uword();
          UWord size = next_token_uword();
          void* buffer = buffer_new(addr, size);
-         unsigned char digest[16];
+         MD5_Digest digest;
          char digest_str[33]; // 16 * 2 + 1
          AN_(MD5_CTX) ctx;
          AN_(MD5_Init)(&ctx);
          buffer_hash(buffer, &ctx);
-         AN_(MD5_Final)(digest, &ctx);
-         hash_to_string(digest, digest_str);
+         AN_(MD5_Final)(&digest, &ctx);
+         hash_to_string(&digest, digest_str);
          VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH,
                       "%lu %s\n", (UWord) buffer, digest_str);
          write_message(command);
@@ -953,13 +1102,13 @@ void process_commands(CommandsEnterType cet)
       }
 
       if (!VG_(strcmp(cmd, "HASH"))) {
-         unsigned char digest[16];
+         MD5_Digest digest;
          char digest_str[33]; // 16 * 2 + 1
          AN_(MD5_CTX) ctx;
          AN_(MD5_Init)(&ctx);
          state_hash(&ctx);
-         AN_(MD5_Final)(digest, &ctx);
-         hash_to_string(digest, digest_str);
+         AN_(MD5_Final)(&digest, &ctx);
+         hash_to_string(&digest, digest_str);
          VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
                       "%s\n", digest_str));
          write_message(command);
@@ -983,6 +1132,17 @@ void process_commands(CommandsEnterType cet)
          state_free(state);
          write_message("Ok\n");
          continue;
+      }
+
+      if (!VG_(strcmp)(cmd, "STATS")) {
+          VG_(snprintf)(command,
+                        MAX_MESSAGE_BUFFER_LENGTH,
+                        "pages %ld|"
+                        "active-pages %ld\n",
+                        stats.pages,
+                        VG_(OSetGen_Size)(current_memspace->auxmap));
+          write_message(command);
+          continue;
       }
 
       if (!VG_(strcmp(cmd, "QUIT"))) {
@@ -1060,20 +1220,22 @@ static
 void new_mem_mmap (Addr a, SizeT len, Bool rr, Bool ww, Bool xx,
                    ULong di_handle)
 {
-   //VG_(printf)("MMAP %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+   VPRINT(2, "new_mem_mmap %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
 
-   if (rr && ww) {
+   if (rr && ww) {      
       make_mem_defined(a, len);
    } else {
       make_mem_noaccess(a, len);
    }
+
+   //memspace_dump();
 }
 
 static
 void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
 {
-   //VG_(printf)("MPROTECT %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
-   //
+   VPRINT(2, "new_mem_mprotect %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+
    if (rr && ww) {
       make_mem_defined(a, len);
    } else {
@@ -1084,7 +1246,7 @@ void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
 static
 void mem_unmap(Addr a, SizeT len)
 {
-   //VG_(printf)("UNMAP %lu-%lu %lu %d %d %d\n", a, a + len, len);
+   VPRINT(2, "unmap %lu-%lu %lu\n", a, a + len, len);
    make_mem_noaccess(a, len);
 }
 
@@ -1104,13 +1266,20 @@ void new_mem_startup(Addr a, SizeT len,
 
 static void new_mem_stack (Addr a, SizeT len)
 {
-   //VG_(printf)("NEW STACK %p %lu\n", (void*) a, len);
+   //VG_(printf)("NEW STACK %lu %lu\n", a, len);
+   make_mem_undefined(a, len);
+}
+
+static
+void new_mem_stack_signal(Addr a, SizeT len, ThreadId tid)
+{
+   //VG_(printf)("STACK SIGNAL %lu %lu", a, len);
    make_mem_undefined(a, len);
 }
 
 static void die_mem_stack (Addr a, SizeT len)
 {
-   //VG_(printf)("DIE STACK %p %lu\n", (void*) a, len);
+   //VG_(printf)("DIE STACK %lu %lu\n", a, len);
    make_mem_noaccess(a, len);
 }
 
@@ -1142,14 +1311,59 @@ Bool restore_thread(ThreadId tid)
 }
 
 static
+void event_write(IRSB *sb, IRExpr *addr, Int dsize)
+{
+   IRExpr **args = mkIRExprVec_2(addr, mkIRExpr_HWord(dsize));
+   IRDirty *di   = unsafeIRDirty_0_N( /*regparms*/2, 
+                             "trace_write", VG_(fnptr_to_fnentry)(trace_write),
+                             args);
+   addStmtToIRSB( sb, IRStmt_Dirty(di) );
+}
+
+static
 IRSB* an_instrument ( VgCallbackClosure* closure,
-                      IRSB* bb,
+                      IRSB* sb_in,
                       VexGuestLayout* layout,
                       VexGuestExtents* vge,
                       VexArchInfo* archinfo_host,
                       IRType gWordTy, IRType hWordTy )
 {
-    return bb;
+   Int i;
+   IRSB *sb_out;
+   IRTypeEnv* tyenv = sb_in->tyenv;
+
+   if (gWordTy != hWordTy) {
+      /* We don't currently support this case. */
+      VG_(tool_panic)("host/guest word size mismatch");
+   }
+
+   sb_out = deepCopyIRSBExceptStmts(sb_in);
+
+   i = 0;
+   while (i < sb_in->stmts_used && sb_in->stmts[i]->tag != Ist_IMark) {
+      addStmtToIRSB( sb_out, sb_in->stmts[i] );
+      i++;
+   }
+
+   for (/*use current i*/; i < sb_in->stmts_used; i++) {
+      IRStmt* st = sb_in->stmts[i];
+      switch (st->tag) {
+
+         case Ist_Store: {
+            IRExpr* data = st->Ist.Store.data;
+            IRType  type = typeOfIRExpr(tyenv, data);
+            tl_assert(type != Ity_INVALID);
+            event_write(sb_out, st->Ist.Store.addr, sizeofIRType(type) );
+            addStmtToIRSB(sb_out, st);
+            break;
+         }
+         default:
+            addStmtToIRSB(sb_out, st);
+            break;
+      }
+   }
+
+   return sb_out;
 }
 
 static void an_fini(Int exitcode)
@@ -1192,12 +1406,79 @@ static void* user_malloc (ThreadId tid, SizeT n)
     return (void*) addr;
 }
 
+static
+void* user_memalign (ThreadId tid, SizeT alignB, SizeT n)
+{
+    VG_(tool_panic)("user_memalign: Not implemented");
+}
+
+static
+void* user_calloc (ThreadId tid, SizeT nmemb, SizeT size1)
+{
+   VG_(tool_panic)("user_calloc: Not implemented");
+}
+
+static
+void* user_realloc(ThreadId tid, void* p_old, SizeT new_szB)
+{
+    VG_(tool_panic)("user_realloc: Not implemented");
+}
+
+static
+SizeT user_malloc_usable_size(ThreadId tid, void* p)
+{
+    VG_(tool_panic)("user_malloc_usable_size: Not implemented");
+}
+
+
 static void user_free (ThreadId tid, void *a)
 {
-    //VG_(printf)("!!! FREE %p\n", a);
+    VPRINT(2, "user_free %lu\n", (Addr) a);
     SizeT size = memspace_free((Addr) a);
     make_mem_noaccess((Addr) a, size);
 }
+
+/*static
+void check_mem_is_defined ( CorePart part, ThreadId tid, const HChar* s,
+                            Addr base, SizeT size )
+{
+    VG_(tool_panic)("check_mem_is_defined: Not implemented");
+}
+
+static
+void check_mem_is_defined_asciiz ( CorePart part, ThreadId tid,
+                                   const HChar* s, Addr str )
+{
+    VG_(tool_panic)("check_mem_is_defined_asciiz: Not implemented");
+}
+
+static
+void check_mem_is_addressable ( CorePart part, ThreadId tid, const HChar* s,
+                                Addr base, SizeT size )
+{
+    VG_(tool_panic)("check_mem_is_addressable: Not implemented");
+}*/
+
+static
+void post_mem_write(CorePart part, ThreadId tid, Addr a, SizeT len)
+{
+   make_mem_defined(a, len);
+}
+
+static void post_reg_write ( CorePart part, ThreadId tid,
+                                PtrdiffT offset, SizeT size)
+{
+   //VG_(tool_panic)("post_reg_write: Not implemented");
+}
+
+static
+void post_reg_write_clientcall ( ThreadId tid,
+                                    PtrdiffT offset, SizeT size, Addr f)
+{
+   post_reg_write(/*dummy*/0, tid, offset, size);
+}
+
+
 
 static void an_pre_clo_init(void)
 {
@@ -1223,14 +1504,16 @@ static void an_pre_clo_init(void)
    VG_(needs_malloc_replacement)  (user_malloc,
                                    user_malloc, //MC_(__builtin_new),
                                    user_malloc, //MC_(__builtin_vec_new),
-                                   NULL, //MC_(memalign),
-                                   NULL, //MC_(calloc),
+                                   user_memalign, //MC_(memalign),
+                                   user_calloc, //MC_(calloc),
                                    user_free, //MC_(free),
                                    NULL, //MC_(__builtin_delete),
                                    NULL, //MC_(__builtin_vec_delete),
-                                   NULL, //MC_(realloc),
-                                   NULL, //MC_(malloc_usable_size),
+                                   user_realloc, //MC_(realloc),
+                                   user_malloc_usable_size, //MC_(malloc_usable_size),
                                    0);
+
+   VG_(track_new_mem_mmap)    (new_mem_mmap);
    VG_(track_new_mem_startup) (new_mem_startup);
    VG_(track_change_mem_mprotect) (new_mem_mprotect);
 
@@ -1241,12 +1524,22 @@ static void an_pre_clo_init(void)
 
    /*VG_(track_new_mem_mmap)    (an_new_mem_mmap);
    VG_(track_new_mem_brk)     (an_new_mem_brk);
-   VG_(needs_client_requests) (an_handle_client_request);
+   VG_(needs_client_requests) (an_handle_client_request);*/
 
-   VG_(needs_restore_thread)(an_restore_thread);*/
-
+   /*VG_(needs_restore_thread)(an_restore_thread);*/
+   VG_(track_new_mem_stack_signal) (new_mem_stack_signal);
    VG_(track_new_mem_stack) (new_mem_stack);
    VG_(track_die_mem_stack) (die_mem_stack);
+
+   VG_(track_ban_mem_stack)       (make_mem_noaccess);
+
+   /*VG_(track_pre_mem_read)        (check_mem_is_defined );
+   VG_(track_pre_mem_read_asciiz) (check_mem_is_defined_asciiz);
+   VG_(track_pre_mem_write)       (check_mem_is_addressable);*/
+   VG_(track_post_mem_write)      (post_mem_write);
+   VG_(track_post_reg_write)                  (post_reg_write);
+   VG_(track_post_reg_write_clientcall_return)(post_reg_write_clientcall);
+
    VG_(needs_client_requests) (an_handle_client_request);
 
    states_table = VG_(HT_construct)("an.states");
