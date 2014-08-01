@@ -1507,8 +1507,8 @@ static void an_pre_clo_init(void)
                                    user_memalign, //MC_(memalign),
                                    user_calloc, //MC_(calloc),
                                    user_free, //MC_(free),
-                                   NULL, //MC_(__builtin_delete),
-                                   NULL, //MC_(__builtin_vec_delete),
+                                   user_free, //MC_(__builtin_delete),
+                                   user_free, //MC_(__builtin_vec_delete),
                                    user_realloc, //MC_(realloc),
                                    user_malloc_usable_size, //MC_(malloc_usable_size),
                                    0);
