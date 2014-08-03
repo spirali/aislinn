@@ -182,6 +182,8 @@ class Program:
             self.build()
         else:
             cleanup_report()
+        if isinstance(args, str):
+            args = args.split()
         run_and_check(self.make_args(processes, args, **kw),
                       AISLINN_BUILD,
                       exitcode,

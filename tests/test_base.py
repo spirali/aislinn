@@ -61,12 +61,15 @@ class BaseTests(TestCase):
         self.execute(1)
         self.no_errors()
 
-    def test_args(self):
+    def test_invalid_args(self):
         self.program("args")
         args = [ "isend_rank_1",
                  "isend_rank_2",
                  "isend_rank_3",
                  "irecv_rank",
+                 "irecv_tag",
+                 "send_tag",
+                 "send_tag_2",
                  "isend_count",
                  "irecv_count",
                  "irecv_datatype" ]

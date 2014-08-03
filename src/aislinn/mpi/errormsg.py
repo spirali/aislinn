@@ -78,17 +78,18 @@ class InvalidArgument(ErrorMessage):
     name = "invalidarg"
     short_description = "Invalid argument"
 
-    def __init__(self, function_name, arg_value, arg_position=None):
+    def __init__(self, function_name, arg_value, arg_position=None, extra_message=""):
         ErrorMessage.__init__(self)
         self.function_name = function_name
         self.arg_value = arg_value
         self.arg_position = arg_position
+        self.extra_message = extra_message
 
     @property
     def description(self):
         return "Function '{0.function_name}' was called with an invalid " \
-               "value ({0.arg_value}) in {0.arg_position}. argument." \
-               .format(self)
+               "value ({0.arg_value}) in {0.arg_position}. argument. {1}" \
+               .format(self, self.extra_message)
 
 
 class RuntimeErr(ErrorMessage):

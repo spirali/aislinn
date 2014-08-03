@@ -51,10 +51,11 @@ class ExecutionContext:
 
 class ValidateException(Exception):
 
-    def __init__(self, value, arg_position):
+    def __init__(self, value, arg_position, extra_message=""):
         Exception.__init__(self)
         self.value = value
         self.arg_position = arg_position
+        self.extra_message = extra_message
 
 
 class Generator:
@@ -378,7 +379,10 @@ class Generator:
                 else:
                     raise Exception("Unkown function call: " + repr(call))
         except ValidateException as e:
-            emsg = errormsg.InvalidArgument(call[1], e.value, e.arg_position)
+            emsg = errormsg.InvalidArgument(call[1],
+                                            e.value,
+                                            e.arg_position,
+                                            e.extra_message)
             emsg.stacktrace = self.controller.get_stacktrace()
 
             context.add_error_message(emsg)
@@ -404,6 +408,19 @@ class Generator:
                 raise ValidateException("MPI_ANY_SOURCE", arg_position)
         elif rank < 0 or rank >= self.process_count:
             raise ValidateException(rank, arg_position)
+
+    def validate_tag(self,
+                     tag,
+                     arg_position,
+                     any_tag_allowed):
+
+        if tag == consts.MPI_ANY_TAG:
+            if not any_tag_allowed:
+                raise ValidateException("MPI_ANY_TAG", arg_position)
+        elif tag < 0:
+            raise ValidateException(tag,
+                                    arg_position,
+                                    "Tag has to be a non-negative number.")
 
     def validate_count(self, size, arg_position):
         if size < 0:
@@ -470,6 +487,7 @@ class Generator:
                           ))
         self.validate_count(count, 2)
         self.validate_rank(target, 4, False)
+        self.validate_tag(tag, 5, False)
         size = count * self.get_datatype_size(datatype, 3)
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
         vg_buffer = self.vg_buffers.new(buffer_id)
@@ -498,6 +516,8 @@ class Generator:
 
         self.validate_count(count, 2)
         self.validate_rank(source, 4, True)
+        self.validate_tag(tag, 5, True)
+
         size = count * self.get_datatype_size(datatype, 3)
 
         e = event.CommEvent("Recv", state.rank, source, tag)
@@ -522,6 +542,8 @@ class Generator:
                           ))
         self.validate_count(count, 2)
         self.validate_rank(target, 4, False)
+        self.validate_tag(tag, 5, False)
+
         size = count * self.get_datatype_size(datatype, 3)
 
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
@@ -549,6 +571,8 @@ class Generator:
 
         self.validate_count(count, 2)
         self.validate_rank(source, 4, True)
+        self.validate_tag(tag, 5, True)
+
         size = count * self.get_datatype_size(datatype, 3)
 
         request_id = state.add_recv_request(source, tag, buf_ptr, size)

@@ -38,6 +38,7 @@ const MPI_Datatype MPI_LONG_DOUBLE = 0xFF00111;
 #define MPI_STATUS_IGNORE ((MPI_Status*) 0)
 #define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
 #define MPI_ANY_SOURCE 0xFFFF
+#define MPI_ANY_TAG -0xABF1
 
 inline void MPI_Init(int *argc, char ***argv) {
 	aislinn_call_0("MPI_Init");

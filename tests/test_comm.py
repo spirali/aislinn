@@ -114,6 +114,18 @@ class CommTests(TestCase):
         self.execute(2, ("DOUBLE",))
         self.no_errors()
 
+    def test_tag(self):
+        self.program("tag")
+        self.execute(2, "10 20", stdout="100 200\n")
+        self.no_errors()
+        self.execute(2, "20 10", stdout="200 100\n")
+        self.no_errors()
+        self.execute(2, "MPI_ANY_TAG MPI_ANY_TAG", stdout="100 200\n")
+        self.no_errors()
+        self.execute(2, "20 MPI_ANY_TAG", stdout="200 100\n")
+        self.no_errors()
+        self.execute(2, "10 1", stdout="")
+        self.single_error("deadlock")
 
 if __name__ == "__main__":
     unittest.main()

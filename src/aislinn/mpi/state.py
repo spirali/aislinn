@@ -233,7 +233,8 @@ class State:
             for message in self.messages:
                 if (request.source == consts.MPI_ANY_SOURCE \
                         or request.source == message.source) and \
-                        request.tag == message.tag and not flags[message.source]:
+                        (request.tag == consts.MPI_ANY_TAG or request.tag == message.tag) \
+                        and not flags[message.source]:
                     if already_matched(message):
                          continue # Message already taken from other request
                     flags[message.source] = True

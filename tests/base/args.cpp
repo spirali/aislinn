@@ -21,11 +21,17 @@ int main(int argc, char **argv)
 		MPI_Isend(&data, 1, MPI_INT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "irecv_rank")) {
 		MPI_Irecv(&data, 1, MPI_INT, 1000, 1, MPI_COMM_WORLD, &r);
+	} else if(!strcmp(argv[1], "send_tag")) {
+		MPI_Send(&data, 1, MPI_INT, 1, -100, MPI_COMM_WORLD);
+	} else if(!strcmp(argv[1], "send_tag_2")) {
+		MPI_Send(&data, 1, MPI_INT, 1, MPI_ANY_TAG, MPI_COMM_WORLD);
+	} else if(!strcmp(argv[1], "irecv_tag")) {
+		MPI_Irecv(&data, 1, MPI_INT, 1, -100, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "isend_count")) {
 		MPI_Isend(&data, -500, MPI_INT, 1, 1, MPI_COMM_WORLD, &r);
 	} else if(!strcmp(argv[1], "irecv_count")) {
 		MPI_Irecv(&data, -1, MPI_INT, 1, 1, MPI_COMM_WORLD, &r);
-    } else if(!strcmp(argv[1], "irecv_datatype")) {
+	} else if(!strcmp(argv[1], "irecv_datatype")) {
 		MPI_Irecv(&data, 100, 0, 1, 1, MPI_COMM_WORLD, &r);
 	} else {
 		return 1;
