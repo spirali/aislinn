@@ -348,7 +348,9 @@ class Generator:
 
     def make_error_message_from_report(self, parts):
         assert parts[0] == "REPORT"
-        return errormsg.make_runtime_err(parts[1])
+        e = errormsg.make_runtime_err(parts[1], parts[2:])
+        e.stacktrace = self.controller.get_stacktrace()
+        return e
 
     def execute_state(self, gstate, state):
         if state.vg_state is not None:

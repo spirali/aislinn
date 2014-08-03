@@ -78,7 +78,9 @@ class InvalidArgument(ErrorMessage):
     name = "invalidarg"
     short_description = "Invalid argument"
 
-    def __init__(self, function_name, arg_value, arg_position=None, extra_message=""):
+    def __init__(self, function_name,
+                       arg_value, arg_position=None,
+                       extra_message=""):
         ErrorMessage.__init__(self)
         self.function_name = function_name
         self.arg_value = arg_value
@@ -93,14 +95,39 @@ class InvalidArgument(ErrorMessage):
 
 
 class RuntimeErr(ErrorMessage):
-    pass
+
+    def __init__(self, args):
+        pass
 
 
-def make_runtime_err(code):
+class HeapExhausted(RuntimeErr):
+
+    name = "heaperror"
+    short_description = "Heap exhausted"
+    description = "Process allocated more memory on heap than limit. "\
+                  "Use argument --heapsize to bigger value."
+
+
+class InvalidWrite(RuntimeErr):
+
+    name = "invalidwrite"
+    short_description = "Invalid write"
+
+    def __init__(self, args):
+        self.addr, self.size = map(int, args)
+
+    @property
+    def description(self):
+        return "Invalid write of size {0.size} at address " \
+               "0x{0.addr:08X}".format(self)
+
+
+def make_runtime_err(code, args):
+    runtime_errors = [ HeapExhausted,
+                       InvalidWrite ]
+    for e in runtime_errors:
+        if e.name == code:
+            return e(args)
     e = RuntimeErr()
     e.name = code
-    if code == "heaperror":
-        e.short_description = "Heap exhausted"
-        e.description = "Process allocated more memory on heap than limit. "\
-                        "Use argument --heapsize to bigger value."
     return e

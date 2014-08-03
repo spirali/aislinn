@@ -176,12 +176,20 @@ static INLINE Bool is_start_of_page ( Addr a ) {
  *  Reports
  * --------------------------------------------------------*/
 
-static void report_error(const char *code)
+static NOINLINE void report_error(const char *code)
 {
    char message[MAX_MESSAGE_BUFFER_LENGTH];
    VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH, "REPORT %s\n", code);
    write_message(message);
    process_commands(CET_REPORT);
+   tl_assert(0); // no return from process_commands
+}
+
+static NOINLINE void report_error_write(Addr addr, SizeT size)
+{
+   char message[MAX_MESSAGE_BUFFER_LENGTH];
+   VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH, "invalidwrite %lx %lu", addr, size);
+   report_error(message);
 }
 
 
@@ -191,12 +199,20 @@ static void report_error(const char *code)
 
 static void memspace_init(void)
 {
-   /* It should be allocated with mmap with PROT_NONE to just reserse address space,
-    * and change protection as necessary.
-    * but I am not sure how to do it in valgrind libc in a way that address space is
-    * placed into clients arena */
-   Addr heap_space = (Addr) VG_(cli_malloc)(PAGE_SIZE, heap_max_size);
+   /* Here we need to reserve an address space for our heap manager,
+    * We need deterministic allocator that can be saved into and restored from memimage
+    *
+    * VG_(malloc) is not good solution because address is taken from a bad memory area and optimization
+    * like in memcheck (primary map) cannot be applied
+    * But VG_(cli_malloc) is not used because it reports underlying mmap
+    * through new_mem_mmap and it causes that the whole heap space would be marked through VA flags.
+    * ?? Probably VG_(am_mmap_anon_float_client) should be called
+    */
+   Addr heap_space = (Addr) VG_(malloc)("heap", heap_max_size);
+
+
    tl_assert(heap_space != 0);
+   VPRINT(2, "memspace_init: heap %lu-%lu\n", heap_space, heap_space + heap_max_size);
 
    MemorySpace *ms = VG_(malloc)("an.memspace", sizeof(MemorySpace));
    ms->auxmap = VG_(OSetGen_Create)(/*keyOff*/  offsetof(AuxMapEnt,base),
@@ -435,8 +451,8 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
    return nyu;
 }
 
-static void INLINE page_prepare_for_write(Page **page) {
-   VPRINT(2, "page_prepare_for_write base=%lu refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
+static void INLINE make_own_copy_of_page(Page **page) {
+   VPRINT(2, "make_own_copy base=%lu refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
    if (UNLIKELY((*page)->ref_count >= 2)) {
       (*page)->ref_count--;
       Page *new_page = page_clone(*page);
@@ -444,6 +460,11 @@ static void INLINE page_prepare_for_write(Page **page) {
    } else {
     (*page)->has_hash = False;
    }
+}
+
+
+static void INLINE page_prepare_for_va_write(Page **page) {
+   make_own_copy_of_page(page);
 }
 
 static INLINE Page** get_page_ptr (Addr a)
@@ -481,7 +502,7 @@ void set_address_range_perms (
    }
 
    page_ptr = get_page_ptr(a);
-   page_prepare_for_write(page_ptr);
+   page_prepare_for_va_write(page_ptr);
    va = (*page_ptr)->va;
    pg_off = PAGE_OFF(a);
    while (lenA > 0) {
@@ -495,7 +516,7 @@ void set_address_range_perms (
 part2:
    while (lenB >= PAGE_SIZE) {
       page_ptr = get_page_ptr(a);
-      page_prepare_for_write(page_ptr);
+      page_prepare_for_va_write(page_ptr);
       va = (*page_ptr)->va;
 
       VG_(memset)(&((va)->vabits), perm, VA_CHUNKS);
@@ -506,7 +527,7 @@ part2:
    tl_assert(lenB < PAGE_SIZE);
 
    page_ptr = get_page_ptr(a);
-   page_prepare_for_write(page_ptr);
+   page_prepare_for_va_write(page_ptr);
    va = (*page_ptr)->va;
    pg_off = 0;
    while (lenB > 0) {
@@ -803,14 +824,25 @@ static void state_restore(State *state)
 
 static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 {
-   //VG_(printf)("TRACE WRITE %lu\n", addr);
+   //VG_(printf)("TRACE WRITE %lu %lu\n", addr, size);
    AuxMapEnt *ent = maybe_find_in_auxmap(addr);
-   page_prepare_for_write(&ent->page);
+   make_own_copy_of_page(&ent->page);
+   Page *page = ent->page;
+   Addr offset = addr - page->base;
+   SizeT i;
+   //page_dump(page);
+   for (i = 0; i < size; i++) {
+      //VG_(printf)("OFFSET %lu %i\n", offset + i, page->va->vabits[offset + i]);
+      if (UNLIKELY(offset + i < PAGE_SIZE && !page->va->vabits[offset + i])) {
+         report_error_write(addr, size);
+         tl_assert(0); // no return here
+      }
+   }
 
    // Overlap test
-   Addr offset = (addr & PAGE_MASK) + size;
-   if (UNLIKELY(offset > PAGE_SIZE)) {
-      trace_write(start_of_this_page(addr) + PAGE_SIZE, offset - PAGE_SIZE);
+   Addr end = (addr & PAGE_MASK) + size;
+   if (UNLIKELY(end > PAGE_SIZE)) {
+      trace_write(start_of_this_page(addr) + PAGE_SIZE, end - PAGE_SIZE);
    }
 }
 
@@ -964,20 +996,20 @@ static UWord next_token_uword(void) {
    return value;
 }
 
-static void process_commands_init(void) {
+static void process_commands_init(CommandsEnterType cet) {
    ThreadState *tst = VG_(get_ThreadState)(1);
    tl_assert(tst);
    tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
-   tl_assert(!tst->sched_jmpbuf_valid);
+   tl_assert(!tst->sched_jmpbuf_valid || cet == CET_REPORT);
    // Reset invalid jmpbuf to make be able generate reasonable hash of state
-   //VG_(memset)(tst->sched_jmpbuf, 0, sizeof(tst->sched_jmpbuf));
+   // If cet == CET_REPORT then we do not return to program so we dont care about hash
    tst->arch.vex.guest_RDX = 0; // Result of client request
 }
 
 static
 void process_commands(CommandsEnterType cet)
 {
-   process_commands_init();
+   process_commands_init(cet);
    char command[MAX_MESSAGE_BUFFER_LENGTH + 1];
 
    for (;;) {
@@ -1060,8 +1092,12 @@ void process_commands(CommandsEnterType cet)
             VG_(printf)("Process cannot be resume after report");
             VG_(exit)(1);
          }
+         ThreadState *tst = VG_(get_ThreadState)(1);
+         tl_assert(tst);
+         tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
+         tl_assert(!tst->sched_jmpbuf_valid || cet == CET_REPORT);
+
          if (cet == CET_FINISH) { // Thread finished, so after restore, status has to be fixed
-            ThreadState *tst = VG_(get_ThreadState)(1);
             tst->status = VgTs_Init;
          }
          return;
@@ -1261,26 +1297,27 @@ static
 void new_mem_startup(Addr a, SizeT len,
                      Bool rr, Bool ww, Bool xx, ULong di_handle)
 {
+   VPRINT(2, "new_mem_startup %lu-%lu %lu\n", a, a + len, len);
    new_mem_mmap(a, len, rr, ww, xx, di_handle);
 }
 
 static void new_mem_stack (Addr a, SizeT len)
 {
-   //VG_(printf)("NEW STACK %lu %lu\n", a, len);
-   make_mem_undefined(a, len);
+   //VG_(printf)("NEW STACK %lx %lu\n", a - VG_STACK_REDZONE_SZB, len);
+   make_mem_undefined(a - VG_STACK_REDZONE_SZB, len);
 }
 
 static
 void new_mem_stack_signal(Addr a, SizeT len, ThreadId tid)
 {
-   //VG_(printf)("STACK SIGNAL %lu %lu", a, len);
-   make_mem_undefined(a, len);
+   //VG_(printf)("STACK SIGNAL %lx %lu", a - VG_STACK_REDZONE_SZB, len);
+   make_mem_undefined(a - VG_STACK_REDZONE_SZB, len);
 }
 
 static void die_mem_stack (Addr a, SizeT len)
 {
-   //VG_(printf)("DIE STACK %lu %lu\n", a, len);
-   make_mem_noaccess(a, len);
+   //VG_(printf)("DIE STACK %lx %lu\n", a - VG_STACK_REDZONE_SZB, len);
+   make_mem_noaccess(a - VG_STACK_REDZONE_SZB, len);
 }
 
 static void an_post_clo_init(void)
@@ -1293,6 +1330,10 @@ static void an_post_clo_init(void)
       VG_(printf)("Invalid server port\n");
       VG_(exit)(1);
    }
+
+   states_table = VG_(HT_construct)("an.states");
+   memspace_init();
+
    char target[300];
    VG_(snprintf)(target, 300, "127.0.0.1:%u", server_port);
    control_socket = connect_to_server(target);
@@ -1397,12 +1438,12 @@ static void print_debug_usage(void)
 
 }
 
-static void* user_malloc (ThreadId tid, SizeT n)
-{
+static void* client_malloc (ThreadId tid, SizeT n)
+{   
    //memspace_dump();
     Addr addr = memspace_alloc(n);
     make_mem_undefined(addr, n);
-    //VG_(printf)("!!! MALLOC %lu %lu\n", addr,  n);
+    VPRINT(2, "client_malloc address=%lu size=%lu\n", addr, n);
     return (void*) addr;
 }
 
@@ -1425,15 +1466,15 @@ void* user_realloc(ThreadId tid, void* p_old, SizeT new_szB)
 }
 
 static
-SizeT user_malloc_usable_size(ThreadId tid, void* p)
+SizeT client_malloc_usable_size(ThreadId tid, void* p)
 {
-    VG_(tool_panic)("user_malloc_usable_size: Not implemented");
+    VG_(tool_panic)("client_malloc_usable_size: Not implemented");
 }
 
 
-static void user_free (ThreadId tid, void *a)
+static void client_free (ThreadId tid, void *a)
 {
-    VPRINT(2, "user_free %lu\n", (Addr) a);
+    VPRINT(2, "client_free %lu\n", (Addr) a);
     SizeT size = memspace_free((Addr) a);
     make_mem_noaccess((Addr) a, size);
 }
@@ -1501,16 +1542,16 @@ static void an_pre_clo_init(void)
                                    print_usage,
                                    print_debug_usage);
 
-   VG_(needs_malloc_replacement)  (user_malloc,
-                                   user_malloc, //MC_(__builtin_new),
-                                   user_malloc, //MC_(__builtin_vec_new),
+   VG_(needs_malloc_replacement)  (client_malloc,
+                                   client_malloc, //MC_(__builtin_new),
+                                   client_malloc, //MC_(__builtin_vec_new),
                                    user_memalign, //MC_(memalign),
                                    user_calloc, //MC_(calloc),
-                                   user_free, //MC_(free),
-                                   user_free, //MC_(__builtin_delete),
-                                   user_free, //MC_(__builtin_vec_delete),
+                                   client_free, //MC_(free),
+                                   client_free, //MC_(__builtin_delete),
+                                   client_free, //MC_(__builtin_vec_delete),
                                    user_realloc, //MC_(realloc),
-                                   user_malloc_usable_size, //MC_(malloc_usable_size),
+                                   client_malloc_usable_size, //MC_(malloc_usable_size),
                                    0);
 
    VG_(track_new_mem_mmap)    (new_mem_mmap);
@@ -1541,10 +1582,6 @@ static void an_pre_clo_init(void)
    VG_(track_post_reg_write_clientcall_return)(post_reg_write_clientcall);
 
    VG_(needs_client_requests) (an_handle_client_request);
-
-   states_table = VG_(HT_construct)("an.states");
-
-   memspace_init();
 }
 
 VG_DETERMINE_INTERFACE_VERSION(an_pre_clo_init)
