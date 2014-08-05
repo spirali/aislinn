@@ -114,6 +114,16 @@ class CommTests(TestCase):
         self.execute(2, ("DOUBLE",))
         self.no_errors()
 
+    def test_status(self):
+        output = "0 111\n2 333\n2 333\n0 111\n"
+        self.program("status")
+        self.execute(3, "wait", send_protocol="randezvous", stdout=output)
+        self.no_errors()
+        self.execute(3, "waitall", send_protocol="randezvous", stdout=output)
+        self.no_errors()
+        self.execute(3, "recv", send_protocol="randezvous", stdout=output)
+        self.no_errors()
+
     def test_tag(self):
         self.program("tag")
         self.execute(2, "10 20", stdout="100 200\n")
@@ -126,6 +136,7 @@ class CommTests(TestCase):
         self.no_errors()
         self.execute(2, "10 1", stdout="")
         self.single_error("deadlock")
+
 
 if __name__ == "__main__":
     unittest.main()

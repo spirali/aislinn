@@ -134,10 +134,15 @@ class State:
         self.active_request_ids = None
         self.flag_ptr = None
 
-    def set_wait(self, request_ids):
+    def set_wait(self, request_ids, status_ptrs=None):
         self.reset_state()
         self.status = self.StatusWait
         self.active_request_ids = request_ids
+        if status_ptrs is not None:
+            for i, ptr in zip(request_ids, status_ptrs):
+                request = self.requests[i]
+                assert request.status_ptr is None
+                request.status_ptr = ptr
 
     def set_finished(self):
         self.reset_state()

@@ -23,6 +23,8 @@ from base.utils import EqMixin
 
 class Request(EqMixin):
 
+    status_ptr = None
+
     def is_send(self):
         return False
 

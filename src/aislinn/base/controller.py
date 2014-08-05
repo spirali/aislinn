@@ -85,11 +85,21 @@ class Controller:
     def write_int(self, addr, value):
         self.send_and_receive_ok("WRITE {0} int {1}\n".format(addr, value))
 
+    def write_ints(self, addr, values):
+        self.send_and_receive_ok("WRITE {0} ints {1} {2}\n" \
+                .format(addr, len(values), " ".join(map(str, values))))
+
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))
 
     def read_ints(self, addr, count):
         line = self.send_and_receive("READ {0} ints {1}\n".format(addr, count))
+        results = map(int, line.split())
+        assert len(results) == count
+        return results
+
+    def read_pointers(self, addr, count):
+        line = self.send_and_receive("READ {0} pointers {1}\n".format(addr, count))
         results = map(int, line.split())
         assert len(results) == count
         return results

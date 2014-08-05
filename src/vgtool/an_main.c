@@ -1045,6 +1045,14 @@ void process_commands(CommandsEnterType cet)
          if (!VG_(strcmp)(param, "int")) {
             extern_write((Addr)addr, sizeof(int));
             *((Int*) addr) = next_token_uword();
+         } else if (!VG_(strcmp)(param, "ints")) {
+               SizeT i, s = next_token_uword();
+               extern_write((Addr)addr, s * sizeof(int));
+               Int *a = (Int *) addr;
+               for (i = 0; i < s; i++) {
+                  *a = next_token_uword();
+                  a++;
+               }
          } else if (!VG_(strcmp(param, "buffer"))) {
             UWord *buffer = (UWord*) next_token_uword();
             UWord size = *buffer;
@@ -1079,7 +1087,22 @@ void process_commands(CommandsEnterType cet)
                                       MAX_MESSAGE_BUFFER_LENGTH - written,
                                       "\n");
              tl_assert(written < MAX_MESSAGE_BUFFER_LENGTH);
-         } else {
+         } else if(!VG_(strcmp)(param, "pointers")) {
+                UWord count = next_token_uword();
+                UWord written = 0;
+                UWord i;
+                Addr *iaddr = addr;
+                for (i = 0; i < count; i++) {
+                   written += VG_(snprintf)(command + written,
+                                            MAX_MESSAGE_BUFFER_LENGTH - written,
+                                            "%lu ", *iaddr);
+                   iaddr += 1;
+                }
+                written += VG_(snprintf)(command + written,
+                                         MAX_MESSAGE_BUFFER_LENGTH - written,
+                                         "\n");
+                tl_assert(written < MAX_MESSAGE_BUFFER_LENGTH);
+             } else {
             write_message("Error: Invalid argument\n");
             VG_(exit)(1);
          }

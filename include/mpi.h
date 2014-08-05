@@ -11,7 +11,12 @@ struct aislinn_status;
 /* Public MPI types */
 typedef int MPI_Request;
 typedef int MPI_Comm;
-typedef struct aislinn_status *MPI_Status;
+typedef
+	struct {
+		int MPI_SOURCE;
+		int MPI_TAG;
+	} MPI_Status;
+
 typedef int MPI_Datatype;
 
 /* Constants */

@@ -57,6 +57,8 @@ class ValidateException(Exception):
         self.arg_position = arg_position
         self.extra_message = extra_message
 
+# TODO: Universal architecture detection
+POINTER_SIZE = 8
 
 class Generator:
 
@@ -179,6 +181,10 @@ class Generator:
             assert not request.is_receive() or message is not None
             state.set_request_as_completed(request)
             if message:
+                if request.status_ptr:
+                    self.controller.write_ints(
+                            request.status_ptr, [ message.source, message.tag ])
+
                 self.controller.write_buffer(request.data_ptr,
                                              message.vg_buffer.id)
                 state.remove_message(message)
@@ -526,7 +532,11 @@ class Generator:
         self.add_call_event(context, e)
 
         request_ids = (state.add_recv_request(source, tag, buf_ptr, size),)
-        state.set_wait(request_ids)
+        if status_ptr:
+            status_ptrs = [ status_ptr ]
+        else:
+            status_ptrs = None
+        state.set_wait(request_ids, status_ptrs)
         # TODO: Optimization : If message is already here,
         # then non block and continue
         return True
@@ -587,8 +597,12 @@ class Generator:
     def call_MPI_Wait(self, args, gstate, state, context):
         request_ptr, status_ptr = args
         request_ids = [ self.controller.read_int(request_ptr) ]
+        if status_ptr != "0":
+            status_ptrs = [ status_ptr ]
+        else:
+            status_ptrs = None
         self.validate_request_ids(state, request_ids)
-        state.set_wait(request_ids)
+        state.set_wait(request_ids, status_ptrs)
 
         e = event.WaitEvent("Wait", state.rank, request_ids)
         self.add_call_event(context, e)
@@ -608,8 +622,14 @@ class Generator:
         count, requests_ptr, status_ptr = args
         count = int(count)
         request_ids = self.controller.read_ints(requests_ptr, count)
+        if status_ptr != "0":
+            status_ptr = int(status_ptr)
+            status_ptrs = [ status_ptr + i * POINTER_SIZE for i in xrange(count) ]
+        else:
+            status_ptrs = None
+
         self.validate_request_ids(state, request_ids)
-        state.set_wait(request_ids)
+        state.set_wait(request_ids, status_ptrs)
 
         e = event.WaitEvent("Waitall", state.rank, request_ids)
         self.add_call_event(context, e)

@@ -2,7 +2,7 @@
 from utils import TestCase
 import unittest
 
-class CommTests(TestCase):
+class MemTests(TestCase):
 
     category = "mem"
 

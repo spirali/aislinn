@@ -17,10 +17,14 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
+# ---- Basic consts ------------------------------------
 MPI_ANY_SOURCE = 0xFFFF
 MPI_ANY_TAG = -0xABF1
 
+MPI_STATUS_IGNORE = 0
+MPI_STATUSES_IGNORE = 0
+
+# ---- Data types ------------------------------------
 MPI_PACKED = 0xFF00101
 MPI_BYTE = 0xFF00102
 MPI_CHAR = 0xFF00103
