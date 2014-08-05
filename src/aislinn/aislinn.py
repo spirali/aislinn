@@ -23,6 +23,7 @@ import base.utils as utils
 import argparse
 import sys
 import logging
+import platform
 
 def parse_threshold(value):
     if ":" not in value:
@@ -135,6 +136,13 @@ def main():
     generator = Generator(run_args,
                           valgrind_args,
                           args)
+
+    if platform.architecture()[0] != "64bit" or \
+       platform.system() != "Linux":
+           logging.error("Aislinn is not supported on this platform. "
+                         "The current version supports only 64b Linux")
+           sys.exit(1)
+
 
     logging.debug("Run args: %s", run_args)
     logging.debug("Valgrind args: %s", valgrind_args)
