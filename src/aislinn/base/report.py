@@ -155,28 +155,37 @@ class Report:
         html = Tag("html")
         self.create_html_head(html)
         body = html.child("body")
-        body.child("h1", "Aislinn report")
+        header = body.child("header", id="header").child("div")
+        header.set("class", "inner clearfix")
+        header.child("h1", "Aislinn report")
 
-        body.child("h2", "Basic information")
-        self.entries_to_html(body, self.info)
+        section = body.child("section", id="section")
+        div = section.child("div", id="column")
+        div.set("class", "inner")
 
-        body.child("h2", "Errors")
+        div.child("h2", "Basic information")
+        self.entries_to_html(div, self.info)
+
+        div.child("h2", "Errors")
 
         if self.error_messages:
-            body.child("p", "{0} error(s) found" \
+            div.child("p", "{0} error(s) found" \
                     .format(len(self.error_messages)))
             for error in self.error_messages:
-                body.child("h3", "Error: " + error.short_description)
-                body.child("p", error.description)
+                div.child("h3", "Error: " + error.short_description)
+                lst = div.child("ul")
+                lst.child("li", error.description)
                 if error.rank is not None:
-                    body.child("p", "Rank: {0}".format(error.rank))
+                    lst.child("li", "Rank: {0}".format(error.rank))
                 if error.stacktrace is not None:
-                    body.child("p", "{0}" \
+                    li = lst.child("li", "Stacktrace:")
+                    li.child("pre", "{0}" \
                             .format(error.stacktrace.replace("|", "<br>")))
                 if error.events:
-                    self.export_events(error.events, body)
+                    li = lst.child("li", "Events:")
+                    self.export_events(error.events, li)
         else:
-            body.child("p", "No errors found")
+            div.child("p", "No errors found")
 
         return html
 
@@ -190,8 +199,170 @@ class Report:
 
 
 REPORT_CSS = """
+html, h1, h2, h3, h4, h5, h6, body, div, span,
+applet, object, iframe, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, font, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+fieldset, form, label, legend,
+dl, dt, dd, ol, ul, li,
+table, caption, tbody, tfoot, thead, tr, th, td {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	font-weight: inherit;
+	font-style: inherit;
+	font-size: 100%;
+	font-family: inherit;
+	vertical-align: baseline;
+}
 
-table, tr, td { border: black solid 1px; }
+body {
+	line-height: 1;
+	color: black;
+	background: white;
+	font: 14px/1.8em 'Open Sans', Helvetica, Arial, Helvetica, sans-serif;
+	color: #444;
+	background: #fff;
+	-webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, h5, h6 {
+	color: #000;
+	line-height: 1.2em;
+	margin-bottom: 0.3em;
+}
+
+h2, h3 {
+	margin-top: 1em;
+}
+
+h1 {
+	font-size: 2em;
+}
+
+h2 {
+	font-size: 1.7em;
+}
+
+h3 {
+	font-size: 1.5em;
+	margin-top: 2em;
+}
+
+p {
+	margin-bottom: 1em;
+}
+
+ol, ul {
+	padding-left: 30px;
+	margin-bottom: 1em;
+}
+
+b, strong {
+	font-weight: bold;
+}
+
+i, em {
+	font-style: italic;
+}
+
+u {
+	text-decoration: underline;
+}
+
+abbr, acronym {
+	cursor: help;
+	border-bottom: 0.1em dotted;
+}
+
+td, td img {
+	vertical-align: top;
+}
+
+sub {
+	vertical-align: sub;
+	font-size: smaller;
+}
+
+sup {
+	vertical-align: super;
+	font-size: smaller;
+}
+
+code {
+	font-family: Courier, "Courier New", Monaco, Tahoma;
+	background: #eee;
+	color: #333;
+	padding: 0px 2px;
+}
+
+pre {
+	margin-bottom: 1em;
+	overflow: auto;
+	background-color: #ddd;
+	padding: 0.2em;
+	border: 1px solid #aaa;
+}
+
+header, section, footer,
+aside, nav, article, figure {
+	display: block;
+}
+
+#header {
+        background: #025588;
+	padding-top: 20px;
+	color: #afe1da;
+}
+#header a { padding: 10px; color: #afe1da; }
+#header h1 a,
+#header a:hover { color: #dff1fa; }
+#header h1 {
+	font-size: 2.2em;
+	font-weight: bold;
+	margin: 10px;
+	float: left;
+    color: #dff1fa;
+}
+
+blockquote {
+	font-style: italic;
+	margin: 0 0 1em 15px;
+	padding-left: 10px;
+	border-left: 5px solid #dddddd;
+}
+
+.inner {
+	width: 840px;
+	margin: 0 auto;
+}
+
+#column
+{
+  overflow: hidden;
+  margin: 0 auto 0 auto;
+  background-color: #EEEEEE;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+
+.clearfix:before,
+.clearfix:after {
+    content: " ";
+    display: table;
+}
+.clearfix:after {
+    clear: both;
+}
+.clearfix {
+    *zoom: 1;
+}
+
+table, tr, td {
+    border: black solid 1px;
+}
+
 td {
     padding: 0.5em;
     text-align: center;
@@ -208,5 +379,4 @@ td {
 .Recv {
     background-color: lightblue;
 }
-
 """
