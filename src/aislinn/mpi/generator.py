@@ -66,6 +66,8 @@ class Generator:
         self.args = args
         self.controller = base.controller.Controller(args)
         self.controller.valgrind_args = valgrind_args
+        if aislinn_args.debug_under_valgrind:
+            self.controller.debug_under_valgrind = True
         self.statespace = StateSpace()
         self.fatal_error = False
         self.initial_node = None

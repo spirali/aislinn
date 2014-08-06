@@ -80,6 +80,8 @@ def parse_args():
                         default="html")
     parser.add_argument("--write-dot",
                        action="store_true")
+    parser.add_argument("--debug-under-valgrind",
+                       action="store_true")
     args = parser.parse_args()
 
     if args.verbose == 0:

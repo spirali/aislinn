@@ -25,6 +25,8 @@ import time
 
 class Controller:
 
+    debug_under_valgrind = False
+
     def __init__(self, args, cwd=None):
         self.process = None
         self.conn = None
@@ -168,6 +170,15 @@ class Controller:
             "--tool=aislinn",
             "--port={0}".format(port)
         ) + tuple(self.valgrind_args) + tuple(self.args)
+
+        if self.debug_under_valgrind:
+            args = (
+                "valgrind",
+                "--sim-hints=enable-outer",
+                "--trace-children=yes",
+                "--smc-check=all-non-file",
+                "--run-libc-freeres=no") + args
+
         self.process = subprocess.Popen(args, cwd=self.cwd)
 
     def _start_server(self):
