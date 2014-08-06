@@ -396,6 +396,7 @@ static Page *page_new(Addr a)
     page->has_hash = False;
     page->data = NULL;
     page->va = VG_(malloc)("an.va", sizeof(VA));
+    VG_(memset)(page->va, 0, sizeof(VA));
     VPRINT(2, "page_new base=%lu %p\n", a, page);
     return page;
 }
@@ -585,7 +586,7 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
       if (s != 0) {
          AN_(MD5_Update)(&ctx2, b, s);
       }
-      AN_(MD5_Final)(&page->hash, &ctx2);      
+      AN_(MD5_Final)(&page->hash, &ctx2);
       char tmp[33];
       hash_to_string(&page->hash, tmp);
    }
