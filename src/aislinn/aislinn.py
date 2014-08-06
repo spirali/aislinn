@@ -72,7 +72,7 @@ def parse_args():
                         metavar="VALUE",
                         type=str,
                         help="Standard send protocol.",
-                        default="dynamic")
+                        default="full")
     parser.add_argument("--output",
                         metavar="TYPE",
                         type=str,
