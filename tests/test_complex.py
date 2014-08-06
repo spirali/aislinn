@@ -16,6 +16,13 @@ class ComplexTests(TestCase):
         self.execute(8, ("40", "40", "10", "10000"))
         self.no_errors()
 
+    def test_workers(self):
+        files = ("workers.c",)
+        self.program("workers", files=files)
+
+        self.execute(3, ("4", "40"))
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()
