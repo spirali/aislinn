@@ -26,7 +26,7 @@ from base.statespace import StateSpace
 from collections import deque
 from globalstate import GlobalState
 from base.report import Report
-from base.utils import convert_types
+from base.utils import convert_types, convert_type
 import consts
 
 import event
@@ -367,7 +367,7 @@ class Generator:
             while True:
                 call = self.controller.run_process().split()
                 if call[0] == "EXIT":
-                    exitcode = int(call[1])
+                    exitcode = convert_type(call[1], "int")
                     e = event.ExitEvent("Exit", state.rank, exitcode)
                     context.add_event(e)
                     state.set_finished()
