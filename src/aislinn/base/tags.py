@@ -17,6 +17,7 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import base64
 
 class Tag:
 
@@ -57,3 +58,8 @@ class Tag:
         tag = Tag(*args, **kw)
         self.add_child(tag)
         return tag
+
+def embed_img(parent, data):
+    img = parent.child("img")
+    img.set("src", "data:image/png;base64," + base64.b64encode(data))
+    return img

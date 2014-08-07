@@ -18,8 +18,26 @@
 #
 
 
-from tags import Tag
+from tags import Tag, embed_img
 import xml.etree.ElementTree as xml
+
+plt = None
+try:
+    import matplotlib.pyplot as plt
+    import StringIO
+except ImportError:
+    pass # User of plt has to make sure that plt is not None
+
+
+def make_chart(data, ydata, units):
+    fig = plt.figure(figsize=(8, 2))
+    plt.plot(ydata, data, "-")
+    plt.ylabel(units)
+    stringfile = StringIO.StringIO()
+    fig.savefig(stringfile, format="png", transparent=True)
+    stringfile.seek(0)
+    return stringfile.buf
+
 
 class Entry:
 
@@ -55,6 +73,7 @@ class Report:
     def __init__(self, generator):
         self.info = EntryList()
         self.process_count = generator.process_count
+        self.statistics = generator.get_statistics()
 
         self.info.add(
                 "program-args", " ".join(generator.args), "Program arguments")
@@ -151,6 +170,17 @@ class Report:
             self._make_row(tbody, data, classes, titles)
             step += 1
 
+    def write_html_statistics(self, parent):
+        if plt is not None:
+            metadata, data, tick = self.statistics
+            ydata = range(0, len(data) * tick, tick)
+            for i, (name, units) in enumerate(metadata):
+                parent.child("h3", name)
+                img = make_chart([s[i] for s in data], ydata, units)
+                embed_img(parent, img)
+        else:
+            parent.child("Error: please install matplotlib to obtain charts")
+
     def create_html(self):
         html = Tag("html")
         self.create_html_head(html)
@@ -186,6 +216,10 @@ class Report:
                     self.export_events(error.events, li)
         else:
             div.child("p", "No errors found")
+
+        if self.statistics:
+            div.child("h2", "Statistics")
+            self.write_html_statistics(div)
 
         return html
 

@@ -97,6 +97,30 @@ class Generator:
         self.send_protocol_randezvous_threshold = \
                 aislinn_args.send_protocol_randezvous_threshold
 
+        if aislinn_args.stats:
+            self.statistics_tick = aislinn_args.stats
+            self.statistics = []
+        else:
+            self.statistics_tick = None
+            self.statistics = None
+
+    def get_statistics(self):
+        if self.statistics is None:
+            return None
+        else:
+            return ([ ("Length of working queue", "states"),
+                      ("All pages", "pages"),
+                      ("Active pages", "pages") ],
+                    self.statistics,
+                    self.statistics_tick)
+
+    def record_statistics(self):
+        stats = self.controller.get_stats()
+        self.statistics.append((
+            len(self.working_queue),
+            stats["pages"],
+            stats["active-pages"]))
+
     def add_error_message(self, error_message):
         if error_message.name in [ e.name for e in self.error_messages]:
             return
@@ -146,12 +170,21 @@ class Generator:
             self.initial_node = self.add_node(None, gstate, True)
             self.statespace.initial_node = self.initial_node
 
+            tick = self.statistics_tick
+            tick_counter = tick
+
             while self.working_queue:
                 node, gstate = self.working_queue.popleft()
                 self.expand_node(node, gstate)
                 if self.fatal_error:
                     return True
                 self.cleanup()
+
+                if tick:
+                    tick_counter -= 1
+                    if tick_counter == 0:
+                        tick_counter = tick
+                        self.record_statistics()
 
             # Check there is no memory leak
             assert self.vg_states.resource_count == 0

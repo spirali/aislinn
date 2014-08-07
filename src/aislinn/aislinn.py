@@ -78,6 +78,10 @@ def parse_args():
                         type=str,
                         help="Output type: xml, html, none",
                         default="html")
+    parser.add_argument("--stats",
+                       metavar="TICKS",
+                       type=int,
+                       default=None)
     parser.add_argument("--write-dot",
                        action="store_true")
     parser.add_argument("--debug-under-valgrind",
@@ -151,6 +155,7 @@ def main():
 
     if not generator.run(args.p):
         sys.exit(1)
+
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
         logging.info("Statespace graph written into 'statespace.dot'")
