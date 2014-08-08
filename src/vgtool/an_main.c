@@ -139,6 +139,7 @@ Int server_port = -1;
 
 static struct {
    Word pages; // Number of currently allocated pages
+   Word buffers_size; // Sum of buffer sizes
 } stats;
 
 typedef
@@ -738,6 +739,7 @@ static void memspace_hash(AN_(MD5_CTX) *ctx)
 
 static void* buffer_new(void* addr, UWord size)
 {
+   stats.buffers_size += size;
    UWord *buffer = VG_(malloc)("an.buffers", sizeof(UWord) + size);
    *buffer = size;
    VG_(memcpy)(buffer + 1, addr, size);
@@ -746,6 +748,8 @@ static void* buffer_new(void* addr, UWord size)
 
 static void buffer_free(void *addr)
 {
+   UWord *buffer = (UWord*) addr;
+   stats.buffers_size -= *buffer;
    VG_(free)(addr);
 }
 
@@ -1198,9 +1202,11 @@ void process_commands(CommandsEnterType cet)
           VG_(snprintf)(command,
                         MAX_MESSAGE_BUFFER_LENGTH,
                         "pages %ld|"
-                        "active-pages %ld\n",
+                        "active-pages %ld|"
+                        "buffers-size %lu\n",
                         stats.pages,
-                        VG_(OSetGen_Size)(current_memspace->auxmap));
+                        VG_(OSetGen_Size)(current_memspace->auxmap),
+                        stats.buffers_size);
           write_message(command);
           continue;
       }

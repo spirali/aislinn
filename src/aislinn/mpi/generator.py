@@ -110,7 +110,8 @@ class Generator:
         else:
             return ([ ("Length of working queue", "states"),
                       ("All pages", "pages"),
-                      ("Active pages", "pages") ],
+                      ("Active pages", "pages"),
+                      ("Sum of buffer sizes", "bytes") ],
                     self.statistics,
                     self.statistics_tick)
 
@@ -119,7 +120,8 @@ class Generator:
         self.statistics.append((
             len(self.working_queue),
             stats["pages"],
-            stats["active-pages"]))
+            stats["active-pages"],
+            stats["buffers-size"]))
 
     def add_error_message(self, error_message):
         if error_message.name in [ e.name for e in self.error_messages]:
@@ -193,6 +195,7 @@ class Generator:
             stats = self.controller.get_stats()
             # All pages are active, i.e. we have freed everyhing else
             assert stats["pages"] == stats["active-pages"]
+            assert stats["buffers-size"] == 0
 
         finally:
             self.controller.kill()
