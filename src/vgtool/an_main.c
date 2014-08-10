@@ -55,6 +55,8 @@
 
 
 #define INLINE    inline __attribute__((always_inline))
+#define NOINLINE __attribute__ ((noinline))
+
 
 #define VPRINT(level, ...) if (verbosity_level >= (level)) { VG_(printf)(__VA_ARGS__); }
 

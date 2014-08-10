@@ -21,31 +21,26 @@ typedef
    } Vg_AislinnClientRequest;
 
 
-/* Noinline is workaround for problem: https://bugs.kde.org/show_bug.cgi?id=337812
- * aislinn_call must not be inlined at all cost
- */
-#define NOINLINE __attribute__ ((noinline))
+void aislinn_call_0(const char *name);
 
-void NOINLINE aislinn_call_0(const char *name);
+void aislinn_call_1(const char *name, AislinnArgType arg0);
 
-void NOINLINE aislinn_call_1(const char *name, AislinnArgType arg0);
-
-void NOINLINE aislinn_call_2(const char *name, 
+void aislinn_call_2(const char *name, 
 		             AislinnArgType arg0, 
 			     AislinnArgType arg1);
 
-void NOINLINE aislinn_call_3(const char *name, 
+void aislinn_call_3(const char *name, 
 		             AislinnArgType arg0, 
 		             AislinnArgType arg1, 
 			     AislinnArgType arg2);
 
-void NOINLINE aislinn_call_4(const char *name, 
+void aislinn_call_4(const char *name, 
 		             AislinnArgType arg0, 
 		             AislinnArgType arg1, 
 		             AislinnArgType arg2, 
 			     AislinnArgType arg3);
 
-void NOINLINE aislinn_call_args(const char *name, 
+void aislinn_call_args(const char *name, 
 		                AislinnArgType *args, 
 		                AislinnArgType count);
 
