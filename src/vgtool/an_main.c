@@ -215,7 +215,7 @@ static void memspace_init(void)
 
 
    tl_assert(heap_space != 0);
-   VPRINT(2, "memspace_init: heap %lu-%lu\n", heap_space, heap_space + heap_max_size);
+   VPRINT(2, "memspace_init: heap %lx-%lx\n", heap_space, heap_space + heap_max_size);
 
    MemorySpace *ms = VG_(malloc)("an.memspace", sizeof(MemorySpace));
    ms->auxmap = VG_(OSetGen_Create)(/*keyOff*/  offsetof(AuxMapEnt,base),
@@ -400,7 +400,7 @@ static Page *page_new(Addr a)
     page->data = NULL;
     page->va = VG_(malloc)("an.va", sizeof(VA));
     VG_(memset)(page->va, 0, sizeof(VA));
-    VPRINT(2, "page_new base=%lu %p\n", a, page);
+    VPRINT(2, "page_new %p base=%lx\n", page, a);
     return page;
 }
 
@@ -456,7 +456,7 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
 }
 
 static void INLINE make_own_copy_of_page(Page **page) {
-   VPRINT(2, "make_own_copy base=%lu refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
+   VPRINT(2, "make_own_copy base=%lx refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
    if (UNLIKELY((*page)->ref_count >= 2)) {
       (*page)->ref_count--;
       Page *new_page = page_clone(*page);
@@ -644,7 +644,7 @@ static void memimage_save_page_content(Page *page)
 static void memimage_restore_page_content(Page *page)
 {
    //page_dump(page);
-   VPRINT(2, "memimage_restore_page_content base=%lu\n", page->base);
+   VPRINT(2, "memimage_restore_page_content base=%lx\n", page->base);
    UWord i;
    UChar *dst = (UChar*) page->base;
    VA *va = page->va;
@@ -1287,7 +1287,7 @@ static
 void new_mem_mmap (Addr a, SizeT len, Bool rr, Bool ww, Bool xx,
                    ULong di_handle)
 {
-   VPRINT(2, "new_mem_mmap %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+   VPRINT(2, "new_mem_mmap %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
 
    if (rr && ww) {      
       make_mem_defined(a, len);
@@ -1301,7 +1301,7 @@ void new_mem_mmap (Addr a, SizeT len, Bool rr, Bool ww, Bool xx,
 static
 void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
 {
-   VPRINT(2, "new_mem_mprotect %lu-%lu %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+   VPRINT(2, "new_mem_mprotect %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
 
    if (rr && ww) {
       make_mem_defined(a, len);
@@ -1313,7 +1313,7 @@ void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
 static
 void mem_unmap(Addr a, SizeT len)
 {
-   VPRINT(2, "unmap %lu-%lu %lu\n", a, a + len, len);
+   VPRINT(2, "unmap %lx-%lx %lu\n", a, a + len, len);
    make_mem_noaccess(a, len);
 }
 
@@ -1328,7 +1328,7 @@ static
 void new_mem_startup(Addr a, SizeT len,
                      Bool rr, Bool ww, Bool xx, ULong di_handle)
 {
-   VPRINT(2, "new_mem_startup %lu-%lu %lu\n", a, a + len, len);
+   VPRINT(2, "new_mem_startup %lx-%lx %lu\n", a, a + len, len);
    new_mem_mmap(a, len, rr, ww, xx, di_handle);
 }
 
@@ -1475,7 +1475,7 @@ static void* client_malloc (ThreadId tid, SizeT n)
     Addr addr = memspace_alloc(n);
     VG_(memset)((void*)addr, 0, n);
     make_mem_undefined(addr, n);
-    VPRINT(2, "client_malloc address=%lu size=%lu\n", addr, n);
+    VPRINT(2, "client_malloc address=%lx size=%lu\n", addr, n);
     return (void*) addr;
 }
 
@@ -1506,7 +1506,7 @@ SizeT client_malloc_usable_size(ThreadId tid, void* p)
 
 static void client_free (ThreadId tid, void *a)
 {
-    VPRINT(2, "client_free %lu\n", (Addr) a);
+    VPRINT(2, "client_free %lx\n", (Addr) a);
     SizeT size = memspace_free((Addr) a);
     make_mem_noaccess((Addr) a, size);
 }
