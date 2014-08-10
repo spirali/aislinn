@@ -72,6 +72,32 @@ class VgToolTests(TestCase):
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
 
+    def test_restore_after_quit(self):
+        self.program("simple")
+        c = self.controller()
+        self.assertEquals(c.start(), "CALL Hello 1")
+        s = c.save_state()
+        h1 = c.hash_state()
+        self.assertEquals(c.run_process(), "CALL Hello 2")
+        h2 = c.hash_state()
+        self.assertEquals(c.run_process(), "EXIT 0")
+        h3 = c.hash_state()
+
+        c.restore_state(s)
+        g1 = c.hash_state()
+        self.assertEquals(c.run_process(), "CALL Hello 2")
+        g2 = c.hash_state()
+        self.assertEquals(c.run_process(), "EXIT 0")
+        g3 = c.hash_state()
+
+        self.assertEquals(h1, g1)
+        self.assertEquals(h2, g2)
+        self.assertEquals(h3, g3)
+
+        self.assertNotEquals(h1, h2)
+        self.assertNotEquals(h2, h3)
+        self.assertNotEquals(h2, h3)
+
 
 if __name__ == "__main__":
     unittest.main()

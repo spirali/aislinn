@@ -1228,6 +1228,7 @@ static
 Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
 {
    tl_assert(tid == 1); // No multithreading supported yet
+   *ret = 0;
 
    if (!VG_IS_TOOL_USERREQ('A','N',arg[0])) {
         return False;
