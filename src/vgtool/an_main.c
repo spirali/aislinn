@@ -191,7 +191,7 @@ static NOINLINE void report_error(const char *code)
 static NOINLINE void report_error_write(Addr addr, SizeT size)
 {
    char message[MAX_MESSAGE_BUFFER_LENGTH];
-   VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH, "invalidwrite %lx %lu", addr, size);
+   VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH, "invalidwrite 0x%lx %lu", addr, size);
    report_error(message);
 }
 

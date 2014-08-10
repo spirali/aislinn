@@ -114,7 +114,9 @@ class InvalidWrite(RuntimeErr):
     short_description = "Invalid write"
 
     def __init__(self, args):
-        self.addr, self.size = map(int, args)
+        assert len(args) == 2
+        self.addr = int(args[0], 16)
+        self.size = int(args[1])
 
     @property
     def description(self):
