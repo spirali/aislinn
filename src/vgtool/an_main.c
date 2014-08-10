@@ -1473,6 +1473,7 @@ static void* client_malloc (ThreadId tid, SizeT n)
 {   
    //memspace_dump();
     Addr addr = memspace_alloc(n);
+    VG_(memset)((void*)addr, 0, n);
     make_mem_undefined(addr, n);
     VPRINT(2, "client_malloc address=%lu size=%lu\n", addr, n);
     return (void*) addr;
