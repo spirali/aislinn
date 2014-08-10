@@ -590,8 +590,6 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
          AN_(MD5_Update)(&ctx2, b, s);
       }
       AN_(MD5_Final)(&page->hash, &ctx2);
-      char tmp[33];
-      hash_to_string(&page->hash, tmp);
    }
    AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
 }
