@@ -83,7 +83,11 @@ class Deadlock(ErrorMessage):
     short_description = "Deadlock"
 
 
-class InvalidArgument(ErrorMessage):
+class CallError(ErrorMessage):
+    name = "callerror"
+
+
+class InvalidArgument(CallError):
 
     name = "invalidarg"
     short_description = "Invalid argument"

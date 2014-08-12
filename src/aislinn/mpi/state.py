@@ -19,7 +19,11 @@
 
 
 from message import Message
-from request import SendRequest, ReceiveRequest, CompletedRequest
+from request import \
+    SendRequest, \
+    ReceiveRequest, \
+    CompletedRequest, \
+    CollectiveRequest
 import consts
 import copy
 
@@ -39,6 +43,7 @@ class State:
         self.requests = [None]
         self.active_request_ids = None
         self.flag_ptr = None
+        self.cc_id_counter = 0
 
     def copy(self):
         if self.status == State.StatusFinished:
@@ -57,6 +62,7 @@ class State:
         state.requests = copy.copy(self.requests)
         state.active_request_ids = copy.copy(self.active_request_ids)
         state.flag_ptr = self.flag_ptr
+        state.cc_id_counter = self.cc_id_counter
         return state
 
     def dispose(self):
@@ -64,6 +70,9 @@ class State:
             self.vg_state.dec_ref()
         for message in self.messages:
             message.vg_buffer.dec_ref()
+
+    def inc_cc_id_counter(self):
+        self.cc_id_counter += 1
 
     def is_hashable(self):
         # If we are finished, we do not care about exact state
@@ -77,6 +86,7 @@ class State:
             hashthread.update(self.vg_state.hash)
         hashthread.update(str(self.rank))
         hashthread.update(str(self.status))
+        hashthread.update(str(self.cc_id_counter))
         if self.active_request_ids is not None:
             hashthread.update(str(self.active_request_ids))
         if self.flag_ptr is not None:
@@ -117,6 +127,12 @@ class State:
     def add_recv_request(self, source, tag, data_ptr, size):
         request_id = self._new_request_index()
         request = ReceiveRequest(source, tag, data_ptr, size)
+        self.requests[request_id] = request
+        return request_id
+
+    def add_collective_request(self, cc_id):
+        request_id = self._new_request_index()
+        request = CollectiveRequest(cc_id)
         self.requests[request_id] = request
         return request_id
 
@@ -190,6 +206,9 @@ class State:
                 s = gstate.get_state(r.message.target)
                 if r.message not in s.messages:
                     non_recv_requests.append((r, None))
+            if r.is_collective():
+                if gstate.get_operation_by_cc_id(r.cc_id).can_be_completed(gstate, self):
+                    non_recv_requests.append((r, None))
 
         result = []
         recvs = [ r for r in requests if r.is_receive() ]
@@ -210,7 +229,7 @@ class State:
             request = self.requests[i]
             if request is None:
                 continue
-            if request.is_receive() and request.source == consts.MPI_ANY_SOURCE:
+            if not request.is_deterministic():
                 return False
         return True
 
@@ -232,7 +251,7 @@ class State:
                 result.append(matched[:])
                 return
             request = requests[index]
-            flags = [ False ] * gstate.states_count
+            flags = [ False ] * gstate.process_count
             found = False
 
             for message in self.messages:

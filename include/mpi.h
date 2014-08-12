@@ -159,4 +159,62 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
 	return 0;
 }
 
+int MPI_Ibarrier(MPI_Comm comm, MPI_Request *request) 
+{
+	aislinn_call_2(
+		"MPI_Ibarrier",
+		(AislinnArgType) comm,
+		(AislinnArgType) request);
+	return 0;
+}
+
+int MPI_Igather(const void *sendbuf,
+                int sendcount,
+                MPI_Datatype sendtype,
+                void *recvbuf,
+                int recvcount,
+                MPI_Datatype recvtype,
+                int root,
+                MPI_Comm comm,
+                MPI_Request *request)
+{
+    AislinnArgType args[9];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcount;
+	args[2] = (AislinnArgType) sendtype;
+	args[3] = (AislinnArgType) recvbuf;
+	args[4] = (AislinnArgType) recvcount;
+	args[5] = (AislinnArgType) recvtype;
+	args[6] = (AislinnArgType) root;
+	args[7] = (AislinnArgType) comm;
+	args[8] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Igather", args, 9);
+}
+
+int MPI_Igatherv(const void *sendbuf,
+                int sendcount,
+                MPI_Datatype sendtype,
+                void *recvbuf,
+                const int recvcounts[],
+                const int displs[],
+                MPI_Datatype recvtype,
+                int root,
+                MPI_Comm comm,
+                MPI_Request *request)
+{
+    AislinnArgType args[10];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcount;
+	args[2] = (AislinnArgType) sendtype;
+	args[3] = (AislinnArgType) recvbuf;
+	args[4] = (AislinnArgType) recvcounts;
+	args[5] = (AislinnArgType) displs;
+	args[6] = (AislinnArgType) recvtype;
+	args[7] = (AislinnArgType) root;
+	args[8] = (AislinnArgType) comm;
+	args[9] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Igatherv", args, 10);
+}
+
+
 #endif // __AISLINN_MPI_H

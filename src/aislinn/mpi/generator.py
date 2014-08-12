@@ -34,6 +34,7 @@ import base.resource
 import logging
 import sys
 import types
+import collectives
 
 class ExecutionContext:
 
@@ -75,7 +76,10 @@ class Generator:
                 "MPI_Irecv" : self.call_MPI_IRecv,
                 "MPI_Wait" : self.call_MPI_Wait,
                 "MPI_Test" : self.call_MPI_Test,
-                "MPI_Waitall" : self.call_MPI_Waitall
+                "MPI_Waitall" : self.call_MPI_Waitall,
+                "MPI_Ibarrier" : self.call_MPI_Ibarrier,
+                "MPI_Igather" : self.call_MPI_Igather,
+                "MPI_Igatherv" : self.call_MPI_Igatherv,
         }
 
         self.vg_states = base.resource.ResourceManager("vg_state")
@@ -206,7 +210,7 @@ class Generator:
             for vg_buffer in vg_buffers:
                 self.controller.free_buffer(vg_buffer.id)
 
-    def apply_matching(self, state, matching):
+    def apply_matching(self, gstate, state, matching):
         for request, message in matching:
             assert not request.is_receive() or message is not None
             state.set_request_as_completed(request)
@@ -218,6 +222,9 @@ class Generator:
                 self.controller.write_buffer(request.data_ptr,
                                              message.vg_buffer.id)
                 state.remove_message(message)
+            if request.is_collective():
+                op = gstate.get_operation_by_cc_id(request.cc_id)
+                op.complete(self, gstate, state)
 
     def fast_expand_node(self, node, gstate):
         for state in gstate.states:
@@ -232,7 +239,7 @@ class Generator:
 
                 logging.debug("Fast expand status=wait rank=%s", state.rank)
                 self.controller.restore_state(state.vg_state.id)
-                self.apply_matching(state, matches[0])
+                self.apply_matching(gstate, state, matches[0])
                 state.remove_active_requests()
                 self.execute_state_and_add_node(node, gstate, state)
                 return True
@@ -323,6 +330,10 @@ class Generator:
 
         gstate.dispose()
 
+    def restore_state(self, state):
+        # TODO: Use in code of generator
+        self.controller.restore_state(state.vg_state.id)
+
     def process_wait_or_test(self, node, gstate, state, test):
         if test:
             new_gstate = gstate.copy()
@@ -343,7 +354,7 @@ class Generator:
             new_gstate = gstate.copy()
             new_state = new_gstate.get_state(state.rank)
             self.controller.restore_state(new_state.vg_state.id)
-            self.apply_matching(new_state, matching)
+            self.apply_matching(gstate, new_state, matching)
             if not covered:
                 # Not all active requests are ready, so just apply matchings
                 # and create new state
@@ -436,7 +447,7 @@ class Generator:
     def validate_rank(self,
                       rank,
                       arg_position,
-                      any_source_allowed):
+                      any_source_allowed=False):
 
         if rank == consts.MPI_ANY_SOURCE:
             if not any_source_allowed:
@@ -489,7 +500,6 @@ class Generator:
             else:
                 return state.add_standard_send_request(message)
         elif self.send_protocol == "threshold":
-            print message.size
             if message.size < self.send_protocol_eager_threshold:
                 return state.add_completed_request()
             elif message.size >= self.send_protocol_randezvous_threshold:
@@ -500,6 +510,12 @@ class Generator:
             assert self.send_protocol == "full"
             return state.add_standard_send_request(message)
 
+    def new_buffer(self, buf_ptr, size):
+        # TODO: use in MPI_Send and MPI_Isend
+        buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
+        vg_buffer = self.vg_buffers.new(buffer_id)
+        vg_buffer.hash = hash
+        return vg_buffer
 
     def call_MPI_Comm_rank(self, args, gstate, state, context):
         assert len(args) == 2
@@ -662,6 +678,58 @@ class Generator:
         e = event.WaitEvent("Waitall", state.rank, request_ids)
         self.add_call_event(context, e)
         return True
+
+    def call_MPI_Ibarrier(self, args, gstate, state, context):
+        comm, request_ptr = convert_types(args, ("int", "ptr"))
+
+        request_id = self.make_cc_request(gstate, state)
+        self.controller.write_int(request_ptr, request_id)
+
+        e = event.CommEvent("Ibarrier", state.rank, request_id)
+        self.add_call_event(context, e)
+        return False
+
+    def call_MPI_Igather(self, args, gstate, state, context):
+        """args = \
+            convert_types(args,
+                          ("ptr", # sendbuf
+                           "int", # sendcount
+                           "int", # sendtype
+                           "ptr", # recvbuf
+                           "int", # recvcount
+                           "int", # recvtype
+                           "int", # root
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+        request_ptr = args[-1]
+        cc_id = gstate.call_collective_operation(
+                self, state, collectives.Gather, False, args[:-1])
+        request_id = state.add_collective_request(cc_id)
+        self.controller.write_int(request_ptr, request_id)"""
+        return False
+
+    def call_MPI_Igatherv(self, args, gstate, state, context):
+        args = \
+            convert_types(args,
+                          ("ptr", # sendbuf
+                           "int", # sendcount
+                           "int", # sendtype
+                           "ptr", # recvbuf
+                           "ptr", # recvcounts
+                           "ptr", # displs
+                           "int", # recvtype
+                           "int", # root
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+        request_ptr = args[-1]
+        cc_id = gstate.call_collective_operation(
+                self, state, collectives.Gatherv, False, args[:-1])
+        request_id = state.add_collective_request(cc_id)
+        self.controller.write_int(request_ptr, request_id)
+        return False
+
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:

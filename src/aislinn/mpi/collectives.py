@@ -1,0 +1,179 @@
+#
+#    Copyright (C) 2014 Stanislav Bohm
+#
+#    This file is part of Aislinn.
+#
+#    Aislinn is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, version 2 of the License, or
+#    (at your option) any later version.
+#
+#    Aislinn is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import types
+import copy
+import logging
+import errormsg
+
+
+class CollectiveOperation:
+
+    def __init__(self, gstate, blocking, cc_id):
+        self.cc_id = cc_id
+        self.blocking = blocking
+        self.root = None
+        self.process_count = gstate.process_count
+        self.remaining_processes_enter = self.process_count
+        self.remaining_processes_complete = self.process_count
+        self.data = None
+
+    def copy(self):
+        op = copy.copy(self)
+        op.after_copy()
+        return op
+
+    def after_copy(self):
+        pass
+
+    def enter(self, generator, gstate, state, args):
+        logging.debug("Entering collective operation %s", self)
+        assert self.remaining_processes_enter >= 0
+        self.remaining_processes_enter -= 1
+        self.enter_main(generator, gstate, state, args)
+
+    def complete(self, generator, gstate, state):
+        logging.debug("Completing collective operation %s", self)
+        assert self.remaining_processes_complete >= 0
+        self.remaining_processes_complete -= 1
+        self.complete_main(generator, gstate, state)
+        if self.remaining_processes_complete == 0:
+            gstate.finish_collective_operation(self)
+            self.dispose()
+
+    def is_finished(self):
+        return self.remaining_processes_complete == 0
+
+    def has_root(self):
+        return self.root is not None
+
+    def check_root(self, root):
+        if self.root is None:
+            self.root = root
+        elif self.root != root:
+            e = errormsg.CallError()
+            e.name = "rootmismatch"
+            e.short_description = "Root mismatch"
+            e.description = "Root mismatch"
+            e.throw()
+
+    def compute_hash(self, hashthread):
+        hashthread.update("{0} {1} {2} {3} {4}".
+                format(self.name,
+                       self.blocking,
+                       self.root,
+                       self.remaining_processes_complete,
+                       self.remaining_processes_enter))
+        self.compute_hash_data(hashthread)
+
+    @property
+    def mpi_name(self):
+        if self.blocking:
+            return "MPI_I" + self.name
+        else:
+            return "MPI_" + self.name.capitalize()
+
+    def __repr__(self):
+        return "<{0} {1:x} renter={2} rcomplete={3}>" \
+                    .format(self.name,
+                            id(self),
+                            self.remaining_processes_enter,
+                            self.remaining_processes_complete)
+
+
+class OperationWithBuffers(CollectiveOperation):
+
+    def __init__(self, gstate, blocking, cc_id):
+        CollectiveOperation.__init__(self, gstate, blocking, cc_id)
+        self.buffers = [ None ] * self.remaining_processes_enter
+
+    def after_copy(self):
+        for vg_buffer in self.buffers:
+            if vg_buffer:
+                vg_buffer.inc_ref()
+
+    def dispose(self):
+        for vg_buffer in self.buffers:
+            if vg_buffer:
+                vg_buffer.dec_ref()
+
+    def compute_hash_data(self, hashthread):
+        for vg_buffer in self.buffers:
+            if vg_buffer is not None:
+                hashthread.update(vg_buffer.hash)
+            else:
+                hashthread.update("-")
+
+
+class Gatherv(OperationWithBuffers):
+
+    name = "gatherv"
+
+    def __init__(self, gstate, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+        self.sendtype = None
+        self.recvbuf = None
+        self.sendcounts = [ None ] * self.process_count
+        self.recvcounts = None
+        self.displs = None
+
+    def enter_main(self,
+                     generator,
+                     gstate,
+                     state,
+                     args):
+        sendbuf, sendcount, sendtype, \
+               recvbuf, recvcounts, displs, recvtype, root, comm = args
+        generator.validate_rank(root, 8)
+        generator.validate_count(sendcount, 2)
+        self.check_root(root)
+        if self.root == root:
+            self.recvbuf = recvbuf
+
+        self.sendtype = sendtype
+        size = types.get_datatype_size(sendtype) * sendcount
+        self.sendcounts[state.rank] = sendcount
+
+        assert self.buffers[state.rank] is None
+        self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+
+        if root == state.rank:
+            self.recvcounts = generator.controller.read_ints(
+                    recvcounts, self.process_count)
+            self.displs = generator.controller.read_ints(
+                    displs, self.process_count)
+
+    def can_be_completed(self, gstate, state):
+        return state.rank != self.root or self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, gstate, state):
+        if state.rank == self.root:
+            recvbuf = self.recvbuf
+            controller = generator.controller
+            size = types.get_datatype_size(self.sendtype)
+            for vg_buffer, displ in zip(self.buffers, self.displs):
+                controller.write_buffer(recvbuf + displ * size, vg_buffer.id)
+        # Do nothing on non-root processes
+
+    def compute_hash_data(self, hashthread):
+        OperationWithBuffers.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.sendcounts))
+        hashthread.update(str(self.sendtype))
+        hashthread.update(str(self.recvbuf))
+        hashthread.update(str(self.displs))

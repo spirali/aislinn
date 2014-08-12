@@ -19,6 +19,7 @@
 
 
 from base.utils import EqMixin
+import consts
 
 
 class Request(EqMixin):
@@ -33,6 +34,12 @@ class Request(EqMixin):
 
     def is_completed(self):
         return False
+
+    def is_collective(self):
+        return False
+
+    def is_deterministic(self):
+        return True
 
 
 class SendRequest(Request):
@@ -74,6 +81,9 @@ class ReceiveRequest(Request):
         hashthread.update(
                 "RR {0.source} {0.tag} {0.data_ptr} {0.size} ".format(self))
 
+    def is_deterministic(self):
+        return self.source != consts.MPI_ANY_SOURCE
+
     def __repr__(self):
         return "RECV(source={0.source}, tag={0.tag})".format(self)
 
@@ -88,3 +98,17 @@ class CompletedRequest(Request):
 
     def is_completed(self):
         return True
+
+class CollectiveRequest(Request):
+
+    def __init__(self, cc_id):
+        self.cc_id = cc_id
+
+    def is_collective(self):
+        return True
+
+    def compute_hash(self, hashthread):
+        hashthread.update("CR {0}".format(self.cc_id))
+
+    def __repr__(self):
+        return "CCOP(cc_id={0.cc_id})".format(self)
