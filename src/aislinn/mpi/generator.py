@@ -49,14 +49,6 @@ class ExecutionContext:
             self.error_messages = []
         self.error_messages.append(error_message)
 
-class ValidateException(Exception):
-
-    def __init__(self, value, arg_position, extra_message=""):
-        Exception.__init__(self)
-        self.value = value
-        self.arg_position = arg_position
-        self.extra_message = extra_message
-
 # TODO: Universal architecture detection
 POINTER_SIZE = 8
 
@@ -424,14 +416,11 @@ class Generator:
                         break
                 else:
                     raise Exception("Unkown function call: " + repr(call))
-        except ValidateException as e:
-            emsg = errormsg.InvalidArgument(call[1],
-                                            e.value,
-                                            e.arg_position,
-                                            e.extra_message)
-            emsg.stacktrace = self.controller.get_stacktrace()
-
-            context.add_error_message(emsg)
+        except errormsg.ExecutionError as e:
+            error_message = e.error_message
+            error_message.stacktrace = self.controller.get_stacktrace()
+            error_message.function_name = call[1]
+            context.add_error_message(error_message)
             # TODO: It is not necessary to stop everything, just expansion of
             # this state
             self.fatal_error = True
@@ -451,9 +440,9 @@ class Generator:
 
         if rank == consts.MPI_ANY_SOURCE:
             if not any_source_allowed:
-                raise ValidateException("MPI_ANY_SOURCE", arg_position)
+                errormsg.InvalidArgument("MPI_ANY_SOURCE", arg_position).throw()
         elif rank < 0 or rank >= self.process_count:
-            raise ValidateException(rank, arg_position)
+            errormsg.InvalidArgument(rank, arg_position).throw()
 
     def validate_tag(self,
                      tag,
@@ -462,20 +451,21 @@ class Generator:
 
         if tag == consts.MPI_ANY_TAG:
             if not any_tag_allowed:
-                raise ValidateException("MPI_ANY_TAG", arg_position)
+                errormsg.InvalidArgument("MPI_ANY_TAG", arg_position).throw()
         elif tag < 0:
-            raise ValidateException(tag,
-                                    arg_position,
-                                    "Tag has to be a non-negative number.")
+            errormsg.InvalidArgument(
+                    tag,
+                    arg_position,
+                    "Tag has to be a non-negative number.").throw()
 
     def validate_count(self, size, arg_position):
         if size < 0:
-            raise ValidateException(size, arg_position)
+            errormsg.InvalidArgument(size, arg_position).throw()
 
     def get_datatype_size(self, datatype, arg_position):
         size = types.get_datatype_size(datatype)
         if size is None:
-            raise ValidateException(datatype, arg_position)
+            errormsg.InvalidArgument(datatype, arg_position).throw()
         return size
 
     def validate_request_ids(self, state, request_ids):

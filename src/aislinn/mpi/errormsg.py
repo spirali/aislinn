@@ -20,10 +20,17 @@
 
 from base.report import EntryList
 
+class ExecutionError(Exception):
+
+    def __init__(self, error_message):
+        self.error_message = error_message
+
+
 class ErrorMessage:
 
     description = ""
     name = "unknown"
+    function_name = None
 
     stacktrace = None
 
@@ -45,6 +52,9 @@ class ErrorMessage:
     @property
     def short_description(self):
         return self.name.capitalize()
+
+    def throw(self):
+        raise ExecutionError(self)
 
 
 class NonzeroExitCode(ErrorMessage):
@@ -78,11 +88,8 @@ class InvalidArgument(ErrorMessage):
     name = "invalidarg"
     short_description = "Invalid argument"
 
-    def __init__(self, function_name,
-                       arg_value, arg_position=None,
-                       extra_message=""):
+    def __init__(self, arg_value, arg_position, extra_message=""):
         ErrorMessage.__init__(self)
-        self.function_name = function_name
         self.arg_value = arg_value
         self.arg_position = arg_position
         self.extra_message = extra_message
