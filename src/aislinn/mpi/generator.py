@@ -354,7 +354,7 @@ class Generator:
             new_gstate = gstate.copy()
             new_state = new_gstate.get_state(state.rank)
             self.controller.restore_state(new_state.vg_state.id)
-            self.apply_matching(gstate, new_state, matching)
+            self.apply_matching(new_gstate, new_state, matching)
             if not covered:
                 # Not all active requests are ready, so just apply matchings
                 # and create new state
@@ -680,13 +680,13 @@ class Generator:
         return True
 
     def call_MPI_Ibarrier(self, args, gstate, state, context):
-        request_ptr = convert_types(args, ("int", "ptr"))
-
-        request_id = self.make_cc_request(gstate, state)
-        self.controller.write_int(request_ptr, request_id)
-
-        e = event.CommEvent("Ibarrier", state.rank, request_id)
-        self.add_call_event(context, e)
+        args = convert_types(args, ("int", "ptr"))
+        self.call_collective_operation(gstate,
+                                       state,
+                                       context,
+                                       collectives.Barrier,
+                                       False,
+                                       args)
         return False
 
     def call_MPI_Igather(self, args, gstate, state, context):

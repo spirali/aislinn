@@ -16,6 +16,20 @@ class CollectiveTests(TestCase):
             self.execute(2, (arg,))
             self.single_error("invalidarg", rank=0)
 
+    def test_ibarrier(self):
+        self.program("ibarrier")
+
+        def check_output1(output):
+            self.assertEquals(set(output.strip().split("\n")),
+                              set(["a = 0; b = 200", "a = 200; b = 0"]))
+        def check_output2(output):
+            self.assertEquals(set(output.strip().split("\n")), set(["a = 0; b = 200"]))
+
+        self.execute(3, "a", stdout=check_output1)
+        self.no_errors()
+        self.execute(3, "b", stdout=check_output2)
+        self.no_errors()
+
     def test_gatherv(self):
         output1 = "OUT1: 100 101\n" \
                   "OUT2: 100 101\n"

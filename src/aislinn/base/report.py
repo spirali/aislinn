@@ -422,7 +422,7 @@ td {
 }
 
 .Collective {
-    background-color: lightyellow;
+    background-color: #FF5555;
 }
 
 """

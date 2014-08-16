@@ -94,9 +94,10 @@ class CollectiveOperation:
             return self.name.capitalize()
 
     def __repr__(self):
-        return "<{0} {1:x} renter={2} rcomplete={3}>" \
+        return "<{0} {1:x} cc_id={2} renter={3} rcomplete={4}>" \
                     .format(self.name,
                             id(self),
+                            self.cc_id,
                             self.remaining_processes_enter,
                             self.remaining_processes_complete)
 
@@ -124,6 +125,29 @@ class OperationWithBuffers(CollectiveOperation):
             else:
                 hashthread.update("-")
 
+
+class Barrier(CollectiveOperation):
+
+    name = "barrier"
+
+    def enter_main(self,
+                     generator,
+                     gstate,
+                     state,
+                     args):
+        pass
+
+    def can_be_completed(self, gstate, state):
+        return self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, gstate, state):
+        pass
+
+    def compute_hash_data(self, hashthread):
+        pass
+
+    def dispose(self):
+        pass
 
 class Gatherv(OperationWithBuffers):
 
