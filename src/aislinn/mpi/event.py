@@ -41,6 +41,10 @@ class CommEvent(Event):
         self.tag = tag
         self.request_id = request_id
 
+class CollectiveEvent(Event):
+
+    def __init__(self, name, rank):
+        Event.__init__(self, name, rank)
 
 class WaitEvent(Event):
 

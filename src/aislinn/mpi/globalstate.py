@@ -90,7 +90,7 @@ class GlobalState(EqMixin):
             self.collective_operations.append(op)
         state.inc_cc_id_counter()
         op.enter(generator, self, state, args)
-        return cc_id
+        return op
 
     def finish_collective_operation(self, op):
         self.collective_operations.remove(op)

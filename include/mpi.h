@@ -178,7 +178,7 @@ int MPI_Igather(const void *sendbuf,
                 MPI_Comm comm,
                 MPI_Request *request)
 {
-    AislinnArgType args[9];
+	AislinnArgType args[9];
 	args[0] = (AislinnArgType) sendbuf;
 	args[1] = (AislinnArgType) sendcount;
 	args[2] = (AislinnArgType) sendtype;
@@ -202,7 +202,7 @@ int MPI_Igatherv(const void *sendbuf,
                 MPI_Comm comm,
                 MPI_Request *request)
 {
-    AislinnArgType args[10];
+	AislinnArgType args[10];
 	args[0] = (AislinnArgType) sendbuf;
 	args[1] = (AislinnArgType) sendcount;
 	args[2] = (AislinnArgType) sendtype;

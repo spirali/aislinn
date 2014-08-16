@@ -680,7 +680,7 @@ class Generator:
         return True
 
     def call_MPI_Ibarrier(self, args, gstate, state, context):
-        comm, request_ptr = convert_types(args, ("int", "ptr"))
+        request_ptr = convert_types(args, ("int", "ptr"))
 
         request_id = self.make_cc_request(gstate, state)
         self.controller.write_int(request_ptr, request_id)
@@ -704,6 +704,7 @@ class Generator:
                           ))
         self.call_collective_operation(gstate,
                                        state,
+                                       context,
                                        collectives.Gather,
                                        False,
                                        args)
@@ -725,18 +726,20 @@ class Generator:
                           ))
         self.call_collective_operation(gstate,
                                        state,
+                                       context,
                                        collectives.Gatherv,
                                        False,
                                        args)
         return False
 
-    def call_collective_operation(self, gstate, state, op_class, blocking, args):
+    def call_collective_operation(self, gstate, state, context, op_class, blocking, args):
         request_ptr = args[-1]
         args = args[:-1]
-        cc_id = gstate.call_collective_operation(
+        op = gstate.call_collective_operation(
                     self, state, op_class, blocking, args)
-        request_id = state.add_collective_request(cc_id)
+        request_id = state.add_collective_request(op.cc_id)
         self.controller.write_int(request_ptr, request_id)
+        self.add_call_event(context, op.get_event(state))
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:

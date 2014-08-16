@@ -28,6 +28,11 @@ try:
 except ImportError:
     pass # User of plt has to make sure that plt is not None
 
+collective_operations = [
+    "Igather",
+    "Igatherv",
+    "Ibarrier"
+]
 
 def make_chart(data, ydata, units):
     fig = plt.figure(figsize=(8, 2))
@@ -159,11 +164,13 @@ class Report:
                 data[r] = name
                 if e.stacktrace:
                     titles[r] = e.stacktrace.replace("|", "\n")
-                if name.startswith("W"):
+                if name in collective_operations:
+                    classes[r] = "Collective"
+                elif name.startswith("W"):
                     classes[r] = "Wait"
-                if name.endswith("end"):
+                elif name.endswith("end"):
                     classes[r] = "Send"
-                if name.endswith("ecv"):
+                elif name.endswith("ecv"):
                     classes[r] = "Recv"
             if not any(data):
                 break
@@ -413,4 +420,9 @@ td {
 .Recv {
     background-color: lightblue;
 }
+
+.Collective {
+    background-color: lightyellow;
+}
+
 """

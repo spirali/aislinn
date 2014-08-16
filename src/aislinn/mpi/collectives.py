@@ -21,6 +21,7 @@ import types
 import copy
 import logging
 import errormsg
+import event
 
 
 class CollectiveOperation:
@@ -82,12 +83,15 @@ class CollectiveOperation:
                        self.remaining_processes_enter))
         self.compute_hash_data(hashthread)
 
+    def get_event(self, state):
+        return event.CollectiveEvent(self.mpi_name, state.rank)
+
     @property
     def mpi_name(self):
-        if self.blocking:
-            return "MPI_I" + self.name
+        if not self.blocking:
+            return "I" + self.name
         else:
-            return "MPI_" + self.name.capitalize()
+            return self.name.capitalize()
 
     def __repr__(self):
         return "<{0} {1:x} renter={2} rcomplete={3}>" \
