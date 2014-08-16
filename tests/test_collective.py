@@ -36,5 +36,17 @@ class CollectiveTests(TestCase):
         self.execute(3, "mismatch")
         self.single_error("rootmismatch")
 
+    def test_igather(self):
+        output = "OUT1: 100 101 102 103 200 201 202 203 300 301 302 303\n" \
+                 "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 3000 3001 3002 3003\n"
+        self.program("igather")
+        self.execute(3, "0", stdout=output)
+        self.no_errors()
+        self.execute(3, "1", stdout=output)
+        self.no_errors()
+        self.execute(3, "2", stdout=output)
+        self.no_errors()
+
+
 if __name__ == "__main__":
     unittest.main()

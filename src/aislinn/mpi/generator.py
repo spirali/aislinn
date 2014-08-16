@@ -690,7 +690,7 @@ class Generator:
         return False
 
     def call_MPI_Igather(self, args, gstate, state, context):
-        """args = \
+        args = \
             convert_types(args,
                           ("ptr", # sendbuf
                            "int", # sendcount
@@ -702,11 +702,11 @@ class Generator:
                            "int", # comm
                            "ptr", # request_ptr
                           ))
-        request_ptr = args[-1]
-        cc_id = gstate.call_collective_operation(
-                self, state, collectives.Gather, False, args[:-1])
-        request_id = state.add_collective_request(cc_id)
-        self.controller.write_int(request_ptr, request_id)"""
+        self.call_collective_operation(gstate,
+                                       state,
+                                       collectives.Gather,
+                                       False,
+                                       args)
         return False
 
     def call_MPI_Igatherv(self, args, gstate, state, context):
@@ -723,13 +723,20 @@ class Generator:
                            "int", # comm
                            "ptr", # request_ptr
                           ))
-        request_ptr = args[-1]
-        cc_id = gstate.call_collective_operation(
-                self, state, collectives.Gatherv, False, args[:-1])
-        request_id = state.add_collective_request(cc_id)
-        self.controller.write_int(request_ptr, request_id)
+        self.call_collective_operation(gstate,
+                                       state,
+                                       collectives.Gatherv,
+                                       False,
+                                       args)
         return False
 
+    def call_collective_operation(self, gstate, state, op_class, blocking, args):
+        request_ptr = args[-1]
+        args = args[:-1]
+        cc_id = gstate.call_collective_operation(
+                    self, state, op_class, blocking, args)
+        request_id = state.add_collective_request(cc_id)
+        self.controller.write_int(request_ptr, request_id)
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:

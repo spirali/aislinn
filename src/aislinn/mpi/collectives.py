@@ -177,3 +177,55 @@ class Gatherv(OperationWithBuffers):
         hashthread.update(str(self.sendtype))
         hashthread.update(str(self.recvbuf))
         hashthread.update(str(self.displs))
+
+
+class Gather(OperationWithBuffers):
+
+    name = "gather"
+
+    def __init__(self, gstate, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+        self.sendtype = None
+        self.recvbuf = None
+        self.count = None
+        self.recvcount = None
+
+    def enter_main(self,
+                     generator,
+                     gstate,
+                     state,
+                     args):
+        sendbuf, sendcount, sendtype, \
+               recvbuf, recvcount, recvtype, root, comm = args
+        generator.validate_rank(root, 8)
+        generator.validate_count(sendcount, 2)
+        self.check_root(root)
+
+        if self.root == root:
+            self.recvbuf = recvbuf
+            generator.validate_count(recvcount, 5)
+
+        self.sendtype = sendtype
+        self.sendcount = sendcount
+        size = types.get_datatype_size(sendtype) * sendcount
+
+        assert self.buffers[state.rank] is None
+        self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+
+    def can_be_completed(self, gstate, state):
+        return state.rank != self.root or self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, gstate, state):
+        if state.rank == self.root:
+            recvbuf = self.recvbuf
+            controller = generator.controller
+            size = types.get_datatype_size(self.sendtype) * self.sendcount
+            for i, vg_buffer in enumerate(self.buffers):
+                controller.write_buffer(recvbuf + i * size, vg_buffer.id)
+        # Do nothing on non-root processes
+
+    def compute_hash_data(self, hashthread):
+        OperationWithBuffers.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.sendcount))
+        hashthread.update(str(self.sendtype))
+        hashthread.update(str(self.recvbuf))

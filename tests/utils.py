@@ -162,6 +162,7 @@ class Program:
         self.is_built = True
 
     def make_args(self, processes, args,
+                  vgv=None,
                   heapsize=None,
                   send_protocol=None):
         run_args = [ AISLINN,
@@ -169,6 +170,8 @@ class Program:
                     "--verbose=0",
                     "-p={0}".format(processes) ]
 
+        if vgv is not None:
+            run_args.append("--vgv={0}".format(vgv))
         if heapsize is not None:
             run_args.append("--heapsize={0}".format(heapsize))
         if send_protocol is not None:
