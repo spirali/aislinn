@@ -216,5 +216,52 @@ int MPI_Igatherv(const void *sendbuf,
 	aislinn_call_args("MPI_Igatherv", args, 10);
 }
 
+int MPI_Iscatter(const void *sendbuf,
+		int sendcount,
+		MPI_Datatype sendtype,
+		void *recvbuf,
+		int recvcount,
+		MPI_Datatype recvtype,
+		int root,
+		MPI_Comm comm,
+		MPI_Request *request)
+{
+	AislinnArgType args[9];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcount;
+	args[2] = (AislinnArgType) sendtype;
+	args[3] = (AislinnArgType) recvbuf;
+	args[4] = (AislinnArgType) recvcount;
+	args[5] = (AislinnArgType) recvtype;
+	args[6] = (AislinnArgType) root;
+	args[7] = (AislinnArgType) comm;
+	args[8] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Iscatter", args, 9);
+}
+
+int MPI_Iscatterv(const void *sendbuf,
+		const int sendcounts[],
+		const int displs[],
+		MPI_Datatype sendtype,
+		void *recvbuf,
+		int recvcount,
+		MPI_Datatype recvtype,
+		int root,
+		MPI_Comm comm,
+		MPI_Request *request)
+{
+	AislinnArgType args[10];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcounts;
+	args[2] = (AislinnArgType) displs;
+	args[3] = (AislinnArgType) sendtype;
+	args[4] = (AislinnArgType) recvbuf;
+	args[5] = (AislinnArgType) recvcount;
+	args[6] = (AislinnArgType) recvtype;
+	args[7] = (AislinnArgType) root;
+	args[8] = (AislinnArgType) comm;
+	args[9] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Iscatterv", args, 10);
+}
 
 #endif // __AISLINN_MPI_H

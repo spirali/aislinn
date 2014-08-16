@@ -1063,6 +1063,12 @@ void process_commands(CommandsEnterType cet)
             UWord size = *buffer;
             extern_write((Addr)addr, size);
             VG_(memcpy(addr, buffer + 1, size));
+         } else if (!VG_(strcmp(param, "buffer-part"))) {
+            Addr buffer = (Addr) next_token_uword();
+            UWord index = (UWord) next_token_uword();
+            UWord size = (UWord) next_token_uword();
+            extern_write((Addr)addr, size);
+            VG_(memcpy(addr, (void*) (buffer + sizeof(UWord) + index), size));
          } else {
             write_message("Error: Invalid argument\n");
             VG_(exit)(1);

@@ -61,6 +61,49 @@ class CollectiveTests(TestCase):
         self.execute(3, "2", stdout=output)
         self.no_errors()
 
+    def test_iscatterv(self):
+        output1 = "0/2:OUT1: 100 200\n" \
+                  "0/2:OUT2: 100 200\n"
+
+        output3 = "0/6:OUT1: 100 200 300 400 500 600\n" \
+                  "0/6:OUT2: 100 200 300 400 500 600\n" \
+                  "1/5:OUT1: 200 300 400 500 600\n" \
+                  "1/5:OUT2: 200 300 400 500 600\n" \
+                  "2/4:OUT1: 300 400 500 600\n" \
+                  "2/4:OUT2: 300 400 500 600\n"
+
+        self.program("iscatterv")
+        self.execute(1, "waitall", stdout=output1)
+        self.no_errors()
+
+        self.program("iscatterv")
+        self.execute(3, "waitall", stdout=output3)
+        self.no_errors()
+
+        self.program("iscatterv")
+        self.execute(1, "wait", stdout=output1)
+        self.no_errors()
+
+        self.program("iscatterv")
+        self.execute(3, "wait", stdout=output3)
+        self.no_errors()
+
+    def test_iscatter(self):
+        output = "0: OUT1: 100 200 300 400\n" \
+                 "0 OUT2: 1000 2000 3000 4000\n" \
+                 "1: OUT1: 500 600 700 800\n" \
+                 "1 OUT2: 5000 6000 7000 8000\n" \
+                 "2: OUT1: 900 1000 1100 1200\n" \
+                 "2 OUT2: 9000 10000 11000 12000\n"
+
+        self.program("iscatter")
+        self.execute(3, "0", stdout=output, vgv=0)
+        self.no_errors()
+        self.execute(3, "1", stdout=output)
+        self.no_errors()
+        self.execute(3, "2", stdout=output)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

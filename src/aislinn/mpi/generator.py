@@ -80,6 +80,8 @@ class Generator:
                 "MPI_Ibarrier" : self.call_MPI_Ibarrier,
                 "MPI_Igather" : self.call_MPI_Igather,
                 "MPI_Igatherv" : self.call_MPI_Igatherv,
+                "MPI_Iscatter" : self.call_MPI_Iscatter,
+                "MPI_Iscatterv" : self.call_MPI_Iscatterv,
         }
 
         self.vg_states = base.resource.ResourceManager("vg_state")
@@ -728,6 +730,49 @@ class Generator:
                                        state,
                                        context,
                                        collectives.Gatherv,
+                                       False,
+                                       args)
+        return False
+
+    def call_MPI_Iscatter(self, args, gstate, state, context):
+        args = \
+            convert_types(args,
+                          ("ptr", # sendbuf
+                           "int", # sendcount
+                           "int", # sendtype
+                           "ptr", # recvbuf
+                           "int", # recvcount
+                           "int", # recvtype
+                           "int", # root
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+        self.call_collective_operation(gstate,
+                                       state,
+                                       context,
+                                       collectives.Scatter,
+                                       False,
+                                       args)
+        return False
+
+    def call_MPI_Iscatterv(self, args, gstate, state, context):
+        args = \
+            convert_types(args,
+                          ("ptr", # sendbuf
+                           "ptr", # sendcounts
+                           "ptr", # displs
+                           "int", # sendtype
+                           "ptr", # recvbuf
+                           "int", # recvcount
+                           "int", # recvtype
+                           "int", # root
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+        self.call_collective_operation(gstate,
+                                       state,
+                                       context,
+                                       collectives.Scatterv,
                                        False,
                                        args)
         return False

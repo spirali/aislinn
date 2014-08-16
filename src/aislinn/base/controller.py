@@ -80,9 +80,13 @@ class Controller:
     def free_buffer(self, buffer_id):
         self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
 
-    def write_buffer(self, addr, buffer_addr):
-        self.send_and_receive_ok("WRITE {0} buffer {1}\n" \
-                .format(addr, buffer_addr))
+    def write_buffer(self, addr, buffer_addr, index=None, size=None):
+        if index is None or size is None:
+            self.send_and_receive_ok("WRITE {0} buffer {1}\n" \
+                    .format(addr, buffer_addr))
+        else:
+            self.send_and_receive_ok("WRITE {0} buffer-part {1} {2} {3}\n" \
+                    .format(addr, buffer_addr, index, size))
 
     def write_int(self, addr, value):
         self.send_and_receive_ok("WRITE {0} int {1}\n".format(addr, value))
