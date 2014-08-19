@@ -1,0 +1,303 @@
+#
+#    Copyright (C) 2014 Stanislav Bohm
+#
+#    This file is part of Aislinn.
+#
+#    Aislinn is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, version 2 of the License, or
+#    (at your option) any later version.
+#
+#    Aislinn is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+from base.utils import convert_types
+import collectives
+import event
+
+# TODO: Universal architecture detection
+POINTER_SIZE = 8
+
+def MPI_Comm_rank(generator, args, gstate, state, context):
+    assert len(args) == 2
+    generator.controller.write_int(args[1], state.rank)
+    return False
+
+def MPI_Comm_size(generator, args, gstate, state, context):
+    assert len(args) == 2
+    generator.controller.write_int(args[1], generator.process_count)
+    return False
+
+def MPI_Send(generator, args, gstate, state, context):
+    buf_ptr, count, datatype, target, tag, comm = \
+        convert_types(args,
+                      ("ptr", # buf_ptr
+                       "int", # count
+                       "int", # datatype
+                       "int", # target
+                       "int", # tag
+                       "int", # comm
+                      ))
+    generator.validate_count(count, 2)
+    generator.validate_rank(target, 4, False)
+    generator.validate_tag(tag, 5, False)
+    size = count * generator.get_datatype_size(datatype, 3)
+    buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
+    vg_buffer = generator.vg_buffers.new(buffer_id)
+    message = gstate.get_state(target).add_message(
+            state.rank, target, tag, vg_buffer, size, hash)
+
+    e = event.CommEvent("Send", state.rank, target, tag)
+    generator.add_call_event(context, e)
+
+    request_ids = (generator.make_send_request(gstate, state, message),)
+    state.set_wait(request_ids)
+    # TODO: Optimization : If message use eager protocol then nonblock
+    return True
+
+def MPI_Recv(generator, args, gstate, state, context):
+    buf_ptr, count, datatype, source, tag, comm, status_ptr = \
+        convert_types(args,
+                      ("ptr", # buf_ptr
+                       "int", # count
+                       "int", # datatype
+                       "int", # source
+                       "int", # tag
+                       "int", # comm
+                       "ptr", # status
+                      ))
+
+    generator.validate_count(count, 2)
+    generator.validate_rank(source, 4, True)
+    generator.validate_tag(tag, 5, True)
+
+    size = count * generator.get_datatype_size(datatype, 3)
+
+    e = event.CommEvent("Recv", state.rank, source, tag)
+    generator.add_call_event(context, e)
+
+    request_ids = (state.add_recv_request(source, tag, buf_ptr, size),)
+    if status_ptr:
+        status_ptrs = [ status_ptr ]
+    else:
+        status_ptrs = None
+    state.set_wait(request_ids, status_ptrs)
+    # TODO: Optimization : If message is already here,
+    # then non block and continue
+    return True
+
+def MPI_ISend(generator, args, gstate, state, context):
+    buf_ptr, count, datatype, target, tag, comm, request_ptr = \
+        convert_types(args,
+                      ("ptr", # buf_ptr
+                       "int", # count
+                       "int", # datatype
+                       "int", # target
+                       "int", # tag
+                       "int", # comm
+                       "ptr", # request_ptr
+                      ))
+    generator.validate_count(count, 2)
+    generator.validate_rank(target, 4, False)
+    generator.validate_tag(tag, 5, False)
+
+    size = count * generator.get_datatype_size(datatype, 3)
+
+    buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
+    vg_buffer = generator.vg_buffers.new(buffer_id)
+    message = gstate.get_state(target).add_message(
+            state.rank, target, tag, vg_buffer, size, hash)
+    request_id = generator.make_send_request(gstate, state, message)
+    generator.controller.write_int(request_ptr, request_id)
+
+    e = event.CommEvent("Isend", state.rank, target, tag, request_id)
+    generator.add_call_event(context, e)
+    return False
+
+def MPI_IRecv(generator, args, gstate, state, context):
+    buf_ptr, count, datatype, source, tag, comm, request_ptr = \
+        convert_types(args,
+                      ("ptr", # buf_ptr
+                       "int", # count
+                       "int", # datatype
+                       "int", # source
+                       "int", # tag
+                       "int", # comm
+                       "ptr", # request_ptr
+                      ))
+
+    generator.validate_count(count, 2)
+    generator.validate_rank(source, 4, True)
+    generator.validate_tag(tag, 5, True)
+
+    size = count * generator.get_datatype_size(datatype, 3)
+
+    request_id = state.add_recv_request(source, tag, buf_ptr, size)
+    generator.controller.write_int(request_ptr, request_id)
+
+    e = event.CommEvent("Irecv", state.rank, source, tag, request_id)
+    generator.add_call_event(context, e)
+    return False
+
+def MPI_Wait(generator, args, gstate, state, context):
+    request_ptr, status_ptr = args
+    request_ids = [ generator.controller.read_int(request_ptr) ]
+    if status_ptr != "0":
+        status_ptrs = [ status_ptr ]
+    else:
+        status_ptrs = None
+    generator.validate_request_ids(state, request_ids)
+    state.set_wait(request_ids, status_ptrs)
+
+    e = event.WaitEvent("Wait", state.rank, request_ids)
+    generator.add_call_event(context, e)
+    return True
+
+def MPI_Test(generator, args, gstate, state, context):
+    request_ptr, flag_ptr, status_ptr = args
+    request_ids = [ generator.controller.read_int(request_ptr) ]
+    generator.validate_request_ids(state, request_ids)
+    state.set_test(request_ids, flag_ptr)
+
+    e = event.WaitEvent("Test", state.rank, request_ids)
+    generator.add_call_event(context, e)
+    return True
+
+def MPI_Waitall(generator, args, gstate, state, context):
+    count, requests_ptr, status_ptr = args
+    count = int(count)
+    request_ids = generator.controller.read_ints(requests_ptr, count)
+    if status_ptr != "0":
+        status_ptr = int(status_ptr)
+        status_ptrs = [ status_ptr + i * POINTER_SIZE for i in xrange(count) ]
+    else:
+        status_ptrs = None
+
+    generator.validate_request_ids(state, request_ids)
+    state.set_wait(request_ids, status_ptrs)
+
+    e = event.WaitEvent("Waitall", state.rank, request_ids)
+    generator.add_call_event(context, e)
+    return True
+
+def MPI_Ibarrier(generator, args, gstate, state, context):
+    args = convert_types(args, ("int", "ptr"))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.Barrier,
+                              False,
+                              args)
+    return False
+
+def MPI_Igather(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "int", # sendcount
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "int", # recvcount
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                       "ptr", # request_ptr
+                      ))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.Gather,
+                              False,
+                              args)
+    return False
+
+def MPI_Igatherv(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "int", # sendcount
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "ptr", # recvcounts
+                       "ptr", # displs
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                       "ptr", # request_ptr
+                      ))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.Gatherv,
+                              False,
+                              args)
+    return False
+
+def MPI_Iscatter(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "int", # sendcount
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "int", # recvcount
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                       "ptr", # request_ptr
+                      ))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.Scatter,
+                              False,
+                              args)
+    return False
+
+def MPI_Iscatterv(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "ptr", # sendcounts
+                       "ptr", # displs
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "int", # recvcount
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                       "ptr", # request_ptr
+                      ))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.Scatterv,
+                              False,
+                              args)
+    return False
+
+def call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              op_class,
+                              blocking,
+                              args):
+    request_ptr = args[-1]
+    args = args[:-1]
+    op = gstate.call_collective_operation(
+                generator, state, op_class, blocking, args)
+    request_id = state.add_collective_request(op.cc_id)
+    generator.controller.write_int(request_ptr, request_id)
+    generator.add_call_event(context, op.get_event(state))

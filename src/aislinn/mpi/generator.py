@@ -26,7 +26,7 @@ from base.statespace import StateSpace
 from collections import deque
 from globalstate import GlobalState
 from base.report import Report
-from base.utils import convert_types, convert_type
+from base.utils import convert_type
 import consts
 
 import event
@@ -34,7 +34,7 @@ import base.resource
 import logging
 import sys
 import types
-import collectives
+import mpicalls
 
 class ExecutionContext:
 
@@ -50,8 +50,6 @@ class ExecutionContext:
             self.error_messages = []
         self.error_messages.append(error_message)
 
-# TODO: Universal architecture detection
-POINTER_SIZE = 8
 
 class Generator:
 
@@ -68,20 +66,20 @@ class Generator:
         self.working_queue = deque()
         self.error_messages = []
         self.calls = {
-                "MPI_Comm_rank" : self.call_MPI_Comm_rank,
-                "MPI_Comm_size" : self.call_MPI_Comm_size,
-                "MPI_Send" : self.call_MPI_Send,
-                "MPI_Recv" : self.call_MPI_Recv,
-                "MPI_Isend" : self.call_MPI_ISend,
-                "MPI_Irecv" : self.call_MPI_IRecv,
-                "MPI_Wait" : self.call_MPI_Wait,
-                "MPI_Test" : self.call_MPI_Test,
-                "MPI_Waitall" : self.call_MPI_Waitall,
-                "MPI_Ibarrier" : self.call_MPI_Ibarrier,
-                "MPI_Igather" : self.call_MPI_Igather,
-                "MPI_Igatherv" : self.call_MPI_Igatherv,
-                "MPI_Iscatter" : self.call_MPI_Iscatter,
-                "MPI_Iscatterv" : self.call_MPI_Iscatterv,
+                "MPI_Comm_rank" : mpicalls.MPI_Comm_rank,
+                "MPI_Comm_size" : mpicalls.MPI_Comm_size,
+                "MPI_Send" : mpicalls.MPI_Send,
+                "MPI_Recv" : mpicalls.MPI_Recv,
+                "MPI_Isend" : mpicalls.MPI_ISend,
+                "MPI_Irecv" : mpicalls.MPI_IRecv,
+                "MPI_Wait" : mpicalls.MPI_Wait,
+                "MPI_Test" : mpicalls.MPI_Test,
+                "MPI_Waitall" : mpicalls.MPI_Waitall,
+                "MPI_Ibarrier" : mpicalls.MPI_Ibarrier,
+                "MPI_Igather" : mpicalls.MPI_Igather,
+                "MPI_Igatherv" : mpicalls.MPI_Igatherv,
+                "MPI_Iscatter" : mpicalls.MPI_Iscatter,
+                "MPI_Iscatterv" : mpicalls.MPI_Iscatterv,
         }
 
         self.vg_states = base.resource.ResourceManager("vg_state")
@@ -425,7 +423,7 @@ class Generator:
                     return context
                 fn = self.calls.get(call[1])
                 if fn is not None:
-                    if fn(call[2:], gstate, state, context):
+                    if fn(self, call[2:], gstate, state, context):
                         break
                 else:
                     raise Exception("Unkown function call: " + repr(call))
@@ -518,273 +516,6 @@ class Generator:
         vg_buffer = self.vg_buffers.new(buffer_id)
         vg_buffer.hash = hash
         return vg_buffer
-
-    def call_MPI_Comm_rank(self, args, gstate, state, context):
-        assert len(args) == 2
-        self.controller.write_int(args[1], state.rank)
-        return False
-
-    def call_MPI_Comm_size(self, args, gstate, state, context):
-        assert len(args) == 2
-        self.controller.write_int(args[1], self.process_count)
-        return False
-
-    def call_MPI_Send(self, args, gstate, state, context):
-        buf_ptr, count, datatype, target, tag, comm = \
-            convert_types(args,
-                          ("ptr", # buf_ptr
-                           "int", # count
-                           "int", # datatype
-                           "int", # target
-                           "int", # tag
-                           "int", # comm
-                          ))
-        self.validate_count(count, 2)
-        self.validate_rank(target, 4, False)
-        self.validate_tag(tag, 5, False)
-        size = count * self.get_datatype_size(datatype, 3)
-        buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
-        vg_buffer = self.vg_buffers.new(buffer_id)
-        message = gstate.get_state(target).add_message(
-                state.rank, target, tag, vg_buffer, size, hash)
-
-        e = event.CommEvent("Send", state.rank, target, tag)
-        self.add_call_event(context, e)
-
-        request_ids = (self.make_send_request(gstate, state, message),)
-        state.set_wait(request_ids)
-        # TODO: Optimization : If message use eager protocol then nonblock
-        return True
-
-    def call_MPI_Recv(self, args, gstate, state, context):
-        buf_ptr, count, datatype, source, tag, comm, status_ptr = \
-            convert_types(args,
-                          ("ptr", # buf_ptr
-                           "int", # count
-                           "int", # datatype
-                           "int", # source
-                           "int", # tag
-                           "int", # comm
-                           "ptr", # status
-                          ))
-
-        self.validate_count(count, 2)
-        self.validate_rank(source, 4, True)
-        self.validate_tag(tag, 5, True)
-
-        size = count * self.get_datatype_size(datatype, 3)
-
-        e = event.CommEvent("Recv", state.rank, source, tag)
-        self.add_call_event(context, e)
-
-        request_ids = (state.add_recv_request(source, tag, buf_ptr, size),)
-        if status_ptr:
-            status_ptrs = [ status_ptr ]
-        else:
-            status_ptrs = None
-        state.set_wait(request_ids, status_ptrs)
-        # TODO: Optimization : If message is already here,
-        # then non block and continue
-        return True
-
-    def call_MPI_ISend(self, args, gstate, state, context):
-        buf_ptr, count, datatype, target, tag, comm, request_ptr = \
-            convert_types(args,
-                          ("ptr", # buf_ptr
-                           "int", # count
-                           "int", # datatype
-                           "int", # target
-                           "int", # tag
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
-        self.validate_count(count, 2)
-        self.validate_rank(target, 4, False)
-        self.validate_tag(tag, 5, False)
-
-        size = count * self.get_datatype_size(datatype, 3)
-
-        buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
-        vg_buffer = self.vg_buffers.new(buffer_id)
-        message = gstate.get_state(target).add_message(
-                state.rank, target, tag, vg_buffer, size, hash)
-        request_id = self.make_send_request(gstate, state, message)
-        self.controller.write_int(request_ptr, request_id)
-
-        e = event.CommEvent("Isend", state.rank, target, tag, request_id)
-        self.add_call_event(context, e)
-        return False
-
-    def call_MPI_IRecv(self, args, gstate, state, context):
-        buf_ptr, count, datatype, source, tag, comm, request_ptr = \
-            convert_types(args,
-                          ("ptr", # buf_ptr
-                           "int", # count
-                           "int", # datatype
-                           "int", # source
-                           "int", # tag
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
-
-        self.validate_count(count, 2)
-        self.validate_rank(source, 4, True)
-        self.validate_tag(tag, 5, True)
-
-        size = count * self.get_datatype_size(datatype, 3)
-
-        request_id = state.add_recv_request(source, tag, buf_ptr, size)
-        self.controller.write_int(request_ptr, request_id)
-
-        e = event.CommEvent("Irecv", state.rank, source, tag, request_id)
-        self.add_call_event(context, e)
-        return False
-
-    def call_MPI_Wait(self, args, gstate, state, context):
-        request_ptr, status_ptr = args
-        request_ids = [ self.controller.read_int(request_ptr) ]
-        if status_ptr != "0":
-            status_ptrs = [ status_ptr ]
-        else:
-            status_ptrs = None
-        self.validate_request_ids(state, request_ids)
-        state.set_wait(request_ids, status_ptrs)
-
-        e = event.WaitEvent("Wait", state.rank, request_ids)
-        self.add_call_event(context, e)
-        return True
-
-    def call_MPI_Test(self, args, gstate, state, context):
-        request_ptr, flag_ptr, status_ptr = args
-        request_ids = [ self.controller.read_int(request_ptr) ]
-        self.validate_request_ids(state, request_ids)
-        state.set_test(request_ids, flag_ptr)
-
-        e = event.WaitEvent("Test", state.rank, request_ids)
-        self.add_call_event(context, e)
-        return True
-
-    def call_MPI_Waitall(self, args, gstate, state, context):
-        count, requests_ptr, status_ptr = args
-        count = int(count)
-        request_ids = self.controller.read_ints(requests_ptr, count)
-        if status_ptr != "0":
-            status_ptr = int(status_ptr)
-            status_ptrs = [ status_ptr + i * POINTER_SIZE for i in xrange(count) ]
-        else:
-            status_ptrs = None
-
-        self.validate_request_ids(state, request_ids)
-        state.set_wait(request_ids, status_ptrs)
-
-        e = event.WaitEvent("Waitall", state.rank, request_ids)
-        self.add_call_event(context, e)
-        return True
-
-    def call_MPI_Ibarrier(self, args, gstate, state, context):
-        args = convert_types(args, ("int", "ptr"))
-        self.call_collective_operation(gstate,
-                                       state,
-                                       context,
-                                       collectives.Barrier,
-                                       False,
-                                       args)
-        return False
-
-    def call_MPI_Igather(self, args, gstate, state, context):
-        args = \
-            convert_types(args,
-                          ("ptr", # sendbuf
-                           "int", # sendcount
-                           "int", # sendtype
-                           "ptr", # recvbuf
-                           "int", # recvcount
-                           "int", # recvtype
-                           "int", # root
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
-        self.call_collective_operation(gstate,
-                                       state,
-                                       context,
-                                       collectives.Gather,
-                                       False,
-                                       args)
-        return False
-
-    def call_MPI_Igatherv(self, args, gstate, state, context):
-        args = \
-            convert_types(args,
-                          ("ptr", # sendbuf
-                           "int", # sendcount
-                           "int", # sendtype
-                           "ptr", # recvbuf
-                           "ptr", # recvcounts
-                           "ptr", # displs
-                           "int", # recvtype
-                           "int", # root
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
-        self.call_collective_operation(gstate,
-                                       state,
-                                       context,
-                                       collectives.Gatherv,
-                                       False,
-                                       args)
-        return False
-
-    def call_MPI_Iscatter(self, args, gstate, state, context):
-        args = \
-            convert_types(args,
-                          ("ptr", # sendbuf
-                           "int", # sendcount
-                           "int", # sendtype
-                           "ptr", # recvbuf
-                           "int", # recvcount
-                           "int", # recvtype
-                           "int", # root
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
-        self.call_collective_operation(gstate,
-                                       state,
-                                       context,
-                                       collectives.Scatter,
-                                       False,
-                                       args)
-        return False
-
-    def call_MPI_Iscatterv(self, args, gstate, state, context):
-        args = \
-            convert_types(args,
-                          ("ptr", # sendbuf
-                           "ptr", # sendcounts
-                           "ptr", # displs
-                           "int", # sendtype
-                           "ptr", # recvbuf
-                           "int", # recvcount
-                           "int", # recvtype
-                           "int", # root
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
-        self.call_collective_operation(gstate,
-                                       state,
-                                       context,
-                                       collectives.Scatterv,
-                                       False,
-                                       args)
-        return False
-
-    def call_collective_operation(self, gstate, state, context, op_class, blocking, args):
-        request_ptr = args[-1]
-        args = args[:-1]
-        op = gstate.call_collective_operation(
-                    self, state, op_class, blocking, args)
-        request_id = state.add_collective_request(op.cc_id)
-        self.controller.write_int(request_ptr, request_id)
-        self.add_call_event(context, op.get_event(state))
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:
