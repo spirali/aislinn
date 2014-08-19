@@ -18,6 +18,7 @@ typedef
 	} MPI_Status;
 
 typedef int MPI_Datatype;
+typedef int MPI_Op;
 
 /* Constants */
 const MPI_Comm MPI_COMM_WORLD = 0;
@@ -40,6 +41,17 @@ const MPI_Datatype MPI_FLOAT = 0xFF0010F;
 const MPI_Datatype MPI_DOUBLE = 0xFF00110;
 const MPI_Datatype MPI_LONG_DOUBLE = 0xFF00111;
 
+const MPI_Op MPI_MAX = 0xDD00101;
+const MPI_Op MPI_MIN = 0xDD00102;
+const MPI_Op MPI_SUM = 0xDD00103;
+const MPI_Op MPI_PROD = 0xDD00104;
+const MPI_Op MPI_LAND = 0xDD00105;
+const MPI_Op MPI_BAND = 0xDD00106;
+const MPI_Op MPI_LOR = 0xDD00107;
+const MPI_Op MPI_BOR = 0xDD00109;
+const MPI_Op MPI_LXOR = 0xDD00110;
+const MPI_Op MPI_BXOR = 0xDD00111;
+
 #define MPI_STATUS_IGNORE ((MPI_Status*) 0)
 #define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
 #define MPI_ANY_SOURCE 0xFFFF
@@ -56,16 +68,16 @@ inline int MPI_Finalize() {
 
 inline int MPI_Comm_rank(MPI_Comm comm, int *rank) {
 	aislinn_call_2(
-		"MPI_Comm_rank", 
-		(AislinnArgType) comm, 
+		"MPI_Comm_rank",
+		(AislinnArgType) comm,
 		(AislinnArgType) rank);
 	return 0;
 }
 
 inline int MPI_Comm_size(MPI_Comm comm, int *size) {
 	aislinn_call_2(
-		"MPI_Comm_size", 
-		(AislinnArgType) comm, 
+		"MPI_Comm_size",
+		(AislinnArgType) comm,
 		(AislinnArgType) size);
 	return 0;
 }
@@ -263,5 +275,27 @@ int MPI_Iscatterv(const void *sendbuf,
 	args[9] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iscatterv", args, 10);
 }
+
+int MPI_Ireduce(const void *sendbuf,
+		void *recvbuf,
+		int count,
+		MPI_Datatype datatype,
+		MPI_Op op,
+		int root,
+		MPI_Comm comm,
+		MPI_Request *request)
+{
+	AislinnArgType args[8];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) recvbuf;
+	args[2] = (AislinnArgType) count;
+	args[3] = (AislinnArgType) datatype;
+	args[4] = (AislinnArgType) op;
+	args[5] = (AislinnArgType) root;
+	args[6] = (AislinnArgType) comm;
+	args[7] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Ireduce", args, 8);
+}
+
 
 #endif // __AISLINN_MPI_H

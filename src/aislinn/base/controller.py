@@ -80,6 +80,10 @@ class Controller:
     def free_buffer(self, buffer_id):
         self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
 
+    def memcpy(self, addr, source, size):
+        self.send_and_receive_ok("WRITE {0} addr {1} {2}\n" \
+                .format(addr, source, size))
+
     def write_buffer(self, addr, buffer_addr, index=None, size=None):
         if index is None or size is None:
             self.send_and_receive_ok("WRITE {0} buffer {1}\n" \
@@ -95,6 +99,10 @@ class Controller:
         self.send_and_receive_ok("WRITE {0} ints {1} {2}\n" \
                 .format(addr, len(values), " ".join(map(str, values))))
 
+    def reduce(self, addr, datatype, count, op, buffer_id):
+        self.send_and_receive_ok("REDUCE {0} {1} {2} {3} {4}\n" \
+                .format(addr, datatype, count, op, buffer_id))
+
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))
 
@@ -105,7 +113,8 @@ class Controller:
         return results
 
     def read_pointers(self, addr, count):
-        line = self.send_and_receive("READ {0} pointers {1}\n".format(addr, count))
+        line = self.send_and_receive("READ {0} pointers {1}\n" \
+                .format(addr, count))
         results = map(int, line.split())
         assert len(results) == count
         return results

@@ -10,7 +10,8 @@ class CollectiveTests(TestCase):
         self.program("invalid")
 
         args = [ "gatherv_root",
-                 "gatherv_sendcount" ]
+                 "gatherv_sendcount",
+                 "reduce_op" ]
 
         for arg in args:
             self.execute(2, (arg,))
@@ -102,6 +103,16 @@ class CollectiveTests(TestCase):
         self.execute(3, "1", stdout=output)
         self.no_errors()
         self.execute(3, "2", stdout=output)
+        self.no_errors()
+
+    def test_reduce(self):
+        output = "OUT1: 600 603 606 609\n" \
+                 "OUT2: 6000000 6110601 6222408 6335427\n" \
+                 "OUT1d: 0.6 0.603 0.606 0.609\n" \
+                 "OUT2d: 0.006 0.0061106 0.00622241 0.00633543\n"
+        self.program("reduce")
+
+        self.execute(3, "ok", stdout=output)
         self.no_errors()
 
 

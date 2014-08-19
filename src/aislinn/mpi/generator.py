@@ -65,23 +65,6 @@ class Generator:
         self.process_count = None
         self.working_queue = deque()
         self.error_messages = []
-        self.calls = {
-                "MPI_Comm_rank" : mpicalls.MPI_Comm_rank,
-                "MPI_Comm_size" : mpicalls.MPI_Comm_size,
-                "MPI_Send" : mpicalls.MPI_Send,
-                "MPI_Recv" : mpicalls.MPI_Recv,
-                "MPI_Isend" : mpicalls.MPI_ISend,
-                "MPI_Irecv" : mpicalls.MPI_IRecv,
-                "MPI_Wait" : mpicalls.MPI_Wait,
-                "MPI_Test" : mpicalls.MPI_Test,
-                "MPI_Waitall" : mpicalls.MPI_Waitall,
-                "MPI_Ibarrier" : mpicalls.MPI_Ibarrier,
-                "MPI_Igather" : mpicalls.MPI_Igather,
-                "MPI_Igatherv" : mpicalls.MPI_Igatherv,
-                "MPI_Iscatter" : mpicalls.MPI_Iscatter,
-                "MPI_Iscatterv" : mpicalls.MPI_Iscatterv,
-        }
-
         self.vg_states = base.resource.ResourceManager("vg_state")
         self.vg_buffers = base.resource.ResourceManager("vg_buffer")
 
@@ -421,7 +404,7 @@ class Generator:
                             self.make_error_message_from_report(call))
                     self.fatal_error = True
                     return context
-                fn = self.calls.get(call[1])
+                fn = mpicalls.calls.get(call[1])
                 if fn is not None:
                     if fn(self, call[2:], gstate, state, context):
                         break
@@ -443,6 +426,12 @@ class Generator:
         stacktrace = self.controller.get_stacktrace()
         event.stacktrace = stacktrace
         context.add_event(event)
+
+    def validate_op(self,
+                    op,
+                    arg_position):
+        if not types.is_valid_op(op):
+            errormsg.InvalidArgument(op, arg_position).throw()
 
     def validate_rank(self,
                       rank,

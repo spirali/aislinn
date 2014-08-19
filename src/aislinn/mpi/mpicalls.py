@@ -287,6 +287,27 @@ def MPI_Iscatterv(generator, args, gstate, state, context):
                               args)
     return False
 
+def MPI_Ireduce(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "ptr", # recvbuf
+                       "int", # count
+                       "int", # datatype
+                       "int", # op
+                       "int", # root
+                       "int", # comm
+                       "ptr", # request
+                      ))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.Reduce,
+                              False,
+                              args)
+    return False
+
 def call_collective_operation(generator,
                               gstate,
                               state,
@@ -301,3 +322,21 @@ def call_collective_operation(generator,
     request_id = state.add_collective_request(op.cc_id)
     generator.controller.write_int(request_ptr, request_id)
     generator.add_call_event(context, op.get_event(state))
+
+calls = {
+        "MPI_Comm_rank" : MPI_Comm_rank,
+        "MPI_Comm_size" : MPI_Comm_size,
+        "MPI_Send" : MPI_Send,
+        "MPI_Recv" : MPI_Recv,
+        "MPI_Isend" : MPI_ISend,
+        "MPI_Irecv" : MPI_IRecv,
+        "MPI_Wait" : MPI_Wait,
+        "MPI_Test" : MPI_Test,
+        "MPI_Waitall" : MPI_Waitall,
+        "MPI_Ibarrier" : MPI_Ibarrier,
+        "MPI_Igather" : MPI_Igather,
+        "MPI_Igatherv" : MPI_Igatherv,
+        "MPI_Iscatter" : MPI_Iscatter,
+        "MPI_Iscatterv" : MPI_Iscatterv,
+        "MPI_Ireduce" : MPI_Ireduce,
+}

@@ -1012,6 +1012,49 @@ static void process_commands_init(CommandsEnterType cet) {
 }
 
 static
+void run_reduce(Addr addr,
+                const char *datatype,
+                UWord count,
+                const char *op,
+                Addr input)
+{
+   UWord i;
+   if (!VG_(strcmp)(datatype, "int")) {
+      if (!VG_(strcmp)(op, "+")) {
+         int *result = (int *) addr, *data = (int *) input;
+         for (i = 0; i < count; i++) {
+            result[i] += data[i];
+         }
+         return;
+      }
+      if (!VG_(strcmp)(op, "*")) {
+         int *result = (int *) addr, *data = (int *) input;
+         for (i = 0; i < count; i++) {
+            result[i] *= data[i];
+         }
+         return;
+      }
+   }
+   if (!VG_(strcmp)(datatype, "double")) {
+      if (!VG_(strcmp)(op, "+")) {
+         double *result = (double *) addr, *data = (double *) input;
+         for (i = 0; i < count; i++) {
+            result[i] += data[i];
+         }
+         return;
+      }
+      if (!VG_(strcmp)(op, "*")) {
+         double *result = (double *) addr, *data = (double *) input;
+         for (i = 0; i < count; i++) {
+            result[i] *= data[i];
+         }
+         return;
+      }
+   }
+   tl_assert(0);
+}
+
+static
 void process_commands(CommandsEnterType cet)
 {
    process_commands_init(cet);
@@ -1069,6 +1112,11 @@ void process_commands(CommandsEnterType cet)
             UWord size = (UWord) next_token_uword();
             extern_write((Addr)addr, size);
             VG_(memcpy(addr, (void*) (buffer + sizeof(UWord) + index), size));
+         } else if (!VG_(strcmp(param, "addr"))) {
+            Addr source = (Addr) next_token_uword();
+            UWord size = (UWord) next_token_uword();
+            extern_write((Addr)addr, size);
+            VG_(memcpy(addr, (void*) source, size));
          } else {
             write_message("Error: Invalid argument\n");
             VG_(exit)(1);
@@ -1200,6 +1248,19 @@ void process_commands(CommandsEnterType cet)
          }
          VG_(HT_remove)(states_table, state_id);
          state_free(state);
+         write_message("Ok\n");
+         continue;
+      }
+
+      if (!VG_(strcmp)(cmd, "REDUCE")) {
+         Addr addr = next_token_uword();
+         char datatype[10], op[10];
+         VG_(strncpy)(datatype, next_token(), 10);
+         UWord count = next_token_uword();
+         VG_(strncpy)(op, next_token(), 10);
+         UWord *buffer = (UWord*) next_token_uword();
+         buffer += 1; // skip size
+         run_reduce(addr, datatype, count, op, (Addr) buffer);
          write_message("Ok\n");
          continue;
       }
