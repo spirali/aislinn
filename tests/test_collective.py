@@ -115,6 +115,16 @@ class CollectiveTests(TestCase):
         self.execute(3, "ok", stdout=output)
         self.no_errors()
 
+    def test_allreduce(self):
+        output = "OUT1: 600 603 606 609\n" \
+                 "OUT2: 6000000 6110601 6222408 6335427\n" \
+                 "OUT1d: 0.6 0.603 0.606 0.609\n" \
+                 "OUT2d: 0.006 0.0061106 0.00622241 0.00633543\n"
+        self.program("allreduce")
+
+        self.execute(3, "ok", stdout=output * 3)
+        self.no_errors()
+
     def test_loc(self):
         output = "int: (100, 1) (100, 1)\n" \
                  "int: (100, 3) (300, 30)\n" \

@@ -310,6 +310,21 @@ int MPI_Ireduce(const void *sendbuf,
 	return 0;
 }
 
+int MPI_Iallreduce(void *sendbuf, void *recvbuf, int count,
+    MPI_Datatype datatype, MPI_Op op, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) recvbuf;
+	args[2] = (AislinnArgType) count;
+	args[3] = (AislinnArgType) datatype;
+	args[4] = (AislinnArgType) op;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Iallreduce", args, 7);
+	return 0;
+}
+
 double MPI_Wtime() {
 	// Dummy version
 	return 0.0;

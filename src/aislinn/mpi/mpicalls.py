@@ -308,6 +308,27 @@ def MPI_Ireduce(generator, args, gstate, state, context):
                               args)
     return False
 
+def MPI_Iallreduce(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "ptr", # recvbuf
+                       "int", # count
+                       "int", # datatype
+                       "int", # op
+                       "int", # comm
+                       "ptr", # request
+                      ))
+    call_collective_operation(generator,
+                              gstate,
+                              state,
+                              context,
+                              collectives.AllReduce,
+                              False,
+                              args)
+    return False
+
+
 def call_collective_operation(generator,
                               gstate,
                               state,
@@ -339,4 +360,5 @@ calls = {
         "MPI_Iscatter" : MPI_Iscatter,
         "MPI_Iscatterv" : MPI_Iscatterv,
         "MPI_Ireduce" : MPI_Ireduce,
+        "MPI_Iallreduce" : MPI_Iallreduce,
 }

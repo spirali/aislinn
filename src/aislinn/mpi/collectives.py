@@ -442,3 +442,63 @@ class Reduce(OperationWithBuffers):
         hashthread.update(str(self.datatype))
         hashthread.update(str(self.count))
         hashthread.update(str(self.op))
+
+
+class AllReduce(OperationWithBuffers):
+
+    name = "allreduce"
+
+    def __init__(self, gstate, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+        self.recvbufs = [ None ] * self.process_count
+        self.datatype = None
+        self.count = None
+        self.op = None
+
+    def enter_main(self,
+                     generator,
+                     gstate,
+                     state,
+                     args):
+
+        sendbuf, recvbuf, count, datatype, op, comm = args
+        generator.validate_count(count, 3)
+        generator.validate_op(op, 5)
+
+        if self.op is None:
+            self.op = op
+            self.count = count
+            self.datatype = datatype
+        else:
+            assert (self.op == op and
+                    self.count == count and
+                    self.datatype == datatype)
+
+        size = types.get_datatype_size(datatype) * count
+        generator.controller.memcpy(recvbuf, sendbuf, size)
+        self.recvbufs[state.rank] = recvbuf
+        assert self.buffers[state.rank] is None
+        self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+
+    def can_be_completed(self, gstate, state):
+        return self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, gstate, state):
+        vg_datatype, vg_op = types.translate_reduction_op(self.datatype,
+                                                          self.op)
+        recvbuf = self.recvbufs[state.rank]
+        for rank in xrange(self.process_count):
+            if rank == state.rank:
+                continue
+            generator.controller.reduce(recvbuf,
+                                        vg_datatype,
+                                        self.count,
+                                        vg_op,
+                                        self.buffers[rank].id)
+
+    def compute_hash_data(self, hashthread):
+        OperationWithBuffers.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.recvbufs))
+        hashthread.update(str(self.datatype))
+        hashthread.update(str(self.count))
+        hashthread.update(str(self.op))
