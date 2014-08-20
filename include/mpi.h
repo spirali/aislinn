@@ -297,5 +297,9 @@ int MPI_Ireduce(const void *sendbuf,
 	aislinn_call_args("MPI_Ireduce", args, 8);
 }
 
+double MPI_Wtime() {
+	// Dummy version
+	return 0.0;
+}
 
 #endif // __AISLINN_MPI_H
