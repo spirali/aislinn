@@ -115,6 +115,17 @@ class CollectiveTests(TestCase):
         self.execute(3, "ok", stdout=output)
         self.no_errors()
 
+    def test_loc(self):
+        output = "int: (100, 1) (100, 1)\n" \
+                 "int: (100, 3) (300, 30)\n" \
+                 "int: (1, 3) (3, -5)\n" \
+                 "double: (0.1, 1) (0.1, 1)\n" \
+                 "double: (0.1, 3) (0.3, 30)\n" \
+                 "double: (0.001, 3) (0.003, -5)\n"
+        self.program("loc")
+        self.execute(3, "ok", stdout=output)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,6 +40,12 @@ const MPI_Datatype MPI_UNSIGNED_LONG_LONG = 0xFF0010E;
 const MPI_Datatype MPI_FLOAT = 0xFF0010F;
 const MPI_Datatype MPI_DOUBLE = 0xFF00110;
 const MPI_Datatype MPI_LONG_DOUBLE = 0xFF00111;
+const MPI_Datatype MPI_FLOAT_INT = 0xFF00112;
+const MPI_Datatype MPI_DOUBLE_INT = 0xFF00113;
+const MPI_Datatype MPI_LONG_INT = 0xFF00114;
+const MPI_Datatype MPI_2INT = 0xFF00115;
+const MPI_Datatype MPI_SHORT_INT = 0xFF00116;
+const MPI_Datatype MPI_LONG_DOUBLE_INT = 0xFF00117;
 
 const MPI_Op MPI_MAX = 0xDD00101;
 const MPI_Op MPI_MIN = 0xDD00102;
@@ -49,8 +55,10 @@ const MPI_Op MPI_LAND = 0xDD00105;
 const MPI_Op MPI_BAND = 0xDD00106;
 const MPI_Op MPI_LOR = 0xDD00107;
 const MPI_Op MPI_BOR = 0xDD00109;
-const MPI_Op MPI_LXOR = 0xDD00110;
-const MPI_Op MPI_BXOR = 0xDD00111;
+const MPI_Op MPI_LXOR = 0xDD0010A;
+const MPI_Op MPI_BXOR = 0xDD0010B;
+const MPI_Op MPI_MINLOC = 0xDD0010C;
+const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
 #define MPI_STATUS_IGNORE ((MPI_Status*) 0)
 #define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
@@ -201,6 +209,7 @@ int MPI_Igather(const void *sendbuf,
 	args[7] = (AislinnArgType) comm;
 	args[8] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Igather", args, 9);
+	return 0;
 }
 
 int MPI_Igatherv(const void *sendbuf,
@@ -226,6 +235,7 @@ int MPI_Igatherv(const void *sendbuf,
 	args[8] = (AislinnArgType) comm;
 	args[9] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Igatherv", args, 10);
+	return 0;
 }
 
 int MPI_Iscatter(const void *sendbuf,
@@ -249,6 +259,7 @@ int MPI_Iscatter(const void *sendbuf,
 	args[7] = (AislinnArgType) comm;
 	args[8] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iscatter", args, 9);
+	return 0;
 }
 
 int MPI_Iscatterv(const void *sendbuf,
@@ -274,6 +285,7 @@ int MPI_Iscatterv(const void *sendbuf,
 	args[8] = (AislinnArgType) comm;
 	args[9] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iscatterv", args, 10);
+	return 0;
 }
 
 int MPI_Ireduce(const void *sendbuf,
@@ -295,6 +307,7 @@ int MPI_Ireduce(const void *sendbuf,
 	args[6] = (AislinnArgType) comm;
 	args[7] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Ireduce", args, 8);
+	return 0;
 }
 
 double MPI_Wtime() {

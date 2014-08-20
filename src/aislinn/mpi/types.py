@@ -21,7 +21,13 @@ type_sizes = {
     consts.MPI_UNSIGNED_LONG_LONG : 8,
     consts.MPI_FLOAT : 4,
     consts.MPI_DOUBLE : 8,
-    consts.MPI_LONG_DOUBLE : 16
+    consts.MPI_LONG_DOUBLE : 16,
+    consts.MPI_FLOAT_INT : 8,
+    consts.MPI_DOUBLE_INT : 16,
+    consts.MPI_LONG_INT : None,
+    consts.MPI_2INT : 8,
+    consts.MPI_SHORT_INT : None,
+    consts.MPI_LONG_DOUBLE_INT : None,
 }
 
 type_names = {
@@ -41,7 +47,13 @@ type_names = {
     consts.MPI_UNSIGNED_LONG_LONG : "MPI_UNSIGNED_LONG_LONG",
     consts.MPI_FLOAT : "MPI_FLOAT",
     consts.MPI_DOUBLE : "MPI_DOUBLE",
-    consts.MPI_LONG_DOUBLE : "MPI_LONG_DOUBLE"
+    consts.MPI_LONG_DOUBLE : "MPI_LONG_DOUBLE",
+    consts.MPI_FLOAT_INT : "MPI_FLOAT_INT",
+    consts.MPI_DOUBLE_INT : "MPI_DOUBLE_INT",
+    consts.MPI_LONG_INT : "MPI_LONG_INT",
+    consts.MPI_2INT : "MPI_2INT",
+    consts.MPI_SHORT_INT : "MPI_SHORT_INT",
+    consts.MPI_LONG_DOUBLE_INT : "MPI_LONG_DOUBLE_INT",
 }
 
 op_names = {
@@ -54,17 +66,23 @@ op_names = {
     consts.MPI_LOR : "MPI_LOR",
     consts.MPI_BOR : "MPI_BOR",
     consts.MPI_LXOR : "MPI_LXOR",
-    consts.MPI_BXOR : "MPI_BXOR"
+    consts.MPI_BXOR : "MPI_BXOR",
+    consts.MPI_MINLOC : "MPI_MINLOC",
+    consts.MPI_MAXLOC : "MPI_MAXLOC",
 }
 
 vgtool_name_of_types = {
     consts.MPI_INT: "int",
     consts.MPI_DOUBLE: "double",
+    consts.MPI_DOUBLE_INT: "double_int",
+    consts.MPI_2INT : "int_int",
 }
 
 vgtool_name_of_ops = {
     consts.MPI_SUM: "+",
     consts.MPI_PROD: "*",
+    consts.MPI_MINLOC: "minloc",
+    consts.MPI_MAXLOC: "maxloc",
 }
 
 def get_datatype_size(datatype):
@@ -78,7 +96,7 @@ def get_datatype_name(datatype):
         return "Unknown type (value={0})".format(datatype)
 
 def is_valid_op(op):
-    return op >= consts.MPI_MIN and op <= consts.MPI_BXOR
+    return op >= consts.MPI_MIN and op <= consts.MPI_MAXLOC
 
 def get_op_name(op):
     return op_names.get(op)

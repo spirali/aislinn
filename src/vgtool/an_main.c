@@ -1011,6 +1011,9 @@ static void process_commands_init(CommandsEnterType cet) {
    tst->arch.vex.guest_RDX = 0; // Result of client request
 }
 
+typedef struct { int x; int y; } Type_int_int;
+typedef struct { double x; int y; } Type_double_int;
+
 static
 void run_reduce(Addr addr,
                 const char *datatype,
@@ -1051,6 +1054,58 @@ void run_reduce(Addr addr,
          return;
       }
    }
+
+   if (!VG_(strcmp)(datatype, "int_int")) {
+      if (!VG_(strcmp)(op, "minloc")) {
+         Type_int_int *result = (Type_int_int *) addr;
+         Type_int_int *data = (Type_int_int *) input;
+         for (i = 0; i < count; i++) {
+            if (result[i].x > data[i].x ||
+                (result[i].x == data[i].x && result[i].y > data[i].y)) {
+               result[i] = data[i];
+            }
+         }
+         return;
+      }
+      if (!VG_(strcmp)(op, "maxloc")) {
+         Type_int_int *result = (Type_int_int *) addr;
+         Type_int_int *data = (Type_int_int *) input;
+         for (i = 0; i < count; i++) {
+            if (result[i].x < data[i].x ||
+                (result[i].x == data[i].x && result[i].y > data[i].y)) {
+               result[i] = data[i];
+            }
+         }
+         return;
+      }
+   }
+
+   if (!VG_(strcmp)(datatype, "double_int")) {
+      if (!VG_(strcmp)(op, "minloc")) {
+         Type_double_int *result = (Type_double_int *) addr;
+         Type_double_int *data = (Type_double_int *) input;
+         for (i = 0; i < count; i++) {
+            if (result[i].x > data[i].x ||
+                (result[i].x == data[i].x && result[i].y > data[i].y)) {
+               result[i] = data[i];
+            }
+         }
+         return;
+      }
+      if (!VG_(strcmp)(op, "maxloc")) {
+         Type_double_int *result = (Type_double_int *) addr;
+         Type_double_int *data = (Type_double_int *) input;
+         for (i = 0; i < count; i++) {
+            if (result[i].x < data[i].x ||
+                (result[i].x == data[i].x && result[i].y > data[i].y)) {
+               result[i] = data[i];
+            }
+         }
+         return;
+      }
+   }
+
+
    tl_assert(0);
 }
 
@@ -1254,8 +1309,8 @@ void process_commands(CommandsEnterType cet)
 
       if (!VG_(strcmp)(cmd, "REDUCE")) {
          Addr addr = next_token_uword();
-         char datatype[10], op[10];
-         VG_(strncpy)(datatype, next_token(), 10);
+         char datatype[20], op[10];
+         VG_(strncpy)(datatype, next_token(), 20);
          UWord count = next_token_uword();
          VG_(strncpy)(op, next_token(), 10);
          UWord *buffer = (UWord*) next_token_uword();
