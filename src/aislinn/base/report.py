@@ -29,9 +29,21 @@ except ImportError:
     pass # User of plt has to make sure that plt is not None
 
 collective_operations = [
+    "Gather",
+    "Gatherv",
+    "Barrier"
+    "Scatter",
+    "Scatterv",
+    "Reduce",
+    "Allreduce",
+
     "Igather",
     "Igatherv",
     "Ibarrier"
+    "Iscatter",
+    "Iscatterv",
+    "Ireduce",
+    "Iallreduce"
 ]
 
 def make_chart(data, ydata, units):

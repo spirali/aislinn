@@ -136,6 +136,14 @@ class CollectiveTests(TestCase):
         self.execute(3, "ok", stdout=output)
         self.no_errors()
 
+    def test_scattergather(self):
+        output = "OUT: 110 210 310 410 520 620 720 820 930 1030 1130 1230\n"
+        self.program("scattergather")
+        self.execute(3, "0", stdout=output)
+        self.execute(3, "1", stdout=output)
+        self.execute(3, "2", stdout=output)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

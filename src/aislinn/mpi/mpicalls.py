@@ -186,16 +186,144 @@ def MPI_Waitall(generator, args, gstate, state, context):
     generator.add_call_event(context, e)
     return True
 
+def MPI_Barrier(generator, args, gstate, state, context):
+    args = convert_types(args, ("int",))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Barrier,
+                                     True,
+                                     args)
+
+def MPI_Gather(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "int", # sendcount
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "int", # recvcount
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                      ))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Gather,
+                                     True,
+                                     args)
+
+def MPI_Gatherv(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "int", # sendcount
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "ptr", # recvcounts
+                       "ptr", # displs
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                      ))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Gatherv,
+                                     True,
+                                     args)
+
+def MPI_Scatter(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "int", # sendcount
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "int", # recvcount
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                      ))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Scatter,
+                                     True,
+                                     args)
+
+def MPI_Scatterv(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "ptr", # sendcounts
+                       "ptr", # displs
+                       "int", # sendtype
+                       "ptr", # recvbuf
+                       "int", # recvcount
+                       "int", # recvtype
+                       "int", # root
+                       "int", # comm
+                      ))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Scatterv,
+                                     True,
+                                     args)
+
+def MPI_Reduce(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "ptr", # recvbuf
+                       "int", # count
+                       "int", # datatype
+                       "int", # op
+                       "int", # root
+                       "int", # comm
+                      ))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Reduce,
+                                     True,
+                                     args)
+
+def MPI_Allreduce(generator, args, gstate, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # sendbuf
+                       "ptr", # recvbuf
+                       "int", # count
+                       "int", # datatype
+                       "int", # op
+                       "int", # comm
+                      ))
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.AllReduce,
+                                     True,
+                                     args)
+
 def MPI_Ibarrier(generator, args, gstate, state, context):
     args = convert_types(args, ("int", "ptr"))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.Barrier,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Barrier,
+                                     False,
+                                     args)
 
 def MPI_Igather(generator, args, gstate, state, context):
     args = \
@@ -210,14 +338,13 @@ def MPI_Igather(generator, args, gstate, state, context):
                        "int", # comm
                        "ptr", # request_ptr
                       ))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.Gather,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Gather,
+                                     False,
+                                     args)
 
 def MPI_Igatherv(generator, args, gstate, state, context):
     args = \
@@ -233,14 +360,13 @@ def MPI_Igatherv(generator, args, gstate, state, context):
                        "int", # comm
                        "ptr", # request_ptr
                       ))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.Gatherv,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Gatherv,
+                                     False,
+                                     args)
 
 def MPI_Iscatter(generator, args, gstate, state, context):
     args = \
@@ -255,14 +381,13 @@ def MPI_Iscatter(generator, args, gstate, state, context):
                        "int", # comm
                        "ptr", # request_ptr
                       ))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.Scatter,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Scatter,
+                                     False,
+                                     args)
 
 def MPI_Iscatterv(generator, args, gstate, state, context):
     args = \
@@ -278,14 +403,13 @@ def MPI_Iscatterv(generator, args, gstate, state, context):
                        "int", # comm
                        "ptr", # request_ptr
                       ))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.Scatterv,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Scatterv,
+                                     False,
+                                     args)
 
 def MPI_Ireduce(generator, args, gstate, state, context):
     args = \
@@ -299,14 +423,13 @@ def MPI_Ireduce(generator, args, gstate, state, context):
                        "int", # comm
                        "ptr", # request
                       ))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.Reduce,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.Reduce,
+                                     False,
+                                     args)
 
 def MPI_Iallreduce(generator, args, gstate, state, context):
     args = \
@@ -319,14 +442,13 @@ def MPI_Iallreduce(generator, args, gstate, state, context):
                        "int", # comm
                        "ptr", # request
                       ))
-    call_collective_operation(generator,
-                              gstate,
-                              state,
-                              context,
-                              collectives.AllReduce,
-                              False,
-                              args)
-    return False
+    return call_collective_operation(generator,
+                                     gstate,
+                                     state,
+                                     context,
+                                     collectives.AllReduce,
+                                     False,
+                                     args)
 
 
 def call_collective_operation(generator,
@@ -336,13 +458,18 @@ def call_collective_operation(generator,
                               op_class,
                               blocking,
                               args):
-    request_ptr = args[-1]
-    args = args[:-1]
+    if not blocking:
+        request_ptr = args[-1]
+        args = args[:-1]
     op = gstate.call_collective_operation(
                 generator, state, op_class, blocking, args)
     request_id = state.add_collective_request(op.cc_id)
-    generator.controller.write_int(request_ptr, request_id)
+    if blocking:
+        state.set_wait((request_id,))
+    else:
+        generator.controller.write_int(request_ptr, request_id)
     generator.add_call_event(context, op.get_event(state))
+    return blocking
 
 calls = {
         "MPI_Comm_rank" : MPI_Comm_rank,
@@ -354,6 +481,13 @@ calls = {
         "MPI_Wait" : MPI_Wait,
         "MPI_Test" : MPI_Test,
         "MPI_Waitall" : MPI_Waitall,
+        "MPI_Barrier" : MPI_Barrier,
+        "MPI_Gather" : MPI_Gather,
+        "MPI_Gatherv" : MPI_Gatherv,
+        "MPI_Scatter" : MPI_Scatter,
+        "MPI_Scatterv" : MPI_Scatterv,
+        "MPI_Reduce" : MPI_Reduce,
+        "MPI_Allreduce" : MPI_Allreduce,
         "MPI_Ibarrier" : MPI_Ibarrier,
         "MPI_Igather" : MPI_Igather,
         "MPI_Igatherv" : MPI_Igatherv,
