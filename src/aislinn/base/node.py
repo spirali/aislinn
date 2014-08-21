@@ -28,8 +28,8 @@ class Arc:
     def label(self):
         if not self.events:
             return "no-events"
-        ranks = list(set(e.rank for e in self.events))
-        return ",".join(map(str, ranks))
+        pids = list(set(e.pid for e in self.events))
+        return ",".join(map(str, pids))
 
 
 class Node:

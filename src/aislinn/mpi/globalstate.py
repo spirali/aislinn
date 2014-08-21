@@ -20,27 +20,38 @@
 
 import hashlib
 from base.utils import EqMixin
+import comm
+import copy
+from state import State
 
 
 class GlobalState(EqMixin):
 
     def __init__(self,
-                 states,
-                 send_protocol_thresholds,
-                 collective_operations=None):
-        self.states = tuple(states)
-        self.collective_operations = collective_operations
+                 vg_state,
+                 process_count,
+                 send_protocol_thresholds):
+        states = []
+        for i in xrange(process_count):
+            vg_state.inc_ref()
+            state = State(self, i, vg_state)
+            states.append(state)
+        self.states = states
+        self.collective_operations = None
         self.send_protocol_thresholds = send_protocol_thresholds
+        self.comm_world = comm.make_comm_world(process_count)
 
     def copy(self):
-        states = [ state.copy() for state in self.states ]
+        gstate = copy.copy(self)
+        gstate.states = [ state.copy(gstate) for state in self.states ]
         if self.collective_operations:
-            collective_operations = [ op.copy() \
-                                      for op in self.collective_operations ]
-        else:
-            collective_operations = None
-        return GlobalState(
-                states, self.send_protocol_thresholds, collective_operations)
+            gstate.collective_operations = [ op.copy() \
+                                             for op in self.collective_operations ]
+        return gstate
+
+    @property
+    def process_count(self):
+        return len(self.states)
 
     def dispose(self):
         for state in self.states:
@@ -49,8 +60,8 @@ class GlobalState(EqMixin):
             for op in self.collective_operations:
                 op.dispose()
 
-    def get_state(self, rank):
-        return self.states[rank]
+    def get_state(self, pid):
+        return self.states[pid]
 
     def compute_hash(self):
         for state in self.states:
@@ -77,7 +88,14 @@ class GlobalState(EqMixin):
             if op.cc_id == cc_id:
                 return op
 
-    def call_collective_operation(self, generator, state, op_class, blocking, args):
+    def call_collective_operation(self,
+                                  generator,
+                                  state,
+                                  comm,
+                                  op_class,
+                                  blocking,
+                                  args):
+
         if self.collective_operations is None:
             self.collective_operations = []
         cc_id = state.cc_id_counter
@@ -86,15 +104,11 @@ class GlobalState(EqMixin):
             # TODO: Check compatability
             pass
         else:
-            op = op_class(self, blocking, cc_id)
+            op = op_class(self, comm, blocking, cc_id)
             self.collective_operations.append(op)
         state.inc_cc_id_counter()
-        op.enter(generator, self, state, args)
+        op.enter(generator, state, comm, args)
         return op
 
     def finish_collective_operation(self, op):
         self.collective_operations.remove(op)
-
-    @property
-    def process_count(self):
-        return len(self.states)

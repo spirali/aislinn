@@ -21,7 +21,11 @@ typedef int MPI_Datatype;
 typedef int MPI_Op;
 
 /* Constants */
-const MPI_Comm MPI_COMM_WORLD = 0;
+const int MPI_UNDEFINED = -0x0BEFBEEF;
+
+const MPI_Comm MPI_COMM_NULL = 0x0000CC00;
+const MPI_Comm MPI_COMM_SELF = 0x0000CC01;
+const MPI_Comm MPI_COMM_WORLD = 0x0000CC02;
 
 const MPI_Datatype MPI_PACKED = 0xFF00101;
 const MPI_Datatype MPI_BYTE = 0xFF00102;
@@ -62,8 +66,8 @@ const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
 #define MPI_STATUS_IGNORE ((MPI_Status*) 0)
 #define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
-#define MPI_ANY_SOURCE 0xFFFF
-#define MPI_ANY_TAG -0xABF1
+#define MPI_ANY_SOURCE -0x00AA00
+#define MPI_ANY_TAG -0x00BB00
 
 inline void MPI_Init(int *argc, char ***argv) {
 	aislinn_call_0("MPI_Init");

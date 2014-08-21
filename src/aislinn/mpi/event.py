@@ -25,9 +25,9 @@ class Event:
 
     stacktrace = None
 
-    def __init__(self, name, rank):
+    def __init__(self, name, pid):
         self.name = name
-        self.rank = rank
+        self.pid = pid
 
     def get_entries(self):
         return EntryList()
@@ -35,26 +35,26 @@ class Event:
 
 class CommEvent(Event):
 
-    def __init__(self, name, rank, target, tag, request_id=None):
-        Event.__init__(self, name, rank)
+    def __init__(self, name, pid, target, tag, request_id=None):
+        Event.__init__(self, name, pid)
         self.target = target
         self.tag = tag
         self.request_id = request_id
 
 class CollectiveEvent(Event):
 
-    def __init__(self, name, rank):
-        Event.__init__(self, name, rank)
+    def __init__(self, name, pid):
+        Event.__init__(self, name, pid)
 
 class WaitEvent(Event):
 
-    def __init__(self, name, rank, request_ids):
-        Event.__init__(self, name, rank)
+    def __init__(self, name, pid, request_ids):
+        Event.__init__(self, name, pid)
         self.request_ids = request_ids
 
 
 class ExitEvent(Event):
 
-    def __init__(self, name, rank, exitcode):
-        Event.__init__(self, name, rank)
+    def __init__(self, name, pid, exitcode):
+        Event.__init__(self, name, pid)
         self.exitcode = exitcode

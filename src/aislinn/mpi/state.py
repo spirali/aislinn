@@ -18,7 +18,6 @@
 #
 
 
-from message import Message
 from request import \
     SendRequest, \
     ReceiveRequest, \
@@ -26,6 +25,7 @@ from request import \
     CollectiveRequest
 import consts
 import copy
+import comm
 
 class State:
 
@@ -34,9 +34,10 @@ class State:
     StatusWait = 2
     StatusTest = 3
 
-    def __init__(self, rank, vg_state):
+    def __init__(self, gstate, pid, vg_state):
         assert vg_state is not None
-        self.rank = rank
+        self.gstate = gstate
+        self.pid = pid
         self.vg_state = vg_state
         self.status = State.StatusInited
         self.messages = []
@@ -45,7 +46,7 @@ class State:
         self.flag_ptr = None
         self.cc_id_counter = 0
 
-    def copy(self):
+    def copy(self, gstate):
         if self.status == State.StatusFinished:
             assert self.vg_state is None
             for message in self.messages:
@@ -54,7 +55,7 @@ class State:
             return self
         if self.vg_state:
             self.vg_state.inc_ref()
-        state = State(self.rank, self.vg_state)
+        state = State(gstate, self.pid, self.vg_state)
         state.status = self.status
         state.messages = copy.copy(self.messages)
         for message in state.messages:
@@ -84,7 +85,7 @@ class State:
         if self.status != State.StatusFinished:
             # If we are finished, we do not care about exact state
             hashthread.update(self.vg_state.hash)
-        hashthread.update(str(self.rank))
+        hashthread.update(str(self.pid))
         hashthread.update(str(self.status))
         hashthread.update(str(self.cc_id_counter))
         if self.active_request_ids is not None:
@@ -97,8 +98,7 @@ class State:
             if request is not None:
                 request.compute_hash(hashthread)
 
-    def add_message(self, source, target, tag, vg_buffer, size, hash):
-        message = Message(source, target, tag, vg_buffer, size, hash)
+    def add_message(self, message):
         self.messages.append(message)
         return message
 
@@ -124,9 +124,9 @@ class State:
         self.requests[request_id] = request
         return request_id
 
-    def add_recv_request(self, source, tag, data_ptr, size):
+    def add_recv_request(self, comm_id, source, tag, data_ptr, size):
         request_id = self._new_request_index()
-        request = ReceiveRequest(source, tag, data_ptr, size)
+        request = ReceiveRequest(comm_id, source, tag, data_ptr, size)
         self.requests[request_id] = request
         return request_id
 
@@ -191,7 +191,7 @@ class State:
                 return False
         return True
 
-    def check_requests(self, gstate, upto_active=False):
+    def check_requests(self, upto_active=False):
         if upto_active:
             max_id = max(self.active_request_ids)
             requests = [ request for request in self.requests[:max_id+1]
@@ -200,22 +200,23 @@ class State:
             requests = [ request for request in self.requests
                          if request is not None ]
         non_recv_requests = []
+        gstate = self.gstate
 
         for r in requests:
             if r.is_send():
-                s = gstate.get_state(r.message.target)
+                s = self.gstate.get_state(r.message.target)
                 if r.message not in s.messages:
                     non_recv_requests.append((r, None))
             if r.is_collective():
-                if gstate.get_operation_by_cc_id(r.cc_id).can_be_completed(gstate, self):
+                if gstate.get_operation_by_cc_id(r.cc_id).can_be_completed(self):
                     non_recv_requests.append((r, None))
 
         result = []
         recvs = [ r for r in requests if r.is_receive() ]
         if recvs:
-            matching = self.collect_messages(gstate, recvs)
+            matching = self.collect_messages(recvs)
             if matching:
-                for matched in self.collect_messages(gstate, recvs):
+                for matched in matching:
                     result.append(non_recv_requests + matched)
             else:
                 result.append(non_recv_requests)
@@ -238,7 +239,7 @@ class State:
             return False
         return self.requests[request_id] is not None
 
-    def collect_messages(self, gstate, requests):
+    def collect_messages(self, requests):
         matched = [] # [(request, message)]
         result = [] # [[(request, message)]]
         def already_matched(message):
@@ -251,14 +252,16 @@ class State:
                 result.append(matched[:])
                 return
             request = requests[index]
-            flags = [ False ] * gstate.process_count
+            flags = [ False ] * self.gstate.process_count
             found = False
 
             for message in self.messages:
-                if (request.source == consts.MPI_ANY_SOURCE \
-                        or request.source == message.source) and \
-                        (request.tag == consts.MPI_ANY_TAG or request.tag == message.tag) \
-                        and not flags[message.source]:
+                if (request.comm_id == message.comm_id) and \
+                   (request.source == consts.MPI_ANY_SOURCE or
+                        request.source == message.source) and \
+                   (request.tag == consts.MPI_ANY_TAG or
+                        request.tag == message.tag) and \
+                   not flags[message.source]:
                     if already_matched(message):
                          continue # Message already taken from other request
                     flags[message.source] = True
@@ -272,13 +275,13 @@ class State:
         collect_messages_helper(0)
         return result
 
-    def fork_standard_sends(self, gstate):
+    def fork_standard_sends(self):
         max_id = max(self.active_request_ids)
         result = [ ([], []) ]
         for i in xrange(max_id + 1):
             request = self.requests[i]
             if request and request.is_send() and request.is_standard_send():
-                s = gstate.get_state(request.message.target)
+                s = self.gstate.get_state(request.message.target)
                 if request.message not in s.messages:
                     continue # Message is received so this send is not a problem
                              # even in synchronous variant
@@ -296,6 +299,15 @@ class State:
             return None
         else:
             return result
+
+    def get_comm(self, comm_id):
+        if comm_id == consts.MPI_COMM_WORLD:
+            return self.gstate.comm_world
+        if comm_id == consts.MPI_COMM_SELF:
+            return comm.make_comm_self(self.pid)
+
+    def get_rank(self, comm):
+        return comm.group.pid_to_rank(self.pid)
 
     def _new_request_index(self):
         i = len(self.requests) - 1

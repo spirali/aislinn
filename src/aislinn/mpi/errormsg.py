@@ -37,13 +37,13 @@ class ErrorMessage:
     def __init__(self):
         self.node = None
         self.last_arc = None
-        self.rank = None
+        self.pid = None
         self.events = None
 
     def get_entries(self):
         e = EntryList()
-        if self.rank is not None:
-            e.add("rank", self.rank)
+        if self.pid is not None:
+            e.add("pid", self.pid)
         description = self.description
         if description:
             e.add("description", self.description)
@@ -68,7 +68,7 @@ class NonzeroExitCode(ErrorMessage):
 
     @property
     def description(self):
-        return "Rank {0.rank} finished with exit code {0.exitcode}" \
+        return "Process {0.pid} finished with exit code {0.exitcode}" \
                     .format(self)
 
     def get_entries(self):
@@ -101,7 +101,8 @@ class InvalidArgument(CallError):
     @property
     def description(self):
         return "Function '{0.function_name}' was called with an invalid " \
-               "value ({0.arg_value}) in {0.arg_position}. argument. {1}" \
+                "value ({0.arg_value}) " \
+               "in {0.arg_position}. argument. {1}" \
                .format(self, self.extra_message)
 
 

@@ -26,11 +26,13 @@ import event
 
 class CollectiveOperation:
 
-    def __init__(self, gstate, blocking, cc_id):
+    def __init__(self, gstate, comm, blocking, cc_id):
         self.cc_id = cc_id
+        self.comm_id = comm.comm_id
         self.blocking = blocking
         self.root = None
-        self.process_count = gstate.process_count
+        self.root_pid = None
+        self.process_count = comm.group.size
         self.remaining_processes_enter = self.process_count
         self.remaining_processes_complete = self.process_count
         self.data = None
@@ -43,19 +45,19 @@ class CollectiveOperation:
     def after_copy(self):
         pass
 
-    def enter(self, generator, gstate, state, args):
+    def enter(self, generator, state, comm, args):
         logging.debug("Entering collective operation %s", self)
         assert self.remaining_processes_enter >= 0
         self.remaining_processes_enter -= 1
-        self.enter_main(generator, gstate, state, args)
+        self.enter_main(generator, state, comm, args)
 
-    def complete(self, generator, gstate, state):
+    def complete(self, generator, state):
         logging.debug("Completing collective operation %s", self)
         assert self.remaining_processes_complete >= 0
         self.remaining_processes_complete -= 1
-        self.complete_main(generator, gstate, state)
+        self.complete_main(generator, state, state.get_comm(self.comm_id))
         if self.remaining_processes_complete == 0:
-            gstate.finish_collective_operation(self)
+            state.gstate.finish_collective_operation(self)
             self.dispose()
 
     def is_finished(self):
@@ -64,9 +66,10 @@ class CollectiveOperation:
     def has_root(self):
         return self.root is not None
 
-    def check_root(self, root):
+    def check_root(self, comm, root):
         if self.root is None:
             self.root = root
+            self.root_pid = comm.group.rank_to_pid(root)
         elif self.root != root:
             e = errormsg.CallError()
             e.name = "rootmismatch"
@@ -75,8 +78,9 @@ class CollectiveOperation:
             e.throw()
 
     def compute_hash(self, hashthread):
-        hashthread.update("{0} {1} {2} {3} {4}".
+        hashthread.update("{0} {1} {2} {3} {4} {5}".
                 format(self.name,
+                       self.comm_id,
                        self.blocking,
                        self.root,
                        self.remaining_processes_complete,
@@ -84,7 +88,7 @@ class CollectiveOperation:
         self.compute_hash_data(hashthread)
 
     def get_event(self, state):
-        return event.CollectiveEvent(self.mpi_name, state.rank)
+        return event.CollectiveEvent(self.mpi_name, state.pid)
 
     @property
     def mpi_name(self):
@@ -104,9 +108,9 @@ class CollectiveOperation:
 
 class OperationWithBuffers(CollectiveOperation):
 
-    def __init__(self, gstate, blocking, cc_id):
-        CollectiveOperation.__init__(self, gstate, blocking, cc_id)
-        self.buffers = [ None ] * self.remaining_processes_enter
+    def __init__(self, gstate, comm, blocking, cc_id):
+        CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
+        self.buffers = [ None ] * self.process_count
 
     def after_copy(self):
         for vg_buffer in self.buffers:
@@ -128,8 +132,8 @@ class OperationWithBuffers(CollectiveOperation):
 
 class OperationWithSingleBuffer(CollectiveOperation):
 
-    def __init__(self, gstate, blocking, cc_id):
-        CollectiveOperation.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
         self.buffer = None
 
     def after_copy(self):
@@ -152,16 +156,16 @@ class Barrier(CollectiveOperation):
     name = "barrier"
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
         pass
 
-    def can_be_completed(self, gstate, state):
+    def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, gstate, state):
+    def complete_main(self, generator, state, comm):
         pass
 
     def compute_hash_data(self, hashthread):
@@ -174,8 +178,8 @@ class Gatherv(OperationWithBuffers):
 
     name = "gatherv"
 
-    def __init__(self, gstate, blocking, cc_id):
-        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.recvbuf = None
         self.sendcounts = [ None ] * self.process_count
@@ -183,36 +187,36 @@ class Gatherv(OperationWithBuffers):
         self.displs = None
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcounts, displs, recvtype, root, comm = args
-        generator.validate_rank(root, 8)
+               recvbuf, recvcounts, displs, recvtype, root = args
+        generator.validate_rank(comm, root, 8)
         generator.validate_count(sendcount, 2)
-        self.check_root(root)
-        if self.root == root:
-            self.recvbuf = recvbuf
-
+        rank = state.get_rank(comm)
+        self.check_root(comm, root)
         self.sendtype = sendtype
         size = types.get_datatype_size(sendtype) * sendcount
-        self.sendcounts[state.rank] = sendcount
+        self.sendcounts[rank] = sendcount
 
-        assert self.buffers[state.rank] is None
-        self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer(sendbuf, size)
 
-        if root == state.rank:
+        if root == rank:
+            self.recvbuf = recvbuf
             self.recvcounts = generator.controller.read_ints(
                     recvcounts, self.process_count)
             self.displs = generator.controller.read_ints(
                     displs, self.process_count)
 
-    def can_be_completed(self, gstate, state):
-        return state.rank != self.root or self.remaining_processes_enter == 0
+    def can_be_completed(self, state):
+        return state.pid != self.root_pid or \
+               self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, gstate, state):
-        if state.rank == self.root:
+    def complete_main(self, generator, state, comm):
+        if state.pid == self.root_pid:
             recvbuf = self.recvbuf
             controller = generator.controller
             size = types.get_datatype_size(self.sendtype)
@@ -232,25 +236,26 @@ class Gather(OperationWithBuffers):
 
     name = "gather"
 
-    def __init__(self, gstate, blocking, cc_id):
-        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.recvbuf = None
         self.count = None
         self.recvcount = None
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcount, recvtype, root, comm = args
-        generator.validate_rank(root, 8)
+               recvbuf, recvcount, recvtype, root = args
+        generator.validate_rank(comm, root, 8)
         generator.validate_count(sendcount, 2)
-        self.check_root(root)
+        self.check_root(comm, root)
 
-        if self.root == root:
+        rank = state.get_rank(comm)
+        if self.root == rank:
             self.recvbuf = recvbuf
             generator.validate_count(recvcount, 5)
 
@@ -258,14 +263,15 @@ class Gather(OperationWithBuffers):
         self.sendcount = sendcount
         size = types.get_datatype_size(sendtype) * sendcount
 
-        assert self.buffers[state.rank] is None
-        self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer(sendbuf, size)
 
-    def can_be_completed(self, gstate, state):
-        return state.rank != self.root or self.remaining_processes_enter == 0
+    def can_be_completed(self, state):
+        return state.pid != self.root_pid or \
+               self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, gstate, state):
-        if state.rank == self.root:
+    def complete_main(self, generator, state, comm):
+        if state.pid == self.root_pid:
             recvbuf = self.recvbuf
             controller = generator.controller
             size = types.get_datatype_size(self.sendtype) * self.sendcount
@@ -284,8 +290,8 @@ class Scatterv(OperationWithSingleBuffer):
 
     name = "scatterv"
 
-    def __init__(self, gstate, blocking, cc_id):
-        OperationWithSingleBuffer.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithSingleBuffer.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.recvbufs = [ None ] * self.process_count
         self.recvcounts = [ None ] * self.process_count
@@ -293,17 +299,18 @@ class Scatterv(OperationWithSingleBuffer):
         self.displs = None
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
         sendbuf, sendcounts, displs, sendtype, \
-               recvbuf, recvcount, recvtype, root, comm = args
-        generator.validate_rank(root, 8)
+               recvbuf, recvcount, recvtype, root = args
+        generator.validate_rank(comm, root, 8)
         generator.validate_count(recvcount, 5)
-        self.check_root(root)
-        self.recvbufs[state.rank] = recvbuf
-        if self.root == state.rank:
+        self.check_root(comm, root)
+        rank = state.get_rank(comm)
+        self.recvbufs[rank] = recvbuf
+        if self.root == rank:
             self.sendtype = sendtype
             self.sendcounts = generator.controller.read_ints(
                     sendcounts, self.process_count)
@@ -314,15 +321,16 @@ class Scatterv(OperationWithSingleBuffer):
             assert self.buffer is None
             self.buffer = generator.new_buffer(sendbuf, size)
 
-    def can_be_completed(self, gstate, state):
+    def can_be_completed(self, state):
         return self.buffer is not None
 
-    def complete_main(self, generator, gstate, state):
+    def complete_main(self, generator, state, comm):
         tsize = types.get_datatype_size(self.sendtype)
-        size =  tsize * self.sendcounts[state.rank]
-        index =  tsize * self.displs[state.rank]
+        rank = state.get_rank(comm)
+        size =  tsize * self.sendcounts[rank]
+        index =  tsize * self.displs[rank]
         generator.controller.write_buffer(
-                self.recvbufs[state.rank], self.buffer.id, index, size)
+                self.recvbufs[rank], self.buffer.id, index, size)
 
     def compute_hash_data(self, hashthread):
         OperationWithSingleBuffer.compute_hash_data(self, hashthread)
@@ -336,26 +344,27 @@ class Scatter(OperationWithSingleBuffer):
 
     name = "scatter"
 
-    def __init__(self, gstate, blocking, cc_id):
-        OperationWithSingleBuffer.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithSingleBuffer.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.recvbufs = [ None ] * self.process_count
         self.sendcount = None
         self.displs = None
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcount, recvtype, root, comm = args
+               recvbuf, recvcount, recvtype, root = args
         generator.validate_count(sendcount, 2)
         generator.validate_count(recvcount, 5)
-        generator.validate_rank(root, 8)
-        self.check_root(root)
-        self.recvbufs[state.rank] = recvbuf
-        if self.root == state.rank:
+        generator.validate_rank(comm, root, 8)
+        self.check_root(comm, root)
+        rank = state.get_rank(comm)
+        self.recvbufs[rank] = recvbuf
+        if self.root == rank:
             self.sendtype = sendtype
             self.sendcount = sendcount
             assert self.buffer is None
@@ -363,14 +372,15 @@ class Scatter(OperationWithSingleBuffer):
                         * self.sendcount * self.process_count)
             self.buffer = generator.new_buffer(sendbuf, size)
 
-    def can_be_completed(self, gstate, state):
+    def can_be_completed(self, state):
         return self.buffer is not None
 
-    def complete_main(self, generator, gstate, state):
+    def complete_main(self, generator, state, comm):
         size = types.get_datatype_size(self.sendtype) * self.sendcount
-        index =  state.rank * size
+        rank = state.get_rank(comm)
+        index =  rank * size
         generator.controller.write_buffer(
-                self.recvbufs[state.rank], self.buffer.id, index, size)
+                self.recvbufs[rank], self.buffer.id, index, size)
 
     def compute_hash_data(self, hashthread):
         OperationWithSingleBuffer.compute_hash_data(self, hashthread)
@@ -383,22 +393,22 @@ class Reduce(OperationWithBuffers):
 
     name = "reduce"
 
-    def __init__(self, gstate, blocking, cc_id):
-        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.recvbuf = None
         self.datatype = None
         self.count = None
         self.op = None
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
 
-        sendbuf, recvbuf, count, datatype, op, root, comm = args
+        sendbuf, recvbuf, count, datatype, op, root = args
         generator.validate_count(count, 3)
-        generator.validate_rank(root, 6)
+        generator.validate_rank(comm, root, 6)
         generator.validate_op(op, 5)
 
         if self.op is None:
@@ -410,31 +420,34 @@ class Reduce(OperationWithBuffers):
                     self.count == count and
                     self.datatype == datatype)
 
-        self.check_root(root)
+        self.check_root(comm, root)
 
         size = types.get_datatype_size(datatype) * count
-        if self.root == state.rank:
+        rank = state.get_rank(comm)
+        if self.root == rank:
             generator.controller.memcpy(recvbuf, sendbuf, size)
         else:
             self.recvbuf = recvbuf
-            assert self.buffers[state.rank] is None
-            self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+            assert self.buffers[rank] is None
+            self.buffers[rank] = generator.new_buffer(sendbuf, size)
 
-    def can_be_completed(self, gstate, state):
-        return state.rank != self.root or self.remaining_processes_enter == 0
+    def can_be_completed(self, state):
+        return state.pid != self.root_pid or \
+               self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, gstate, state):
-        if state.rank == self.root:
+    def complete_main(self, generator, state, comm):
+        if state.pid == self.root_pid:
             vg_datatype, vg_op = types.translate_reduction_op(self.datatype,
                                                               self.op)
-            for rank in xrange(self.process_count):
-                if rank == state.rank:
+            rank = state.get_rank(comm)
+            for r in xrange(self.process_count):
+                if r == rank:
                     continue
                 generator.controller.reduce(self.recvbuf,
                                             vg_datatype,
                                             self.count,
                                             vg_op,
-                                            self.buffers[rank].id)
+                                            self.buffers[r].id)
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
@@ -448,20 +461,20 @@ class AllReduce(OperationWithBuffers):
 
     name = "allreduce"
 
-    def __init__(self, gstate, blocking, cc_id):
-        OperationWithBuffers.__init__(self, gstate, blocking, cc_id)
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.recvbufs = [ None ] * self.process_count
         self.datatype = None
         self.count = None
         self.op = None
 
     def enter_main(self,
-                     generator,
-                     gstate,
-                     state,
-                     args):
+                   generator,
+                   state,
+                   comm,
+                   args):
 
-        sendbuf, recvbuf, count, datatype, op, comm = args
+        sendbuf, recvbuf, count, datatype, op = args
         generator.validate_count(count, 3)
         generator.validate_op(op, 5)
 
@@ -476,25 +489,27 @@ class AllReduce(OperationWithBuffers):
 
         size = types.get_datatype_size(datatype) * count
         generator.controller.memcpy(recvbuf, sendbuf, size)
-        self.recvbufs[state.rank] = recvbuf
-        assert self.buffers[state.rank] is None
-        self.buffers[state.rank] = generator.new_buffer(sendbuf, size)
+        rank = state.get_rank(comm)
+        self.recvbufs[rank] = recvbuf
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer(sendbuf, size)
 
-    def can_be_completed(self, gstate, state):
+    def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, gstate, state):
+    def complete_main(self, generator, state, comm):
         vg_datatype, vg_op = types.translate_reduction_op(self.datatype,
                                                           self.op)
-        recvbuf = self.recvbufs[state.rank]
-        for rank in xrange(self.process_count):
-            if rank == state.rank:
+        rank = state.get_rank(comm)
+        recvbuf = self.recvbufs[rank]
+        for r in xrange(self.process_count):
+            if rank == r:
                 continue
             generator.controller.reduce(recvbuf,
                                         vg_datatype,
                                         self.count,
                                         vg_op,
-                                        self.buffers[rank].id)
+                                        self.buffers[r].id)
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)

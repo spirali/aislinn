@@ -23,7 +23,8 @@ from base.utils import EqMixin
 
 class Message(EqMixin):
 
-    def __init__(self, source, target, tag, vg_buffer, size, hash):
+    def __init__(self, comm_id, source, target, tag, vg_buffer, size, hash):
+        self.comm_id = comm_id
         self.source = source
         self.target = target
         self.tag = tag
@@ -32,7 +33,8 @@ class Message(EqMixin):
         self.hash = hash
 
     def compute_hash(self, hashthread):
-        hashthread.update("M {0.source} {0.target} {0.tag} {0.size} {0.hash} ".format(self))
+        hashthread.update("M {0.comm_id} {0.source} {0.target} "
+                          "{0.tag} {0.size} {0.hash} ".format(self))
 
     def __repr__(self):
         return "MESSAGE(source={0.source}, tag={0.tag})".format(self)

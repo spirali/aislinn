@@ -136,7 +136,7 @@ class Report:
             for event in error.events:
                 e = self.entries_to_xml("event", event.get_entries())
                 e.set("name", event.name)
-                e.set("rank", str(event.rank))
+                e.set("pid", str(event.pid))
                 ev.append(e)
         return xml.ElementTree(root)
 
@@ -159,9 +159,9 @@ class Report:
         process_count = self.process_count
         self._make_row(table.child("thead"), range(process_count))
         tbody = table.child("tbody")
-        ranks = [ [] for x in xrange(process_count) ]
+        pids = [ [] for x in xrange(process_count) ]
         for e in events:
-            ranks[e.rank].append(e)
+            pids[e.pid].append(e)
 
         step = 0
         while True:
@@ -169,9 +169,9 @@ class Report:
             classes = [None] * process_count
             titles = [None] * process_count
             for r in xrange(process_count):
-                if len(ranks[r]) <= step:
+                if len(pids[r]) <= step:
                     continue
-                e = ranks[r][step]
+                e = pids[r][step]
                 name = e.name
                 data[r] = name
                 if e.stacktrace:
@@ -224,8 +224,8 @@ class Report:
                 div.child("h3", "Error: " + error.short_description)
                 lst = div.child("ul")
                 lst.child("li", error.description)
-                if error.rank is not None:
-                    lst.child("li", "Rank: {0}".format(error.rank))
+                if error.pid is not None:
+                    lst.child("li", "Rank {0} in MPI_COMM_WORLD".format(error.pid))
                 if error.stacktrace is not None:
                     li = lst.child("li", "Stacktrace:")
                     li.child("pre", "{0}" \

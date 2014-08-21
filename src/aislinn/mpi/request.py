@@ -68,7 +68,8 @@ class SendRequest(Request):
 
 class ReceiveRequest(Request):
 
-    def __init__(self, source, tag, data_ptr, size):
+    def __init__(self, comm_id, source, tag, data_ptr, size):
+        self.comm_id = comm_id
         self.source = source
         self.tag = tag
         self.data_ptr = data_ptr
@@ -79,7 +80,7 @@ class ReceiveRequest(Request):
 
     def compute_hash(self, hashthread):
         hashthread.update(
-                "RR {0.source} {0.tag} {0.data_ptr} {0.size} ".format(self))
+                "RR {0.comm_id} {0.source} {0.tag} {0.data_ptr} {0.size} ".format(self))
 
     def is_deterministic(self):
         return self.source != consts.MPI_ANY_SOURCE

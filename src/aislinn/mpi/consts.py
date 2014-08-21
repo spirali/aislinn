@@ -18,11 +18,17 @@
 #
 
 # ---- Basic consts ---------------------------------------
-MPI_ANY_SOURCE = 0xFFFF
-MPI_ANY_TAG = -0xABF1
+MPI_UNDEFINED  = -0x0BEFBEEF
+MPI_ANY_SOURCE = -0x0000AA00
+MPI_ANY_TAG    = -0x0000BB00
 
 MPI_STATUS_IGNORE = 0
 MPI_STATUSES_IGNORE = 0
+
+# ---- Communicators --------------------------------------
+MPI_COMM_NULL = 0x0000CC00
+MPI_COMM_SELF = 0x0000CC01
+MPI_COMM_WORLD = 0x0000CC02
 
 # ---- Data types -----------------------------------------
 MPI_PACKED = 0xFF00101

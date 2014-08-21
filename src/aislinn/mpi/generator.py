@@ -134,20 +134,17 @@ class Generator:
 
             vg_state = self.save_state(True)
 
-            states = []
-            for i in xrange(process_count):
-                vg_state.inc_ref()
-                state = State(i, vg_state)
-                states.append(state)
-            vg_state.dec_ref()
-            assert vg_state.ref_count == process_count
-
             if self.send_protocol == "dynamic":
                 send_protocol_thresholds = (0, sys.maxint)
             else:
                 send_protocol_thresholds = None
 
-            gstate = GlobalState(states, send_protocol_thresholds)
+            gstate = GlobalState(vg_state,
+                                 process_count,
+                                 send_protocol_thresholds)
+            vg_state.dec_ref()
+            assert vg_state.ref_count == process_count
+
             self.initial_node = self.add_node(None, gstate, True)
             self.statespace.initial_node = self.initial_node
 
@@ -193,7 +190,7 @@ class Generator:
             for vg_buffer in vg_buffers:
                 self.controller.free_buffer(vg_buffer.id)
 
-    def apply_matching(self, gstate, state, matching):
+    def apply_matching(self, state, matching):
         for request, message in matching:
             assert not request.is_receive() or message is not None
             state.set_request_as_completed(request)
@@ -206,31 +203,31 @@ class Generator:
                                              message.vg_buffer.id)
                 state.remove_message(message)
             if request.is_collective():
-                op = gstate.get_operation_by_cc_id(request.cc_id)
-                op.complete(self, gstate, state)
+                op = state.gstate.get_operation_by_cc_id(request.cc_id)
+                op.complete(self, state)
 
     def fast_expand_node(self, node, gstate):
         for state in gstate.states:
             if state.status == State.StatusWait:
                 if not state.are_requests_deterministic():
                     continue
-                matches = state.check_requests(gstate, upto_active=True)
+                matches = state.check_requests(upto_active=True)
                 len(matches) == 1 # Active request are deterministic here
 
                 if not state.is_matching_covers_active_requests(matches[0]):
                     continue
 
-                logging.debug("Fast expand status=wait rank=%s", state.rank)
+                logging.debug("Fast expand status=wait pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
-                self.apply_matching(gstate, state, matches[0])
+                self.apply_matching(state, matches[0])
                 state.remove_active_requests()
-                self.execute_state_and_add_node(node, gstate, state)
+                self.execute_state_and_add_node(node, state)
                 return True
 
             if state.status == State.StatusInited:
-                logging.debug("Fast expand status=init rank=%s", state.rank)
+                logging.debug("Fast expand status=init pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
-                self.execute_state_and_add_node(node, gstate, state)
+                self.execute_state_and_add_node(node, state)
                 return True
         return False
 
@@ -239,7 +236,7 @@ class Generator:
         for state in gstate.states:
             if state.status == State.StatusWait or \
                     state.status == State.StatusTest:
-                requests = state.fork_standard_sends(gstate)
+                requests = state.fork_standard_sends()
                 if requests is None:
                     continue
                 for buffered, synchronous in requests:
@@ -266,7 +263,7 @@ class Generator:
                            continue
 
                     new_gstate = gstate.copy()
-                    new_state = new_gstate.get_state(state.rank)
+                    new_state = new_gstate.get_state(state.pid)
 
                     if self.send_protocol == "dynamic":
                        new_gstate.send_protocol_thresholds = (buffered_size,
@@ -296,9 +293,9 @@ class Generator:
 
         for state in gstate.states:
             if state.status == State.StatusWait:
-                self.process_wait_or_test(node, gstate, state, False)
+                self.process_wait_or_test(node, state, False)
             elif state.status == State.StatusTest:
-                self.process_wait_or_test(node, gstate, state, True)
+                self.process_wait_or_test(node, state, True)
             elif state.status == State.StatusFinished:
                 continue
             else:
@@ -317,27 +314,27 @@ class Generator:
         # TODO: Use in code of generator
         self.controller.restore_state(state.vg_state.id)
 
-    def process_wait_or_test(self, node, gstate, state, test):
+    def process_wait_or_test(self, node, state, test):
         if test:
-            new_gstate = gstate.copy()
-            new_state = new_gstate.get_state(state.rank)
+            new_gstate = state.gstate.copy()
+            new_state = new_gstate.get_state(state.pid)
             self.controller.restore_state(new_state.vg_state.id)
             self.controller.write_int(state.flag_ptr, 0)
-            self.execute_state_and_add_node(node, new_gstate, new_state)
+            self.execute_state_and_add_node(node, new_state)
 
-        matches = state.check_requests(gstate)
-        logging.debug("Wait or test len(matches)=%s rank=%s",
-                len(matches), state.rank)
+        matches = state.check_requests()
+        logging.debug("Wait or test len(matches)=%s pid=%s",
+                len(matches), state.pid)
         for matching in matches:
             covered = state.is_matching_covers_active_requests(matching)
             if not covered and not any(r.is_receive() for r, m in matching):
                 # Not all request is completed and no new receive request
                 # matched so there is no reason to create new state
                 continue
-            new_gstate = gstate.copy()
-            new_state = new_gstate.get_state(state.rank)
+            new_gstate = state.gstate.copy()
+            new_state = new_gstate.get_state(state.pid)
             self.controller.restore_state(new_state.vg_state.id)
-            self.apply_matching(new_gstate, new_state, matching)
+            self.apply_matching(new_state, matching)
             if not covered:
                 # Not all active requests are ready, so just apply matchings
                 # and create new state
@@ -347,18 +344,18 @@ class Generator:
             new_state.remove_active_requests()
             if test:
                 self.controller.write_int(state.flag_ptr, 1)
-            self.execute_state_and_add_node(node, new_gstate, new_state)
+            self.execute_state_and_add_node(node, new_state)
 
-    def execute_state_and_add_node(self, node, gstate, state):
-        context = self.execute_state(gstate, state)
-        new_node = self.add_node(node, gstate)
+    def execute_state_and_add_node(self, node, state):
+        context = self.execute_state(state)
+        new_node = self.add_node(node, state.gstate)
         arc = Arc(new_node, context.events)
         node.add_arc(arc)
         if context.error_messages is not None:
             for e in context.error_messages:
                 e.node = node
                 e.last_arc = arc
-                e.rank = state.rank
+                e.pid = state.pid
             self.add_error_messages(context.error_messages)
 
     def save_state(self, make_hash):
@@ -382,7 +379,7 @@ class Generator:
         e.stacktrace = self.controller.get_stacktrace()
         return e
 
-    def execute_state(self, gstate, state):
+    def execute_state(self, state):
         if state.vg_state is not None:
             state.vg_state.dec_ref()
             state.vg_state = None
@@ -392,7 +389,7 @@ class Generator:
                 call = self.controller.run_process().split()
                 if call[0] == "EXIT":
                     exitcode = convert_type(call[1], "int")
-                    e = event.ExitEvent("Exit", state.rank, exitcode)
+                    e = event.ExitEvent("Exit", state.pid, exitcode)
                     context.add_event(e)
                     state.set_finished()
                     if exitcode != 0:
@@ -406,7 +403,7 @@ class Generator:
                     return context
                 fn = mpicalls.calls.get(call[1])
                 if fn is not None:
-                    if fn(self, call[2:], gstate, state, context):
+                    if fn(self, call[2:], state, context):
                         break
                 else:
                     raise Exception("Unkown function call: " + repr(call))
@@ -434,15 +431,18 @@ class Generator:
             errormsg.InvalidArgument(op, arg_position).throw()
 
     def validate_rank(self,
+                      comm,
                       rank,
                       arg_position,
                       any_source_allowed=False):
 
         if rank == consts.MPI_ANY_SOURCE:
             if not any_source_allowed:
-                errormsg.InvalidArgument("MPI_ANY_SOURCE", arg_position).throw()
-        elif rank < 0 or rank >= self.process_count:
-            errormsg.InvalidArgument(rank, arg_position).throw()
+                errormsg.InvalidArgument("MPI_ANY_SOURCE",
+                                         arg_position,
+                                         "MPI_ANY_SOURCE not allowed").throw()
+        elif rank < 0 or rank >= comm.group.size:
+            errormsg.InvalidArgument(rank, arg_position, "Invalid rank").throw()
 
     def validate_tag(self,
                      tag,
@@ -460,7 +460,9 @@ class Generator:
 
     def validate_count(self, size, arg_position):
         if size < 0:
-            errormsg.InvalidArgument(size, arg_position).throw()
+            errormsg.InvalidArgument(size,
+                                     arg_position,
+                                     "Count has to be non-negative.").throw()
 
     def get_datatype_size(self, datatype, arg_position):
         size = types.get_datatype_size(datatype)
@@ -468,20 +470,28 @@ class Generator:
             errormsg.InvalidArgument(datatype, arg_position).throw()
         return size
 
+    def check_and_get_comm(self, state, comm_id, arg_position):
+        comm = state.get_comm(comm_id)
+        if comm is None:
+            errormsg.InvalidArgument(comm_id,
+                                     arg_position,
+                                     "Invalid communicator").throw()
+        return comm
+
     def validate_request_ids(self, state, request_ids):
         for request_id in request_ids:
             if not state.is_request_id_valid(request_id):
-                raise Exception("Invalid request id {0}, rank {1} ({2})"
-                        .format(request_id, state.rank, state.requests))
+                raise Exception("Invalid request id {0}, pid {1} ({2})"
+                        .format(request_id, state.pid, state.requests))
 
-    def make_send_request(self, gstate, state, message):
+    def make_send_request(self, state, message):
         if self.send_protocol == "randezvous":
             return state.add_synchronous_send_request(message)
         elif self.send_protocol == "eager":
             return state.add_completed_request()
         elif self.send_protocol == "dynamic":
             eager_threshold, randezvous_threshold = \
-                    gstate.send_protocol_thresholds
+                    state.gstate.send_protocol_thresholds
             if message.size < eager_threshold:
                 return state.add_completed_request()
             elif message.size >= randezvous_threshold:

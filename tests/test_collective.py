@@ -15,7 +15,7 @@ class CollectiveTests(TestCase):
 
         for arg in args:
             self.execute(2, (arg,))
-            self.single_error("invalidarg", rank=0)
+            self.single_error("invalidarg", pid=0)
 
     def test_ibarrier(self):
         self.program("ibarrier")
