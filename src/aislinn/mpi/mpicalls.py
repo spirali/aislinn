@@ -43,125 +43,16 @@ def MPI_Comm_size(generator, args, state, context):
     return False
 
 def MPI_Send(generator, args, state, context):
-    buf_ptr, count, datatype, target, tag, comm_id = \
-        convert_types(args,
-                      ("ptr", # buf_ptr
-                       "int", # count
-                       "int", # datatype
-                       "int", # target
-                       "int", # tag
-                       "int", # comm
-                      ))
-
-    comm = check.check_and_get_comm(state, comm_id, 6)
-    check.check_count(count, 2)
-    check.check_rank(comm, target, 4, False)
-    check.check_tag(tag, 5, False)
-    size = count * check.check_datatype_get_size(datatype, 3)
-    buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
-    vg_buffer = generator.vg_buffers.new(buffer_id)
-    target_pid = comm.group.rank_to_pid(target)
-    message = Message(
-            comm_id, state.get_rank(comm), target, tag, vg_buffer, size, hash)
-    state.gstate.get_state(target_pid).add_message(message)
-
-    e = event.CommEvent("Send", state.pid, target, tag)
-    generator.add_call_event(context, e)
-
-    request_ids = (generator.make_send_request(state, message),)
-    state.set_wait(request_ids)
-    # TODO: Optimization : If message use eager protocol then nonblock
-    return True
+    return call_send(generator, args, state, context, True, "Send")
 
 def MPI_Recv(generator, args, state, context):
-    buf_ptr, count, datatype, source, tag, comm_id, status_ptr = \
-        convert_types(args,
-                      ("ptr", # buf_ptr
-                       "int", # count
-                       "int", # datatype
-                       "int", # source
-                       "int", # tag
-                       "int", # comm
-                       "ptr", # status
-                      ))
-
-    comm = check.check_and_get_comm(state, comm_id, 6)
-    check.check_count(count, 2)
-    check.check_rank(comm, source, 4, True)
-    check.check_tag(tag, 5, True)
-
-    size = count * check.check_datatype_get_size(datatype, 3)
-
-    e = event.CommEvent("Recv", state.pid, source, tag)
-    generator.add_call_event(context, e)
-
-    request_ids = (state.add_recv_request(comm_id, source, tag, buf_ptr, size),)
-    if status_ptr:
-        status_ptrs = [ status_ptr ]
-    else:
-        status_ptrs = None
-    state.set_wait(request_ids, status_ptrs)
-    # TODO: Optimization : If message is already here,
-    # then non block and continue
-    return True
+    return call_recv(generator, args, state, context, True, "Recv")
 
 def MPI_ISend(generator, args, state, context):
-    buf_ptr, count, datatype, target, tag, comm_id, request_ptr = \
-        convert_types(args,
-                      ("ptr", # buf_ptr
-                       "int", # count
-                       "int", # datatype
-                       "int", # target
-                       "int", # tag
-                       "int", # comm
-                       "ptr", # request_ptr
-                      ))
-
-    comm = check.check_and_get_comm(state, comm_id, 6)
-    check.check_count(count, 2)
-    check.check_rank(comm, target, 4, False)
-    check.check_tag(tag, 5, False)
-
-    size = count * check.check_datatype_get_size(datatype, 3)
-
-    buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
-    vg_buffer = generator.vg_buffers.new(buffer_id)
-    target_pid = comm.group.rank_to_pid(target)
-    message = Message(
-            comm_id, state.get_rank(comm), target, tag, vg_buffer, size, hash)
-    state.gstate.get_state(target_pid).add_message(message)
-    request_id = generator.make_send_request(state, message)
-    generator.controller.write_int(request_ptr, request_id)
-
-    e = event.CommEvent("Isend", state.pid, target, tag, request_id)
-    generator.add_call_event(context, e)
-    return False
+    return call_send(generator, args, state, context, False, "Isend")
 
 def MPI_IRecv(generator, args, state, context):
-    buf_ptr, count, datatype, source, tag, comm_id, request_ptr = \
-        convert_types(args,
-                      ("ptr", # buf_ptr
-                       "int", # count
-                       "int", # datatype
-                       "int", # source
-                       "int", # tag
-                       "int", # comm
-                       "ptr", # request_ptr
-                      ))
-
-    comm = check.check_and_get_comm(state, comm_id, 6)
-    check.check_count(count, 2)
-    check.check_rank(comm, source, 4, True)
-    check.check_tag(tag, 5, True)
-
-    size = count * check.check_datatype_get_size(datatype, 3)
-
-    request_id = state.add_recv_request(comm_id, source, tag, buf_ptr, size)
-    generator.controller.write_int(request_ptr, request_id)
-
-    e = event.CommEvent("Irecv", state.pid, source, tag, request_id)
-    generator.add_call_event(context, e)
-    return False
+    return call_recv(generator, args, state, context, False, "Irecv")
 
 def MPI_Wait(generator, args, state, context):
     request_ptr, status_ptr = args
@@ -478,6 +369,119 @@ def call_collective_operation(generator,
     else:
         generator.controller.write_int(request_ptr, request_id)
     generator.add_call_event(context, op.get_event(state))
+    return blocking
+
+def make_send_request(generator, state, message):
+    if generator.send_protocol == "randezvous":
+        return state.add_synchronous_send_request(message)
+    elif generator.send_protocol == "eager":
+        return state.add_completed_request()
+    elif generator.send_protocol == "dynamic":
+        eager_threshold, randezvous_threshold = \
+                state.gstate.send_protocol_thresholds
+        if message.size < eager_threshold:
+            return state.add_completed_request()
+        elif message.size >= randezvous_threshold:
+            return state.add_synchronous_send_request(message)
+        else:
+            return state.add_standard_send_request(message)
+    elif generator.send_protocol == "threshold":
+        if message.size < generator.send_protocol_eager_threshold:
+            return state.add_completed_request()
+        elif message.size >= generator.send_protocol_randezvous_threshold:
+            return state.add_synchronous_send_request(message)
+        else:
+            return state.add_standard_send_request(message)
+    else:
+        assert generator.send_protocol == "full"
+        return state.add_standard_send_request(message)
+
+def call_send(generator, args, state, context, blocking, name):
+    if blocking:
+        buf_ptr, count, datatype, target, tag, comm_id = \
+            convert_types(args,
+                          ("ptr", # buf_ptr
+                           "int", # count
+                           "int", # datatype
+                           "int", # target
+                           "int", # tag
+                           "int", # comm
+                          ))
+    else:
+        buf_ptr, count, datatype, target, tag, comm_id, request_ptr = \
+            convert_types(args,
+                          ("ptr", # buf_ptr
+                           "int", # count
+                           "int", # datatype
+                           "int", # target
+                           "int", # tag
+                           "int", # comm
+                           "ptr", # request_ptr
+                          ))
+
+    comm = check.check_and_get_comm(state, comm_id, 6)
+    check.check_count(count, 2)
+    check.check_rank(comm, target, 4, False)
+    check.check_tag(tag, 5, False)
+    size = count * check.check_datatype_get_size(datatype, 3)
+    buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
+    vg_buffer = generator.vg_buffers.new(buffer_id)
+    target_pid = comm.group.rank_to_pid(target)
+    message = Message(
+            comm_id, state.get_rank(comm), target, tag, vg_buffer, size, hash)
+    state.gstate.get_state(target_pid).add_message(message)
+
+    request_id = make_send_request(generator, state, message)
+    if blocking:
+        state.set_wait((request_id,))
+    else:
+        generator.controller.write_int(request_ptr, request_id)
+
+    e = event.CommEvent(name, state.pid, target, tag)
+    generator.add_call_event(context, e)
+
+    # TODO: Optimization : If message use eager protocol then nonblock
+    return blocking
+
+def call_recv(generator, args, state, context, blocking, name):
+    buf_ptr, count, datatype, source, tag, comm_id, ptr = \
+        convert_types(args,
+                      ("ptr", # buf_ptr
+                       "int", # count
+                       "int", # datatype
+                       "int", # source
+                       "int", # tag
+                       "int", # comm
+                       "ptr", # status_ptr (blocking) | request_ptr (nonblock)
+                      ))
+    if blocking:
+        status_ptr = ptr
+    else:
+        request_ptr = ptr
+
+    comm = check.check_and_get_comm(state, comm_id, 6)
+    check.check_count(count, 2)
+    check.check_rank(comm, source, 4, True)
+    check.check_tag(tag, 5, True)
+
+    size = count * check.check_datatype_get_size(datatype, 3)
+
+    e = event.CommEvent(name, state.pid, source, tag)
+    generator.add_call_event(context, e)
+
+    request_id = state.add_recv_request(comm_id, source, tag, buf_ptr, size)
+
+    if blocking:
+        if status_ptr:
+            status_ptrs = [ status_ptr ]
+        else:
+            status_ptrs = None
+        state.set_wait((request_id,), status_ptrs)
+    else:
+         generator.controller.write_int(request_ptr, request_id)
+
+    # TODO: Optimization : If message is already here,
+    # then non block and continue
     return blocking
 
 calls = {

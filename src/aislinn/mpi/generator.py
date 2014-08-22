@@ -424,31 +424,6 @@ class Generator:
         event.stacktrace = stacktrace
         context.add_event(event)
 
-    def make_send_request(self, state, message):
-        if self.send_protocol == "randezvous":
-            return state.add_synchronous_send_request(message)
-        elif self.send_protocol == "eager":
-            return state.add_completed_request()
-        elif self.send_protocol == "dynamic":
-            eager_threshold, randezvous_threshold = \
-                    state.gstate.send_protocol_thresholds
-            if message.size < eager_threshold:
-                return state.add_completed_request()
-            elif message.size >= randezvous_threshold:
-                return state.add_synchronous_send_request(message)
-            else:
-                return state.add_standard_send_request(message)
-        elif self.send_protocol == "threshold":
-            if message.size < self.send_protocol_eager_threshold:
-                return state.add_completed_request()
-            elif message.size >= self.send_protocol_randezvous_threshold:
-                return state.add_synchronous_send_request(message)
-            else:
-                return state.add_standard_send_request(message)
-        else:
-            assert self.send_protocol == "full"
-            return state.add_standard_send_request(message)
-
     def new_buffer(self, buf_ptr, size):
         # TODO: use in MPI_Send and MPI_Isend
         buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
