@@ -59,6 +59,8 @@ class GlobalState(EqMixin):
         if self.collective_operations:
             for op in self.collective_operations:
                 op.dispose()
+        self.states = None
+        self.collective_operations = None
 
     def get_state(self, pid):
         return self.states[pid]
