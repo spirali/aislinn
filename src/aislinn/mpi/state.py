@@ -92,6 +92,10 @@ class State:
             hashthread.update(str(self.active_request_ids))
         if self.flag_ptr is not None:
             hashthread.update(str(self.flag_ptr))
+
+        # Normalize messages
+        self.messages.sort(message_cmp)
+
         for message in self.messages:
             message.compute_hash(hashthread)
         for request in self.requests:
@@ -320,3 +324,12 @@ class State:
                 return i + 1
             i -= 1
         return 0
+
+# Used for message normalization
+# Matching cannot depenend on order messages according to
+# comm_id and source process
+def message_cmp(m1, m2):
+    r = cmp(m1.comm_id, m1.comm_id)
+    if r == 0:
+        return cmp(m1.source, m2.source)
+    return r
