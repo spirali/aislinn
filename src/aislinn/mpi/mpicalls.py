@@ -22,13 +22,14 @@ from base.utils import convert_types
 import collectives
 import event
 import consts
+import check
 
 # TODO: Universal architecture detection
 POINTER_SIZE = 8
 
 def MPI_Comm_rank(generator, args, state, context):
     comm_id, ptr = convert_types(args, ("int", "ptr"))
-    comm = generator.check_and_get_comm(state, comm_id, 1)
+    comm = check.check_and_get_comm(state, comm_id, 1)
     rank = comm.group.pid_to_rank(state.pid)
     if rank is None:
         rank = consts.MPI_UNDEFINED
@@ -37,7 +38,7 @@ def MPI_Comm_rank(generator, args, state, context):
 
 def MPI_Comm_size(generator, args, state, context):
     comm_id, ptr = convert_types(args, ("int", "ptr"))
-    comm = generator.check_and_get_comm(state, comm_id, 1)
+    comm = check.check_and_get_comm(state, comm_id, 1)
     generator.controller.write_int(args[1], comm.group.size)
     return False
 
@@ -52,11 +53,11 @@ def MPI_Send(generator, args, state, context):
                        "int", # comm
                       ))
 
-    comm = generator.check_and_get_comm(state, comm_id, 6)
-    generator.validate_count(count, 2)
-    generator.validate_rank(comm, target, 4, False)
-    generator.validate_tag(tag, 5, False)
-    size = count * generator.get_datatype_size(datatype, 3)
+    comm = check.check_and_get_comm(state, comm_id, 6)
+    check.check_count(count, 2)
+    check.check_rank(comm, target, 4, False)
+    check.check_tag(tag, 5, False)
+    size = count * check.check_datatype_get_size(datatype, 3)
     buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
     vg_buffer = generator.vg_buffers.new(buffer_id)
     target_pid = comm.group.rank_to_pid(target)
@@ -84,12 +85,12 @@ def MPI_Recv(generator, args, state, context):
                        "ptr", # status
                       ))
 
-    comm = generator.check_and_get_comm(state, comm_id, 6)
-    generator.validate_count(count, 2)
-    generator.validate_rank(comm, source, 4, True)
-    generator.validate_tag(tag, 5, True)
+    comm = check.check_and_get_comm(state, comm_id, 6)
+    check.check_count(count, 2)
+    check.check_rank(comm, source, 4, True)
+    check.check_tag(tag, 5, True)
 
-    size = count * generator.get_datatype_size(datatype, 3)
+    size = count * check.check_datatype_get_size(datatype, 3)
 
     e = event.CommEvent("Recv", state.pid, source, tag)
     generator.add_call_event(context, e)
@@ -116,12 +117,12 @@ def MPI_ISend(generator, args, state, context):
                        "ptr", # request_ptr
                       ))
 
-    comm = generator.check_and_get_comm(state, comm_id, 6)
-    generator.validate_count(count, 2)
-    generator.validate_rank(comm, target, 4, False)
-    generator.validate_tag(tag, 5, False)
+    comm = check.check_and_get_comm(state, comm_id, 6)
+    check.check_count(count, 2)
+    check.check_rank(comm, target, 4, False)
+    check.check_tag(tag, 5, False)
 
-    size = count * generator.get_datatype_size(datatype, 3)
+    size = count * check.check_datatype_get_size(datatype, 3)
 
     buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
     vg_buffer = generator.vg_buffers.new(buffer_id)
@@ -148,12 +149,12 @@ def MPI_IRecv(generator, args, state, context):
                        "ptr", # request_ptr
                       ))
 
-    comm = generator.check_and_get_comm(state, comm_id, 6)
-    generator.validate_count(count, 2)
-    generator.validate_rank(comm, source, 4, True)
-    generator.validate_tag(tag, 5, True)
+    comm = check.check_and_get_comm(state, comm_id, 6)
+    check.check_count(count, 2)
+    check.check_rank(comm, source, 4, True)
+    check.check_tag(tag, 5, True)
 
-    size = count * generator.get_datatype_size(datatype, 3)
+    size = count * check.check_datatype_get_size(datatype, 3)
 
     request_id = state.add_recv_request(comm_id, source, tag, buf_ptr, size)
     generator.controller.write_int(request_ptr, request_id)
@@ -169,7 +170,7 @@ def MPI_Wait(generator, args, state, context):
         status_ptrs = [ status_ptr ]
     else:
         status_ptrs = None
-    generator.validate_request_ids(state, request_ids)
+    check.check_request_ids(state, request_ids)
     state.set_wait(request_ids, status_ptrs)
 
     e = event.WaitEvent("Wait", state.pid, request_ids)
@@ -179,7 +180,7 @@ def MPI_Wait(generator, args, state, context):
 def MPI_Test(generator, args, state, context):
     request_ptr, flag_ptr, status_ptr = args
     request_ids = [ generator.controller.read_int(request_ptr) ]
-    generator.validate_request_ids(state, request_ids)
+    check.check_request_ids(state, request_ids)
     state.set_test(request_ids, flag_ptr)
 
     e = event.WaitEvent("Test", state.pid, request_ids)
@@ -196,7 +197,7 @@ def MPI_Waitall(generator, args, state, context):
     else:
         status_ptrs = None
 
-    generator.validate_request_ids(state, request_ids)
+    check.check_request_ids(state, request_ids)
     state.set_wait(request_ids, status_ptrs)
 
     e = event.WaitEvent("Waitall", state.pid, request_ids)
@@ -468,7 +469,7 @@ def call_collective_operation(generator,
         comm_id = args[-2]
         args = args[:-2]
 
-    comm = generator.check_and_get_comm(state, comm_id, len(args) + 1)
+    comm = check.check_and_get_comm(state, comm_id, len(args) + 1)
     op = state.gstate.call_collective_operation(
                 generator, state, comm, op_class, blocking, args)
     request_id = state.add_collective_request(op.cc_id)

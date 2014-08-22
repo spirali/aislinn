@@ -22,7 +22,7 @@ import copy
 import logging
 import errormsg
 import event
-
+import check
 
 class CollectiveOperation:
 
@@ -193,8 +193,8 @@ class Gatherv(OperationWithBuffers):
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcounts, displs, recvtype, root = args
-        generator.validate_rank(comm, root, 8)
-        generator.validate_count(sendcount, 2)
+        check.check_rank(comm, root, 8)
+        check.check_count(sendcount, 2)
         rank = state.get_rank(comm)
         self.check_root(comm, root)
         self.sendtype = sendtype
@@ -250,14 +250,14 @@ class Gather(OperationWithBuffers):
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        generator.validate_rank(comm, root, 8)
-        generator.validate_count(sendcount, 2)
+        check.check_rank(comm, root, 8)
+        check.check_count(sendcount, 2)
         self.check_root(comm, root)
 
         rank = state.get_rank(comm)
         if self.root == rank:
             self.recvbuf = recvbuf
-            generator.validate_count(recvcount, 5)
+            check.check_count(recvcount, 5)
 
         self.sendtype = sendtype
         self.sendcount = sendcount
@@ -305,8 +305,8 @@ class Scatterv(OperationWithSingleBuffer):
                    args):
         sendbuf, sendcounts, displs, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        generator.validate_rank(comm, root, 8)
-        generator.validate_count(recvcount, 5)
+        check.check_rank(comm, root, 8)
+        check.check_count(recvcount, 5)
         self.check_root(comm, root)
         rank = state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
@@ -358,9 +358,9 @@ class Scatter(OperationWithSingleBuffer):
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        generator.validate_count(sendcount, 2)
-        generator.validate_count(recvcount, 5)
-        generator.validate_rank(comm, root, 8)
+        check.check_count(sendcount, 2)
+        check.check_count(recvcount, 5)
+        check.check_rank(comm, root, 8)
         self.check_root(comm, root)
         rank = state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
@@ -407,9 +407,9 @@ class Reduce(OperationWithBuffers):
                    args):
 
         sendbuf, recvbuf, count, datatype, op, root = args
-        generator.validate_count(count, 3)
-        generator.validate_rank(comm, root, 6)
-        generator.validate_op(op, 5)
+        check.check_count(count, 3)
+        check.check_rank(comm, root, 6)
+        check.check_op(op, 5)
 
         if self.op is None:
             self.op = op
@@ -475,8 +475,8 @@ class AllReduce(OperationWithBuffers):
                    args):
 
         sendbuf, recvbuf, count, datatype, op = args
-        generator.validate_count(count, 3)
-        generator.validate_op(op, 5)
+        check.check_count(count, 3)
+        check.check_op(op, 5)
 
         if self.op is None:
             self.op = op
