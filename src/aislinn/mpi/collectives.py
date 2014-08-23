@@ -24,6 +24,7 @@ import errormsg
 import event
 import check
 
+
 class CollectiveOperation:
 
     def __init__(self, gstate, comm, blocking, cc_id):
@@ -182,7 +183,7 @@ class Gatherv(OperationWithBuffers):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.recvbuf = None
-        self.sendcounts = [ None ] * self.process_count
+        self.sendcount = None
         self.recvcounts = None
         self.displs = None
 
@@ -199,7 +200,7 @@ class Gatherv(OperationWithBuffers):
         self.check_root(comm, root)
         self.sendtype = sendtype
         size = types.get_datatype_size(sendtype) * sendcount
-        self.sendcounts[rank] = sendcount
+        self.sendcount = sendcount
 
         assert self.buffers[rank] is None
         self.buffers[rank] = generator.new_buffer(sendbuf, size)
@@ -226,7 +227,7 @@ class Gatherv(OperationWithBuffers):
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.sendcounts))
+        hashthread.update(str(self.sendcount))
         hashthread.update(str(self.sendtype))
         hashthread.update(str(self.recvbuf))
         hashthread.update(str(self.displs))
@@ -298,6 +299,11 @@ class Scatterv(OperationWithSingleBuffer):
         self.sendcounts = None
         self.displs = None
 
+    def after_copy(self):
+        OperationWithSingleBuffer.after_copy(self)
+        self.recvbufs = copy.copy(self.recvbufs)
+        self.recvcounts = copy.copy(self.recvcounts)
+
     def enter_main(self,
                    generator,
                    state,
@@ -350,6 +356,10 @@ class Scatter(OperationWithSingleBuffer):
         self.recvbufs = [ None ] * self.process_count
         self.sendcount = None
         self.displs = None
+
+    def after_copy(self):
+        OperationWithSingleBuffer.after_copy(self)
+        self.recvbufs = copy.copy(self.recvbufs)
 
     def enter_main(self,
                    generator,
@@ -467,6 +477,10 @@ class AllReduce(OperationWithBuffers):
         self.datatype = None
         self.count = None
         self.op = None
+
+    def after_copy(self):
+        OperationWithBuffers.after_copy(self)
+        self.recvbufs = copy.copy(self.recvbufs)
 
     def enter_main(self,
                    generator,
