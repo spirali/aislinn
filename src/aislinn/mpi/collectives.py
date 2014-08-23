@@ -23,7 +23,7 @@ import logging
 import errormsg
 import event
 import check
-
+import consts
 
 class CollectiveOperation:
 
@@ -97,6 +97,9 @@ class CollectiveOperation:
             return "I" + self.name
         else:
             return self.name.capitalize()
+
+    def dispose(self):
+        pass
 
     def __repr__(self):
         return "<{0} {1:x} cc_id={2} renter={3} rcomplete={4}>" \
@@ -172,8 +175,6 @@ class Barrier(CollectiveOperation):
     def compute_hash_data(self, hashthread):
         pass
 
-    def dispose(self):
-        pass
 
 class Gatherv(OperationWithBuffers):
 
@@ -531,3 +532,76 @@ class AllReduce(OperationWithBuffers):
         hashthread.update(str(self.datatype))
         hashthread.update(str(self.count))
         hashthread.update(str(self.op))
+
+
+class CommSplit(CollectiveOperation):
+
+    name = "comm_split"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
+        self.colors = [ None ] * self.process_count
+        self.keys = [ None ] * self.process_count
+        self.newcomm_ptrs = [ None ] * self.process_count
+        self.comm_ids = [ None ] * self.process_count
+
+    def after_copy(self):
+        self.colors = copy.copy(self.colors)
+        self.keys = copy.copy(self.keys)
+        self.newcomm_ptrs = copy.copy(self.newcomm_ptrs)
+        self.comm_ids = copy.copy(self.comm_ids)
+
+    def enter_main(self,
+                   generator,
+                   state,
+                   comm,
+                   args):
+        color, key, newcomm_ptr = args
+        # In comm_id is first argument, but is was removed from args
+        check.check_color(color, 2)
+        rank = state.get_rank(comm)
+
+        assert self.colors[rank] is None
+        assert self.keys[rank] is None
+
+        self.colors[rank] = color
+        self.keys[rank] = key
+        self.newcomm_ptrs[rank] = newcomm_ptr
+
+        if self.remaining_processes_enter == 0:
+            groups = {}
+            for (r, (color, key)) in enumerate(zip(self.colors, self.keys)):
+                if color == consts.MPI_UNDEFINED:
+                    continue
+                g = groups.get(color)
+                if g is None:
+                    groups[color] = [ (key, r) ]
+                else:
+                    g.append((key, r))
+            items = groups.items()
+            items.sort() # Make it more deterministic
+            for color, g in items:
+                g.sort() # This sort is needed by MPI specification
+                ranks = [ r for key, r in g ]
+                c = state.gstate.create_new_communicator(comm, ranks)
+                for r in ranks:
+                    self.comm_ids[r] = c.comm_id
+            self.colors = None
+            self.keys = None
+
+    def can_be_completed(self, state):
+        return self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        comm_id = self.comm_ids[rank]
+        if comm_id is None:
+            comm_id = consts.MPI_COMM_NULL
+        generator.controller.write_int(self.newcomm_ptrs[rank],
+                                       comm_id)
+
+    def compute_hash_data(self, hashthread):
+        hashthread.update(str(self.colors))
+        hashthread.update(str(self.keys))
+        hashthread.update(str(self.newcomm_ptrs))
+        hashthread.update(str(self.comm_ids))

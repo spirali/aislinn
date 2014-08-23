@@ -27,5 +27,11 @@ class CommTests(TestCase):
         self.execute(3, stdout=output)
         self.no_errors()
 
+    def test_split(self):
+        output = "0 1 2\n1 0 2\n2 1 2\n3 0 2\n4 0 1\nOk\nOk\n"
+        self.program("split")
+        self.execute(7, stdout=output)
+        self.no_errors()
+
 if __name__ == "__main__":
     unittest.main()

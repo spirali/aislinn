@@ -58,6 +58,12 @@ def check_count(size, arg_position):
                                  arg_position,
                                  "Count has to be non-negative.").throw()
 
+def check_color(color, arg_position):
+    if color != consts.MPI_UNDEFINED and color < 0:
+        errormsg.InvalidArgument(color,
+                                 arg_position,
+                                 "Color has to be non-negative.").throw()
+
 def check_datatype_get_size(datatype, arg_position):
     size = types.get_datatype_size(datatype)
     if size is None:
@@ -65,6 +71,10 @@ def check_datatype_get_size(datatype, arg_position):
     return size
 
 def check_and_get_comm(state, comm_id, arg_position):
+    if comm_id == consts.MPI_COMM_NULL:
+        errormsg.InvalidArgument("MPI_COMM_NULL",
+                                 arg_position,
+                                 "Invalid communicator").throw()
     comm = state.get_comm(comm_id)
     if comm is None:
         errormsg.InvalidArgument(comm_id,

@@ -463,6 +463,17 @@ int MPI_Iallreduce(void *sendbuf, void *recvbuf, int count,
 	return 0;
 }
 
+int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
+{
+	aislinn_call_4(
+		"MPI_Comm_split",
+		(AislinnArgType) comm,
+		(AislinnArgType) color,
+		(AislinnArgType) key,
+		(AislinnArgType) newcomm);
+	return 0;
+}
+
 double MPI_Wtime() {
 	// Dummy version
 	return 0.0;

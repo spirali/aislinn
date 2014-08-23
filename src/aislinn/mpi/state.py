@@ -41,6 +41,7 @@ class State:
         self.vg_state = vg_state
         self.status = State.StatusInited
         self.messages = []
+        self.comms = []
         self.requests = [None]
         self.active_request_ids = None
         self.flag_ptr = None
@@ -58,6 +59,7 @@ class State:
         state = State(gstate, self.pid, self.vg_state)
         state.status = self.status
         state.messages = copy.copy(self.messages)
+        state.comms = self.comms # <--- Copy on write!
         for message in state.messages:
             message.vg_buffer.inc_ref()
         state.requests = copy.copy(self.requests)
@@ -65,6 +67,16 @@ class State:
         state.flag_ptr = self.flag_ptr
         state.cc_id_counter = self.cc_id_counter
         return state
+
+    def get_max_comm_id(self):
+        comm_id = max(consts.MPI_COMM_SELF, consts.MPI_COMM_WORLD)
+        for c in self.comms:
+            comm_id = max(comm_id, c.comm_id)
+        return comm_id
+
+    def add_comm(self, comm):
+        self.comms = copy.copy(self.comms)
+        self.comms.append(comm)
 
     def dispose(self):
         if self.vg_state is not None:
@@ -309,6 +321,9 @@ class State:
             return self.gstate.comm_world
         if comm_id == consts.MPI_COMM_SELF:
             return comm.make_comm_self(self.pid)
+        for c in self.comms:
+            if c.comm_id == comm_id:
+                return c
 
     def get_rank(self, comm):
         return comm.group.pid_to_rank(self.pid)

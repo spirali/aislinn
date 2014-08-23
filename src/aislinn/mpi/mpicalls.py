@@ -345,6 +345,22 @@ def MPI_Iallreduce(generator, args, state, context):
                                      False,
                                      args)
 
+def MPI_Comm_split(generator, args, state, context):
+    args = \
+        convert_types(args,
+                      ("ptr", # comm
+                       "int", # color
+                       "int", # key
+                       "ptr", # newcomm
+                      ))
+    comm_id = args[0]
+    args = args[1:]
+    comm = check.check_and_get_comm(state, comm_id, 1)
+    op = state.gstate.call_collective_operation(
+                generator, state, comm, collectives.CommSplit, True, args)
+    request_id = state.add_collective_request(op.cc_id)
+    state.set_wait((request_id,))
+    return True
 
 def call_collective_operation(generator,
                               state,
@@ -487,6 +503,7 @@ def call_recv(generator, args, state, context, blocking, name):
 calls = {
         "MPI_Comm_rank" : MPI_Comm_rank,
         "MPI_Comm_size" : MPI_Comm_size,
+        "MPI_Comm_split" : MPI_Comm_split,
         "MPI_Send" : MPI_Send,
         "MPI_Recv" : MPI_Recv,
         "MPI_Isend" : MPI_ISend,

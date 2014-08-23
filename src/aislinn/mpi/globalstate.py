@@ -20,7 +20,7 @@
 
 import hashlib
 from base.utils import EqMixin
-import comm
+from comm import Communicator, Group, make_comm_world
 import copy
 from state import State
 
@@ -39,7 +39,7 @@ class GlobalState(EqMixin):
         self.states = states
         self.collective_operations = None
         self.send_protocol_thresholds = send_protocol_thresholds
-        self.comm_world = comm.make_comm_world(process_count)
+        self.comm_world = make_comm_world(process_count)
 
     def copy(self):
         gstate = copy.copy(self)
@@ -114,3 +114,13 @@ class GlobalState(EqMixin):
 
     def finish_collective_operation(self, op):
         self.collective_operations.remove(op)
+
+    def create_new_communicator(self, comm, ranks):
+        pids = [ comm.group.rank_to_pid(r) for r in ranks ]
+        comm_ids = [ self.states[pid].get_max_comm_id() for pid in pids ]
+        new_comm_id = max(comm_ids) + 1
+        group = Group(ranks)
+        comm = Communicator(new_comm_id, group)
+        for pid in pids:
+            self.states[pid].add_comm(comm)
+        return comm
