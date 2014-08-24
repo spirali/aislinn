@@ -29,6 +29,7 @@ from comm import comm_id_name
 # TODO: Universal architecture detection
 POINTER_SIZE = 8
 INT_SIZE = 4
+STATUS_SIZE = 3 * INT_SIZE
 
 def MPI_Comm_rank(generator, args, state, context):
     comm_id, ptr = convert_types(args, ("int", "ptr"))
@@ -58,9 +59,13 @@ def MPI_IRecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
 
 def MPI_Wait(generator, args, state, context):
-    request_ptr, status_ptr = args
+    request_ptr, status_ptr = \
+        convert_types(args, ("ptr", # request_ptr
+                             "ptr", # status_ptr
+                             ))
+
     request_ids = [ generator.controller.read_int(request_ptr) ]
-    if status_ptr != "0":
+    if status_ptr != consts.MPI_STATUSES_IGNORE:
         status_ptrs = [ status_ptr ]
     else:
         status_ptrs = None
@@ -72,7 +77,13 @@ def MPI_Wait(generator, args, state, context):
     return True
 
 def MPI_Test(generator, args, state, context):
-    request_ptr, flag_ptr, status_ptr = args
+    request_ptr, flag_ptr, status_ptr = \
+        convert_types(args, ("ptr", # request_ptr
+                             "ptr", # flag_ptr
+                             "ptr", # status_ptr
+                             ))
+
+
     request_ids = [ generator.controller.read_int(request_ptr) ]
     check.check_request_ids(state, request_ids)
     state.set_test(request_ids, flag_ptr)
@@ -82,12 +93,16 @@ def MPI_Test(generator, args, state, context):
     return True
 
 def MPI_Waitall(generator, args, state, context):
-    count, requests_ptr, status_ptr = args
+    count, requests_ptr, statuses_ptr = \
+        convert_types(args, ("int", # count
+                             "ptr", # request_ptr
+                             "ptr", # status_ptr
+                             ))
+
     count = int(count)
     request_ids = generator.controller.read_ints(requests_ptr, count)
-    if status_ptr != "0":
-        status_ptr = int(status_ptr)
-        status_ptrs = [ status_ptr + i * POINTER_SIZE for i in xrange(count) ]
+    if statuses_ptr != consts.MPI_STATUSES_IGNORE:
+        status_ptrs = [ statuses_ptr + i * STATUS_SIZE for i in xrange(count) ]
     else:
         status_ptrs = None
 
