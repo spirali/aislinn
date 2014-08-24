@@ -183,7 +183,7 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
 	return 0;
 }
 
-int MPI_Barrier(MPI_Comm comm, MPI_Request)
+int MPI_Barrier(MPI_Comm comm)
 {
 	aislinn_call_1(
 		"MPI_Barrier",
