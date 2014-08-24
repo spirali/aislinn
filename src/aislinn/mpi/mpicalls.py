@@ -358,7 +358,7 @@ def MPI_Comm_split(generator, args, state, context):
     comm = check.check_and_get_comm(state, comm_id, 1)
     op = state.gstate.call_collective_operation(
                 generator, state, comm, collectives.CommSplit, True, args)
-    request_id = state.add_collective_request(op.cc_id)
+    request_id = state.add_collective_request(comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
 
@@ -379,7 +379,7 @@ def call_collective_operation(generator,
     comm = check.check_and_get_comm(state, comm_id, len(args) + 1)
     op = state.gstate.call_collective_operation(
                 generator, state, comm, op_class, blocking, args)
-    request_id = state.add_collective_request(op.cc_id)
+    request_id = state.add_collective_request(comm_id, op.cc_id)
     if blocking:
         state.set_wait((request_id,))
     else:

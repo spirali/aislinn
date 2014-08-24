@@ -33,5 +33,12 @@ class CommTests(TestCase):
         self.execute(7, stdout=output)
         self.no_errors()
 
+    def test_split2(self):
+        output = set(["0 101 202", "1515", "303 404 505"])
+        self.program("split2")
+        self.execute(6, stdout=output)
+        self.no_errors()
+
+
 if __name__ == "__main__":
     unittest.main()

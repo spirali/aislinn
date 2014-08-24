@@ -24,6 +24,7 @@ import errormsg
 import event
 import check
 import consts
+import comm
 
 class CollectiveOperation:
 
@@ -38,6 +39,24 @@ class CollectiveOperation:
         self.remaining_processes_complete = self.process_count
         self.data = None
 
+    def check_compatability(self, op_class, blocking):
+        if self.name != op_class.name:
+            e = errormsg.CallError()
+            e.name = "collectivemismatch"
+            e.short_description = "Collective mismatch"
+            e.description = "Invalid order of collective operations in " \
+                            "communicator {0}. Operation MPI_{1} expected." \
+                                .format(comm.comm_id_name(self.comm_id),
+                                        self.mpi_name)
+            e.throw()
+
+        if self.blocking != blocking:
+            e = errormsg.CallError()
+            e.name = "blocknonblockcc"
+            e.short_description = "Blocking collective mixed with nonblocking"
+            e.description = "Blocking collective operation mixed " \
+                            "with nonblocking"
+            e.throw()
     def copy(self):
         op = copy.copy(self)
         op.after_copy()

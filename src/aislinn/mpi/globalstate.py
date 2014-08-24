@@ -23,6 +23,7 @@ from base.utils import EqMixin
 from comm import Communicator, Group, make_comm_world
 import copy
 from state import State
+import consts
 
 
 class GlobalState(EqMixin):
@@ -40,6 +41,7 @@ class GlobalState(EqMixin):
         self.collective_operations = None
         self.send_protocol_thresholds = send_protocol_thresholds
         self.comm_world = make_comm_world(process_count)
+        self.comm_id_counter = consts.MPI_COMM_USERDEF
 
     def copy(self):
         gstate = copy.copy(self)
@@ -85,9 +87,9 @@ class GlobalState(EqMixin):
         if len(self.collective_operations) == index:
             self.collective_operations.append(op(self, blocking))
 
-    def get_operation_by_cc_id(self, cc_id):
+    def get_operation_by_cc_id(self, comm_id, cc_id):
         for op in self.collective_operations:
-            if op.cc_id == cc_id:
+            if op.cc_id == cc_id and op.comm_id == comm_id:
                 return op
 
     def call_collective_operation(self,
@@ -97,18 +99,16 @@ class GlobalState(EqMixin):
                                   op_class,
                                   blocking,
                                   args):
-
         if self.collective_operations is None:
             self.collective_operations = []
-        cc_id = state.cc_id_counter
-        op = self.get_operation_by_cc_id(cc_id)
+        cc_id = state.get_cc_id_counter(comm)
+        op = self.get_operation_by_cc_id(comm.comm_id, cc_id)
         if op is not None:
-            # TODO: Check compatability
-            pass
+            op.check_compatability(op_class, blocking)
         else:
             op = op_class(self, comm, blocking, cc_id)
             self.collective_operations.append(op)
-        state.inc_cc_id_counter()
+        state.inc_cc_id_counter(comm)
         op.enter(generator, state, comm, args)
         return op
 
@@ -117,8 +117,8 @@ class GlobalState(EqMixin):
 
     def create_new_communicator(self, comm, ranks):
         pids = [ comm.group.rank_to_pid(r) for r in ranks ]
-        comm_ids = [ self.states[pid].get_max_comm_id() for pid in pids ]
-        new_comm_id = max(comm_ids) + 1
+        self.comm_id_counter += 1
+        new_comm_id = self.comm_id_counter
         group = Group(ranks)
         comm = Communicator(new_comm_id, group)
         for pid in pids:

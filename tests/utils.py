@@ -129,6 +129,13 @@ def run_and_check(args,
                     stdout = ">>> empty <<<"
                 raise_exception("Got unexpected stdout.\n"
                                 "Expected stdout:\n{0}".format(stdout))
+        elif isinstance(stdout, set) or isinstance(stdout, frozenset):
+            r_stdout_set = set(r_stdout.rstrip().split("\n"))
+            if stdout != r_stdout_set:
+                if stdout == "":
+                    stdout = ">>> empty <<<"
+                raise_exception("Got unexpected stdout.\n"
+                                "Expected stdout:\n{0}".format(stdout))
         else:
             r = stdout(r_stdout)
             if r is not None:

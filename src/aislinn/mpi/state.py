@@ -45,7 +45,11 @@ class State:
         self.requests = [None]
         self.active_request_ids = None
         self.flag_ptr = None
-        self.cc_id_counter = 0
+        self.cc_id_counters = None
+
+        # cc_id_counters - when first touched, is should be
+        # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
+        # First two indexes are reserved for MPI_COMM_WORLD and MPI_COMM_SELF
 
     def copy(self, gstate):
         if self.status == State.StatusFinished:
@@ -65,16 +69,13 @@ class State:
         state.requests = copy.copy(self.requests)
         state.active_request_ids = copy.copy(self.active_request_ids)
         state.flag_ptr = self.flag_ptr
-        state.cc_id_counter = self.cc_id_counter
+        state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
 
-    def get_max_comm_id(self):
-        comm_id = max(consts.MPI_COMM_SELF, consts.MPI_COMM_WORLD)
-        for c in self.comms:
-            comm_id = max(comm_id, c.comm_id)
-        return comm_id
-
     def add_comm(self, comm):
+        if self.cc_id_counters is None:
+            self.cc_id_counters = [0] * (2 + len(self.comms))
+        self.cc_id_counters.append(0)
         self.comms = copy.copy(self.comms)
         self.comms.append(comm)
 
@@ -84,8 +85,24 @@ class State:
         for message in self.messages:
             message.vg_buffer.dec_ref()
 
-    def inc_cc_id_counter(self):
-        self.cc_id_counter += 1
+    def _cc_id_counter_index(self, comm):
+        if comm.comm_id == consts.MPI_COMM_WORLD:
+            return 0
+        if comm.comm_id == consts.MPI_COMM_SELF:
+            return 1
+        for i, c in enumerate(self.comms):
+            if c.comm_id == comm.comm_id:
+                return 2 + i
+
+    def get_cc_id_counter(self, comm):
+        if self.cc_id_counters is None:
+            self.cc_id_counters = [0] * (2 + len(self.comms))
+        return self.cc_id_counters[self._cc_id_counter_index(comm)]
+
+    def inc_cc_id_counter(self, comm):
+        if self.cc_id_counters is None:
+            self.cc_id_counters = [0] * (2 + len(self.comms))
+        self.cc_id_counters[self._cc_id_counter_index(comm)] += 1
 
     def is_hashable(self):
         # If we are finished, we do not care about exact state
@@ -99,7 +116,11 @@ class State:
             hashthread.update(self.vg_state.hash)
         hashthread.update(str(self.pid))
         hashthread.update(str(self.status))
-        hashthread.update(str(self.cc_id_counter))
+        hashthread.update(str(self.cc_id_counters))
+
+        for c in self.comms:
+            c.compute_hash(hashthread)
+
         if self.active_request_ids is not None:
             hashthread.update(str(self.active_request_ids))
         if self.flag_ptr is not None:
@@ -146,9 +167,9 @@ class State:
         self.requests[request_id] = request
         return request_id
 
-    def add_collective_request(self, cc_id):
+    def add_collective_request(self, comm_id, cc_id):
         request_id = self._new_request_index()
-        request = CollectiveRequest(cc_id)
+        request = CollectiveRequest(comm_id, cc_id)
         self.requests[request_id] = request
         return request_id
 
@@ -224,7 +245,8 @@ class State:
                 if r.message not in s.messages:
                     non_recv_requests.append((r, None))
             if r.is_collective():
-                if gstate.get_operation_by_cc_id(r.cc_id).can_be_completed(self):
+                if gstate.get_operation_by_cc_id(r.comm_id, r.cc_id) \
+                        .can_be_completed(self):
                     non_recv_requests.append((r, None))
 
         result = []

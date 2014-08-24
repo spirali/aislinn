@@ -100,16 +100,18 @@ class CompletedRequest(Request):
     def is_completed(self):
         return True
 
+
 class CollectiveRequest(Request):
 
-    def __init__(self, cc_id):
+    def __init__(self, comm_id, cc_id):
         self.cc_id = cc_id
+        self.comm_id = comm_id
 
     def is_collective(self):
         return True
 
     def compute_hash(self, hashthread):
-        hashthread.update("CR {0}".format(self.cc_id))
+        hashthread.update("CR {0} {0}".format(self.comm_id, self.cc_id))
 
     def __repr__(self):
-        return "CCOP(cc_id={0.cc_id})".format(self)
+        return "CCOP(comm_id={0.comm_id} cc_id={0.cc_id})".format(self)

@@ -203,7 +203,8 @@ class Generator:
                                              message.vg_buffer.id)
                 state.remove_message(message)
             if request.is_collective():
-                op = state.gstate.get_operation_by_cc_id(request.cc_id)
+                op = state.gstate.get_operation_by_cc_id(request.comm_id,
+                                                         request.cc_id)
                 op.complete(self, state)
 
     def fast_expand_node(self, node, gstate):

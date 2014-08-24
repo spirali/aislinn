@@ -25,6 +25,10 @@ class Communicator:
         self.comm_id = comm_id
         self.group = group
 
+    def compute_hash(self, hashthread):
+        hashthread.update(str(self.comm_id))
+        hashthread.update(str(self.group.table))
+
 
 class Group:
 
@@ -56,3 +60,11 @@ def make_comm_world(process_count):
 def make_comm_self(pid):
     group = Group([pid])
     return Communicator(consts.MPI_COMM_SELF, group)
+
+def comm_id_name(comm_id):
+    if comm_id == consts.MPI_COMM_WORLD:
+        return "MPI_COMM_WORLD"
+    if comm_id == consts.MPI_COMM_SELF:
+        return "MPI_COMM_SELF"
+    return str(comm_id)
+
