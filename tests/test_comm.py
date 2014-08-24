@@ -39,6 +39,23 @@ class CommTests(TestCase):
         self.execute(6, stdout=output)
         self.no_errors()
 
+    def test_free(self):
+        output = "0 6 0 2\n" \
+                 "1 6 1 2\n" \
+                 "2 6 0 2\n" \
+                 "3 6 1 2\n" \
+                 "4 6 0 2\n" \
+                 "5 6 1 2"
+
+        self.program("free")
+        self.execute(6, stdout=set(output.split("\n")))
+        self.no_errors()
+
+    def test_free2(self):
+        self.program("free2")
+        self.execute(2, stdout="")
+        self.single_error("permanentcommfree")
+
 
 if __name__ == "__main__":
     unittest.main()

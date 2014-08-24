@@ -586,7 +586,6 @@ class CommSplit(CollectiveOperation):
         self.colors[rank] = color
         self.keys[rank] = key
         self.newcomm_ptrs[rank] = newcomm_ptr
-
         if self.remaining_processes_enter == 0:
             groups = {}
             for (r, (color, key)) in enumerate(zip(self.colors, self.keys)):

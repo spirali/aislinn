@@ -79,6 +79,11 @@ class State:
         self.comms = copy.copy(self.comms)
         self.comms.append(comm)
 
+    def remove_comm(self, comm):
+        i = self.comms.index(comm)
+        del self.cc_id_counters[i + 2]
+        del self.comms[i]
+
     def dispose(self):
         if self.vg_state is not None:
             self.vg_state.dec_ref()

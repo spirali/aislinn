@@ -119,8 +119,8 @@ class GlobalState(EqMixin):
         pids = [ comm.group.rank_to_pid(r) for r in ranks ]
         self.comm_id_counter += 1
         new_comm_id = self.comm_id_counter
-        group = Group(ranks)
-        comm = Communicator(new_comm_id, group)
+        group = Group(pids)
+        new_comm = Communicator(new_comm_id, group)
         for pid in pids:
-            self.states[pid].add_comm(comm)
-        return comm
+            self.states[pid].add_comm(new_comm)
+        return new_comm

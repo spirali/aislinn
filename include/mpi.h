@@ -486,6 +486,14 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
 	return 0;
 }
 
+int MPI_Comm_free(MPI_Comm *comm)
+{
+	aislinn_call_1(
+		"MPI_Comm_free",
+		(AislinnArgType) comm);
+	return 0;
+}
+
 double MPI_Wtime() {
 	// Dummy version
 	return 0.0;

@@ -1001,6 +1001,18 @@ static UWord next_token_uword(void) {
    return value;
 }
 
+static int next_token_int(void) {
+   char *str = next_token();
+   char *end;
+   UWord value = VG_(strtoll10)(str, &end);
+   if (*end != '\0') {
+      write_message("Error: Invalid argument\n");
+      VG_(exit)(1);
+   }
+   return value;
+}
+
+
 static void process_commands_init(CommandsEnterType cet) {
    ThreadState *tst = VG_(get_ThreadState)(1);
    tl_assert(tst);
@@ -1147,13 +1159,13 @@ void process_commands(CommandsEnterType cet)
          char *param = next_token();
          if (!VG_(strcmp)(param, "int")) {
             extern_write((Addr)addr, sizeof(int));
-            *((Int*) addr) = next_token_uword();
+            *((Int*) addr) = next_token_int();
          } else if (!VG_(strcmp)(param, "ints")) {
                SizeT i, s = next_token_uword();
                extern_write((Addr)addr, s * sizeof(int));
                Int *a = (Int *) addr;
                for (i = 0; i < s; i++) {
-                  *a = next_token_uword();
+                  *a = next_token_int();
                   a++;
                }
          } else if (!VG_(strcmp(param, "buffer"))) {

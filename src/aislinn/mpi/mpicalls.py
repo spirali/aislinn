@@ -18,11 +18,13 @@
 #
 
 from message import Message
-from base.utils import convert_types
+from base.utils import convert_types, convert_type
 import collectives
 import event
 import consts
 import check
+import errormsg
+from comm import comm_id_name
 
 # TODO: Universal architecture detection
 POINTER_SIZE = 8
@@ -362,6 +364,24 @@ def MPI_Comm_split(generator, args, state, context):
     state.set_wait((request_id,))
     return True
 
+def MPI_Comm_free(generator, args, state, context):
+    assert len(args) == 1
+    comm_ptr = convert_type(args[0], "ptr")
+
+    comm_id = generator.controller.read_int(comm_ptr)
+    if comm_id == consts.MPI_COMM_WORLD or comm_id == consts.MPI_COMM_SELF:
+        e = errormsg.CallError()
+        e.name = "permanentcommfree"
+        name = comm_id_name(comm_id)
+        e.short_description = "{0} cannot be freed".format(name)
+        e.description = "Communicator {0} cannot be freed".format(name)
+        e.throw()
+    comm = check.check_and_get_comm(state, comm_id, 1)
+    state.remove_comm(comm)
+    generator.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
+    return False
+
+
 def MPI_Get_count(generator, args, state, context):
     status_ptr, datatype, count_ptr = convert_types(args, ("ptr", "int", "ptr"))
     tsize = check.check_datatype_get_size(datatype, 2)
@@ -511,6 +531,7 @@ calls = {
         "MPI_Comm_rank" : MPI_Comm_rank,
         "MPI_Comm_size" : MPI_Comm_size,
         "MPI_Comm_split" : MPI_Comm_split,
+        "MPI_Comm_free" : MPI_Comm_free,
         "MPI_Get_count" : MPI_Get_count,
         "MPI_Send" : MPI_Send,
         "MPI_Recv" : MPI_Recv,
