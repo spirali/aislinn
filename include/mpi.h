@@ -15,6 +15,7 @@ typedef
 	struct {
 		int MPI_SOURCE;
 		int MPI_TAG;
+		int size;
 	} MPI_Status;
 
 typedef int MPI_Datatype;
@@ -92,6 +93,17 @@ inline int MPI_Comm_size(MPI_Comm comm, int *size) {
 		(AislinnArgType) comm,
 		(AislinnArgType) size);
 	return 0;
+}
+
+inline int MPI_Get_count(
+        const MPI_Status *status, MPI_Datatype datatype, int *count) {
+	aislinn_call_3(
+		"MPI_Get_count",
+		(AislinnArgType) status,
+		(AislinnArgType) datatype,
+		(AislinnArgType) count);
+	return 0;
+
 }
 
 int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,

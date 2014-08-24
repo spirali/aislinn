@@ -197,7 +197,9 @@ class Generator:
             if message:
                 if request.status_ptr:
                     self.controller.write_ints(
-                            request.status_ptr, [ message.source, message.tag ])
+                            request.status_ptr, [ message.source,
+                                                  message.tag,
+                                                  message.size ])
 
                 self.controller.write_buffer(request.data_ptr,
                                              message.vg_buffer.id)

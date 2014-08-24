@@ -26,6 +26,7 @@ import check
 
 # TODO: Universal architecture detection
 POINTER_SIZE = 8
+INT_SIZE = 4
 
 def MPI_Comm_rank(generator, args, state, context):
     comm_id, ptr = convert_types(args, ("int", "ptr"))
@@ -346,13 +347,12 @@ def MPI_Iallreduce(generator, args, state, context):
                                      args)
 
 def MPI_Comm_split(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # comm
-                       "int", # color
-                       "int", # key
-                       "ptr", # newcomm
-                      ))
+    args = convert_types(args,
+                         ("ptr", # comm
+                          "int", # color
+                          "int", # key
+                          "ptr", # newcomm
+                         ))
     comm_id = args[0]
     args = args[1:]
     comm = check.check_and_get_comm(state, comm_id, 1)
@@ -361,6 +361,13 @@ def MPI_Comm_split(generator, args, state, context):
     request_id = state.add_collective_request(comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
+
+def MPI_Get_count(generator, args, state, context):
+    status_ptr, datatype, count_ptr = convert_types(args, ("ptr", "int", "ptr"))
+    tsize = check.check_datatype_get_size(datatype, 2)
+    size = generator.controller.read_int(status_ptr + 2 * INT_SIZE)
+    generator.controller.write_int(count_ptr, size / tsize)
+    return False
 
 def call_collective_operation(generator,
                               state,
@@ -504,6 +511,7 @@ calls = {
         "MPI_Comm_rank" : MPI_Comm_rank,
         "MPI_Comm_size" : MPI_Comm_size,
         "MPI_Comm_split" : MPI_Comm_split,
+        "MPI_Get_count" : MPI_Get_count,
         "MPI_Send" : MPI_Send,
         "MPI_Recv" : MPI_Recv,
         "MPI_Isend" : MPI_ISend,

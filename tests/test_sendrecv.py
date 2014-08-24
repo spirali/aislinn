@@ -137,6 +137,10 @@ class SendRecvTests(TestCase):
         self.execute(2, "10 1", stdout="")
         self.single_error("deadlock")
 
+    def test_getcount(self):
+        self.program("getcount")
+        self.execute(2, stdout="")
+        self.no_errors()
 
 if __name__ == "__main__":
     unittest.main()
