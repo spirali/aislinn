@@ -351,6 +351,88 @@ int MPI_Ibarrier(MPI_Comm comm, MPI_Request *request)
 	return 0;
 }
 
+int MPI_Scan(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype,
+             MPI_Op op, MPI_Comm comm)
+{
+	AislinnArgType args[6];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) recvbuf;
+	args[2] = (AislinnArgType) count;
+	args[3] = (AislinnArgType) datatype;
+	args[4] = (AislinnArgType) op;
+	args[5] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Scan", args, 6);
+	return 0;
+}
+
+int MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                  void *recvbuf, int recvcount, MPI_Datatype recvtype,
+                  MPI_Comm comm)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcount;
+	args[2] = (AislinnArgType) sendtype;
+	args[3] = (AislinnArgType) recvbuf;
+	args[4] = (AislinnArgType) recvcount;
+	args[5] = (AislinnArgType) recvtype;
+	args[6] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Allgather", args, 7);
+	return 0;
+}
+
+int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                 void *recvbuf, int recvcount, MPI_Datatype recvtype,
+                 MPI_Comm comm)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcount;
+	args[2] = (AislinnArgType) sendtype;
+	args[3] = (AislinnArgType) recvbuf;
+	args[4] = (AislinnArgType) recvcount;
+	args[5] = (AislinnArgType) recvtype;
+	args[6] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Alltoall", args, 7);
+	return 0;
+}
+
+int MPI_Alltoallv(const void *sendbuf, const int *sendcounts,
+                  const int *sdispls, MPI_Datatype sendtype, void *recvbuf,
+                  const int *recvcounts, const int *rdispls, MPI_Datatype recvtype,
+                  MPI_Comm comm)
+{
+	AislinnArgType args[9];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcounts;
+	args[2] = (AislinnArgType) sdispls;
+	args[3] = (AislinnArgType) sendtype;
+	args[4] = (AislinnArgType) recvbuf;
+	args[5] = (AislinnArgType) recvcounts;
+	args[6] = (AislinnArgType) rdispls;
+	args[7] = (AislinnArgType) recvtype;
+	args[8] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Alltoallv", args, 9);
+	return 0;
+}
+
+int MPI_Allgatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                   void *recvbuf, const int *recvcounts, const int *displs,
+                   MPI_Datatype recvtype, MPI_Comm comm)
+{
+	AislinnArgType args[8];
+	args[0] = (AislinnArgType) sendbuf;
+	args[1] = (AislinnArgType) sendcount;
+	args[2] = (AislinnArgType) sendtype;
+	args[3] = (AislinnArgType) recvbuf;
+	args[4] = (AislinnArgType) recvcounts;
+	args[5] = (AislinnArgType) displs;
+	args[6] = (AislinnArgType) recvtype;
+	args[7] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Allgatherv", args, 8);
+	return 0;
+}
+
 int MPI_Igather(const void *sendbuf,
                 int sendcount,
                 MPI_Datatype sendtype,
