@@ -1,5 +1,5 @@
 
-from utils import TestCase
+from utils import TestCase, make_set
 import unittest
 
 class CollectiveTests(TestCase):
@@ -60,6 +60,23 @@ class CollectiveTests(TestCase):
         self.execute(3, "1", stdout=output)
         self.no_errors()
         self.execute(3, "2", stdout=output)
+        self.no_errors()
+
+    def test_bcast(self):
+        def make_output(root):
+            return make_set(
+                  "0 OUT1: {0}00 {0}01 {0}02 {0}03\n"
+                  "0 OUT2: {0}000 {0}001 {0}002 {0}003\n"
+                  "1 OUT1: {0}00 {0}01 {0}02 {0}03\n"
+                  "1 OUT2: {0}000 {0}001 {0}002 {0}003\n"
+                  "2 OUT1: {0}00 {0}01 {0}02 {0}03\n"
+                  "2 OUT2: {0}000 {0}001 {0}002 {0}003".format(root + 1))
+        self.program("bcast")
+        self.execute(3, "0", stdout=make_output(0))
+        self.no_errors()
+        self.execute(3, "1", stdout=make_output(1))
+        self.no_errors()
+        self.execute(3, "2", stdout=make_output(2))
         self.no_errors()
 
     def test_iscatterv(self):

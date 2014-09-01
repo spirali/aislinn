@@ -375,7 +375,6 @@ class Scatter(OperationWithSingleBuffer):
         self.sendtype = None
         self.recvbufs = [ None ] * self.process_count
         self.sendcount = None
-        self.displs = None
 
     def after_copy(self):
         OperationWithSingleBuffer.after_copy(self)
@@ -417,6 +416,54 @@ class Scatter(OperationWithSingleBuffer):
         hashthread.update(str(self.sendcount))
         hashthread.update(str(self.sendtype))
         hashthread.update(str(self.recvbufs))
+
+
+class Bcast(OperationWithSingleBuffer):
+
+    name = "bcast"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithSingleBuffer.__init__(self, gstate, comm, blocking, cc_id)
+        self.datatype = None
+        self.recvbufs = [ None ] * self.process_count
+        self.count = None
+        self.root = None
+
+    def after_copy(self):
+        OperationWithSingleBuffer.after_copy(self)
+        self.recvbufs = copy.copy(self.recvbufs)
+
+    def enter_main(self,
+                   generator,
+                   state,
+                   comm,
+                   args):
+        buffer, count, datatype, root = args
+        check.check_count(count, 2)
+        check.check_rank(comm, root, 8)
+        self.check_root(comm, root)
+        rank = state.get_rank(comm)
+        if self.root == rank:
+            self.datatype = datatype
+            self.count = count
+            assert self.buffer is None
+            size = types.get_datatype_size(datatype, count)
+            self.buffer = generator.new_buffer(buffer, size)
+        else:
+            self.recvbufs[rank] = buffer
+
+    def can_be_completed(self, state):
+        return self.buffer is not None
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        if self.root != rank:
+            generator.controller.write_buffer(self.recvbufs[rank], self.buffer.id)
+
+    def compute_hash_data(self, hashthread):
+        OperationWithSingleBuffer.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.count))
+        hashthread.update(str(self.datatype))
 
 
 class Reduce(OperationWithBuffers):

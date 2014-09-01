@@ -17,6 +17,9 @@ AISLINN_CPP = os.path.join(AISLINN_BIN, "aislinn-c++")
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.controller
 
+def make_set(lines):
+    return set(lines.rstrip().split("\n"))
+
 class TestCase(unittest.TestCase):
 
     category = None

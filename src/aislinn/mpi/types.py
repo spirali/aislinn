@@ -85,8 +85,8 @@ vgtool_name_of_ops = {
     consts.MPI_MAXLOC: "maxloc",
 }
 
-def get_datatype_size(datatype):
-    return type_sizes.get(datatype)
+def get_datatype_size(datatype, count=1):
+    return type_sizes.get(datatype) * count
 
 def get_datatype_name(datatype):
     name = type_names.get(datatype)

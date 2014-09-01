@@ -235,6 +235,21 @@ def MPI_Allreduce(generator, args, state, context):
                                      True,
                                      args)
 
+def MPI_Bcast(generator, args, state, context):
+    args = convert_types(args,
+                         ("ptr", # buffer
+                          "int", # count
+                          "int", # datatype
+                          "int", # root
+                          "int", # comm
+                         ))
+    return call_collective_operation(generator,
+                                     state,
+                                     context,
+                                     collectives.Bcast,
+                                     True,
+                                     args)
+
 def MPI_Ibarrier(generator, args, state, context):
     args = convert_types(args, ("int", "ptr"))
     return call_collective_operation(generator,
@@ -362,6 +377,24 @@ def MPI_Iallreduce(generator, args, state, context):
                                      collectives.AllReduce,
                                      False,
                                      args)
+
+def MPI_Ibcast(generator, args, state, context):
+    args = convert_types(args,
+                         ("ptr", # buffer
+                          "int", # count
+                          "int", # datatype
+                          "int", # root
+                          "int", # comm
+                          "ptr", # request
+                         ))
+    return call_collective_operation(generator,
+                                     state,
+                                     context,
+                                     collectives.Bcast,
+                                     False,
+                                     args)
+
+
 
 def MPI_Comm_split(generator, args, state, context):
     args = convert_types(args,
@@ -561,6 +594,7 @@ calls = {
         "MPI_Scatter" : MPI_Scatter,
         "MPI_Scatterv" : MPI_Scatterv,
         "MPI_Reduce" : MPI_Reduce,
+        "MPI_Bcast" : MPI_Bcast,
         "MPI_Allreduce" : MPI_Allreduce,
         "MPI_Ibarrier" : MPI_Ibarrier,
         "MPI_Igather" : MPI_Igather,
@@ -569,4 +603,5 @@ calls = {
         "MPI_Iscatterv" : MPI_Iscatterv,
         "MPI_Ireduce" : MPI_Ireduce,
         "MPI_Iallreduce" : MPI_Iallreduce,
+        "MPI_Ibcast" : MPI_Ibcast,
 }

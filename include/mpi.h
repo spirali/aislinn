@@ -329,6 +329,19 @@ int MPI_Allreduce(void *sendbuf, void *recvbuf, int count,
 	return 0;
 }
 
+int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype,
+		int root, MPI_Comm comm)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) buffer;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) root;
+	args[4] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Bcast", args, 5);
+	return 0;
+}
+
 int MPI_Ibarrier(MPI_Comm comm, MPI_Request *request)
 {
 	aislinn_call_2(
@@ -472,6 +485,20 @@ int MPI_Iallreduce(void *sendbuf, void *recvbuf, int count,
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iallreduce", args, 7);
+	return 0;
+}
+
+int MPI_Ibcast(void *buffer, int count, MPI_Datatype datatype,
+		int root, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[6];
+	args[0] = (AislinnArgType) buffer;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) root;
+	args[4] = (AislinnArgType) comm;
+	args[5] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Ibcast", args, 6);
 	return 0;
 }
 
