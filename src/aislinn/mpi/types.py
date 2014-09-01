@@ -86,7 +86,11 @@ vgtool_name_of_ops = {
 }
 
 def get_datatype_size(datatype, count=1):
-    return type_sizes.get(datatype) * count
+    size = type_sizes.get(datatype)
+    if size is not None:
+        return size * count
+    else:
+        return None
 
 def get_datatype_name(datatype):
     name = type_names.get(datatype)

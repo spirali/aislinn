@@ -219,7 +219,7 @@ class Gatherv(OperationWithBuffers):
         rank = state.get_rank(comm)
         self.check_root(comm, root)
         self.sendtype = sendtype
-        size = types.get_datatype_size(sendtype) * sendcount
+        size = types.get_datatype_size(sendtype, sendcount)
         self.sendcount = sendcount
 
         assert self.buffers[rank] is None
@@ -282,7 +282,7 @@ class Gather(OperationWithBuffers):
 
         self.sendtype = sendtype
         self.sendcount = sendcount
-        size = types.get_datatype_size(sendtype) * sendcount
+        size = types.get_datatype_size(sendtype, sendcount)
 
         assert self.buffers[rank] is None
         self.buffers[rank] = generator.new_buffer(sendbuf, size)
@@ -295,7 +295,7 @@ class Gather(OperationWithBuffers):
         if state.pid == self.root_pid:
             recvbuf = self.recvbuf
             controller = generator.controller
-            size = types.get_datatype_size(self.sendtype) * self.sendcount
+            size = types.get_datatype_size(self.sendtype, self.sendcount)
             for i, vg_buffer in enumerate(self.buffers):
                 controller.write_buffer(recvbuf + i * size, vg_buffer.id)
         # Do nothing on non-root processes
@@ -343,7 +343,7 @@ class Scatterv(OperationWithSingleBuffer):
             self.displs = generator.controller.read_ints(
                     displs, self.process_count)
             sendcount = max(s + d for s, d in zip(self.sendcounts, self.displs))
-            size = types.get_datatype_size(sendtype) * sendcount
+            size = types.get_datatype_size(sendtype, sendcount)
             assert self.buffer is None
             self.buffer = generator.new_buffer(sendbuf, size)
 
@@ -397,15 +397,15 @@ class Scatter(OperationWithSingleBuffer):
             self.sendtype = sendtype
             self.sendcount = sendcount
             assert self.buffer is None
-            size = (types.get_datatype_size(sendtype)
-                        * self.sendcount * self.process_count)
+            size = (types.get_datatype_size(sendtype, self.sendcount)
+                        * self.process_count)
             self.buffer = generator.new_buffer(sendbuf, size)
 
     def can_be_completed(self, state):
         return self.buffer is not None
 
     def complete_main(self, generator, state, comm):
-        size = types.get_datatype_size(self.sendtype) * self.sendcount
+        size = types.get_datatype_size(self.sendtype, self.sendcount)
         rank = state.get_rank(comm)
         index =  rank * size
         generator.controller.write_buffer(
@@ -499,7 +499,7 @@ class Reduce(OperationWithBuffers):
 
         self.check_root(comm, root)
 
-        size = types.get_datatype_size(datatype) * count
+        size = types.get_datatype_size(datatype, count)
         rank = state.get_rank(comm)
         if self.root == rank:
             generator.controller.memcpy(recvbuf, sendbuf, size)
@@ -568,7 +568,7 @@ class AllReduce(OperationWithBuffers):
                     self.count == count and
                     self.datatype == datatype)
 
-        size = types.get_datatype_size(datatype) * count
+        size = types.get_datatype_size(datatype, count)
         generator.controller.memcpy(recvbuf, sendbuf, size)
         rank = state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
