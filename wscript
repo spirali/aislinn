@@ -15,3 +15,4 @@ def configure(ctx):
 
 def build(ctx):
     ctx.recurse("src/libs/aislinn")
+    ctx.recurse("src/libs/mpi")

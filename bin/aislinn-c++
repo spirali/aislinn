@@ -1,3 +1,3 @@
 #!/bin/sh
 AISLINN_ROOT=`dirname $0`/..
-g++ -I${AISLINN_ROOT}/include -I${AISLINN_ROOT}/valgrind/include -L${AISLINN_ROOT}/build/src/libs/aislinn $@ -laislinn
+g++ -I${AISLINN_ROOT}/include -I${AISLINN_ROOT}/valgrind/include -L${AISLINN_ROOT}/build/src/libs/mpi -L${AISLINN_ROOT}/build/src/libs/aislinn $@ -laislinn_mpi -laislinn
