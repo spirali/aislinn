@@ -83,5 +83,11 @@ class BaseTests(TestCase):
         self.execute(2)
         self.no_errors()
 
+    def test_typesize(self):
+        self.program("typesize")
+        self.execute(1, stdout="4 8 16\n")
+        self.no_errors()
+
+
 if __name__ == "__main__":
     unittest.main()

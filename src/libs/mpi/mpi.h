@@ -245,7 +245,7 @@ int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm);
 
 int MPI_Comm_free(MPI_Comm *comm);
 
-
+int MPI_Type_size(MPI_Datatype datatype, int *size);
 
 double MPI_Wtime();
 

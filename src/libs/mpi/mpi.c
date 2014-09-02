@@ -549,6 +549,16 @@ int MPI_Comm_free(MPI_Comm *comm)
 	return 0;
 }
 
+int MPI_Type_size(MPI_Datatype datatype, int *size)
+{
+	aislinn_call_2(
+		"MPI_Type_size",
+		(AislinnArgType) datatype,
+		(AislinnArgType) size);
+	return 0;
+
+}
+
 double MPI_Wtime()
 {
 	// Dummy version

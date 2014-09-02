@@ -37,13 +37,19 @@ def MPI_Comm_rank(generator, args, state, context):
     rank = comm.group.pid_to_rank(state.pid)
     if rank is None:
         rank = consts.MPI_UNDEFINED
-    generator.controller.write_int(args[1], rank)
+    generator.controller.write_int(ptr, rank)
     return False
 
 def MPI_Comm_size(generator, args, state, context):
     comm_id, ptr = convert_types(args, ("int", "ptr"))
     comm = check.check_and_get_comm(state, comm_id, 1)
-    generator.controller.write_int(args[1], comm.group.size)
+    generator.controller.write_int(ptr, comm.group.size)
+    return False
+
+def MPI_Type_size(generator, args, state, context):
+    datatype, ptr = convert_types(args, ("int", "ptr"))
+    size = check.check_datatype_get_size(datatype, 1)
+    generator.controller.write_int(ptr, size)
     return False
 
 def MPI_Send(generator, args, state, context):
@@ -619,4 +625,5 @@ calls = {
         "MPI_Ireduce" : MPI_Ireduce,
         "MPI_Iallreduce" : MPI_Iallreduce,
         "MPI_Ibcast" : MPI_Ibcast,
+        "MPI_Type_size" : MPI_Type_size,
 }
