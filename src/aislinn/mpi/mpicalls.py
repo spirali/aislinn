@@ -398,7 +398,7 @@ def MPI_Ibcast(generator, args, state, context):
 
 def MPI_Comm_split(generator, args, state, context):
     args = convert_types(args,
-                         ("ptr", # comm
+                         ("int", # comm
                           "int", # color
                           "int", # key
                           "ptr", # newcomm
@@ -411,6 +411,20 @@ def MPI_Comm_split(generator, args, state, context):
     request_id = state.add_collective_request(comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
+
+def MPI_Comm_dup(generator, args, state, context):
+    comm_id, new_comm_ptr = convert_types(args,
+                         ("int", # comm
+                          "ptr", # newcomm
+                         ))
+    comm = check.check_and_get_comm(state, comm_id, 1)
+    op = state.gstate.call_collective_operation(
+                generator, state, comm, collectives.CommDup, True, new_comm_ptr)
+    request_id = state.add_collective_request(comm_id, op.cc_id)
+    state.set_wait((request_id,))
+    return True
+
+
 
 def MPI_Comm_free(generator, args, state, context):
     assert len(args) == 1
@@ -579,6 +593,7 @@ calls = {
         "MPI_Comm_rank" : MPI_Comm_rank,
         "MPI_Comm_size" : MPI_Comm_size,
         "MPI_Comm_split" : MPI_Comm_split,
+        "MPI_Comm_dup" : MPI_Comm_dup,
         "MPI_Comm_free" : MPI_Comm_free,
         "MPI_Get_count" : MPI_Get_count,
         "MPI_Send" : MPI_Send,

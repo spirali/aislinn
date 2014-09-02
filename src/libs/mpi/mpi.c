@@ -531,6 +531,16 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
 	return 0;
 }
 
+int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm)
+{
+	aislinn_call_2(
+		"MPI_Comm_dup",
+		(AislinnArgType) comm,
+		(AislinnArgType) newcomm);
+	return 0;
+
+}
+
 int MPI_Comm_free(MPI_Comm *comm)
 {
 	aislinn_call_1(

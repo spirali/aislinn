@@ -1,5 +1,5 @@
 
-from utils import TestCase
+from utils import TestCase, make_set
 import unittest
 
 class CommTests(TestCase):
@@ -37,6 +37,12 @@ class CommTests(TestCase):
         output = set(["0 101 202", "1515", "303 404 505"])
         self.program("split2")
         self.execute(6, stdout=output)
+        self.no_errors()
+
+    def test_dup(self):
+        output = make_set("0 0 4 0 1\n1 1 4 0 1\n2 2 4 0 1\n3 3 4 0 1")
+        self.program("dup")
+        self.execute(4, stdout=output)
         self.no_errors()
 
     def test_free(self):

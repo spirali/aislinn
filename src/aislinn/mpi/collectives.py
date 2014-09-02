@@ -670,3 +670,41 @@ class CommSplit(CollectiveOperation):
         hashthread.update(str(self.keys))
         hashthread.update(str(self.newcomm_ptrs))
         hashthread.update(str(self.comm_ids))
+
+class CommDup(CollectiveOperation):
+
+    name = "comm_dup"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
+        self.newcomm_ptrs = [ None ] * self.process_count
+        self.newcomm_id = None
+
+    def after_copy(self):
+        self.newcomm_ptrs = copy.copy(self.newcomm_ptrs)
+
+    def enter_main(self,
+                   generator,
+                   state,
+                   comm,
+                   args):
+        newcomm_ptr = args
+        rank = state.get_rank(comm)
+
+        assert self.newcomm_ptrs[rank] is None
+        self.newcomm_ptrs[rank] = newcomm_ptr
+
+        if self.newcomm_id is None:
+            self.newcomm_id = state.gstate.clone_communicator(comm).comm_id
+
+    def can_be_completed(self, state):
+        return True
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        generator.controller.write_int(self.newcomm_ptrs[rank],
+                                       self.newcomm_id)
+
+    def compute_hash_data(self, hashthread):
+        hashthread.update(str(self.newcomm_ptrs))
+        hashthread.update(str(self.newcomm_id))

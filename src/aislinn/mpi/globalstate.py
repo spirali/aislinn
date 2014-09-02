@@ -124,3 +124,11 @@ class GlobalState(EqMixin):
         for pid in pids:
             self.states[pid].add_comm(new_comm)
         return new_comm
+
+    def clone_communicator(self, comm):
+        self.comm_id_counter += 1
+        new_comm_id = self.comm_id_counter
+        new_comm = Communicator(new_comm_id, comm.group)
+        for pid in comm.group.pids():
+            self.states[pid].add_comm(new_comm)
+        return new_comm

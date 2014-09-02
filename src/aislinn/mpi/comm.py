@@ -51,6 +51,9 @@ class Group:
         except ValueError:
             return None
 
+    def pids(self):
+        return self.table
+
 
 def make_comm_world(process_count):
     table = range(process_count)
