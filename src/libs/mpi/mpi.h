@@ -29,6 +29,7 @@ typedef int MPI_Fint;
 
 /* Constants */
 static const int MPI_UNDEFINED = -0x0BEFBEEF;
+static const int MPI_KEYVAL_INVALID = -0x0BEEFBEF;
 
 static const MPI_Comm MPI_COMM_NULL = 0x0000CC00;
 static const MPI_Comm MPI_COMM_SELF = 0x0000CC01;
@@ -75,6 +76,27 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
 #define MPI_ANY_SOURCE -0x00AA00
 #define MPI_ANY_TAG -0x00BB00
+
+#define MPI_KEYVAL_INVALID 0x24000000
+
+#define MPI_COMM_NULL_COPY_FN ((MPI_Comm_copy_attr_function*)0)
+#define MPI_COMM_NULL_DELETE_FN ((MPI_Comm_delete_attr_function*)0)
+
+
+/* Functions prototypes */
+typedef int MPI_Comm_copy_attr_function(
+	MPI_Comm oldcomm,
+	int comm_keyval,
+	void *extra_state,
+	void *attribute_val_in,
+	void *attribute_val_out,
+	int *flag);
+
+typedef int MPI_Comm_delete_attr_function(
+		MPI_Comm comm,
+		int comm_keyval,
+		void *attribute_val,
+		void *extra_state);
 
 void MPI_Init(int *argc, char ***argv);
 
@@ -247,7 +269,57 @@ int MPI_Comm_free(MPI_Comm *comm);
 
 int MPI_Type_size(MPI_Datatype datatype, int *size);
 
+int MPI_Comm_create_keyval(
+  MPI_Comm_copy_attr_function *comm_copy_attr_fn,
+  MPI_Comm_delete_attr_function *comm_delete_attr_fn,
+  int *comm_keyval,
+  void *extra_state
+);
+
+int MPI_Comm_get_attr(
+  MPI_Comm comm,
+  int comm_keyval,
+  void *attribute_val,
+  int *flag
+);
+
+int MPI_Comm_set_attr(
+  MPI_Comm comm,
+  int comm_keyval,
+  void *attribute_val
+);
+
+int MPI_Comm_free_keyval(
+  int *comm_keyval
+);
+
 double MPI_Wtime();
+
+/* ----------------------------------------------------------------------------
+/  DEPRECATED INTERFACE
+/  --------------------------------------------------------------------------*/
+
+typedef MPI_Comm_delete_attr_function MPI_Delete_function;
+typedef MPI_Comm_copy_attr_function MPI_Copy_function;
+
+#define MPI_NULL_COPY_FN   ((MPI_Copy_function *)0)
+#define MPI_NULL_DELETE_FN ((MPI_Delete_function *)0)
+
+int MPI_Keyval_create(
+  MPI_Copy_function *comm_copy_attr_fn,
+  MPI_Delete_function *comm_delete_attr_fn,
+  int *comm_keyval,
+  void *extra_state
+);
+
+int MPI_Attr_get(
+	MPI_Comm comm, int comm_keyval, void *attribute_val, int *flag);
+
+int MPI_Attr_put(MPI_Comm comm, int comm_keyval, void *attribute_val);
+
+int MPI_Attr_delete(MPI_Comm comm, int keyval);
+
+int MPI_Keyval_free(int *comm_keyval);
 
 #ifdef __cplusplus
 }

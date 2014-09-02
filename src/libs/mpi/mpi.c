@@ -1,18 +1,18 @@
 
 #include "mpi.h"
 
-void MPI_Init(int *argc, char ***argv) 
+void MPI_Init(int *argc, char ***argv)
 {
 	aislinn_call_0("MPI_Init");
 }
 
-int MPI_Finalize() 
+int MPI_Finalize()
 {
 	// Currently do nothing
 	return 0;
 }
 
-int MPI_Comm_rank(MPI_Comm comm, int *rank) 
+int MPI_Comm_rank(MPI_Comm comm, int *rank)
 {
 	aislinn_call_2(
 		"MPI_Comm_rank",
@@ -21,7 +21,7 @@ int MPI_Comm_rank(MPI_Comm comm, int *rank)
 	return 0;
 }
 
-int MPI_Comm_size(MPI_Comm comm, int *size) 
+int MPI_Comm_size(MPI_Comm comm, int *size)
 {
 	aislinn_call_2(
 		"MPI_Comm_size",
@@ -31,7 +31,7 @@ int MPI_Comm_size(MPI_Comm comm, int *size)
 }
 
 int MPI_Get_count(
-        const MPI_Status *status, MPI_Datatype datatype, int *count) 
+        const MPI_Status *status, MPI_Datatype datatype, int *count)
 {
 	aislinn_call_3(
 		"MPI_Get_count",
@@ -558,6 +558,126 @@ int MPI_Type_size(MPI_Datatype datatype, int *size)
 	return 0;
 
 }
+
+int MPI_Comm_create_keyval(
+  MPI_Comm_copy_attr_function *comm_copy_attr_fn,
+  MPI_Comm_delete_attr_function *comm_delete_attr_fn,
+  int *comm_keyval,
+  void *extra_state
+)
+{
+	aislinn_call_4(
+		"MPI_Comm_create_keyval",
+		(AislinnArgType) comm_copy_attr_fn,
+		(AislinnArgType) comm_copy_attr_fn,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) extra_state);
+	return 0;
+}
+
+int MPI_Comm_get_attr(
+  MPI_Comm comm,
+  int comm_keyval,
+  void *attribute_val,
+  int *flag)
+{
+	aislinn_call_4(
+		"MPI_Comm_get_attr",
+		(AislinnArgType) comm,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) attribute_val,
+		(AislinnArgType) flag);
+	return 0;
+}
+
+int MPI_Comm_set_attr(
+  MPI_Comm comm,
+  int comm_keyval,
+  void *attribute_val)
+{
+	aislinn_call_3(
+		"MPI_Comm_set_attr",
+		(AislinnArgType) comm,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) attribute_val);
+	return 0;
+}
+
+int MPI_Comm_free_keyval(int *comm_keyval)
+{
+	aislinn_call_1(
+		"MPI_Comm_free_keyval",
+		(AislinnArgType) comm_keyval);
+	return 0;
+}
+
+/* ----------------------------------------------------------------------------
+/  DEPRECATED INTERFACE
+/  --------------------------------------------------------------------------*/
+
+int MPI_Keyval_create(
+  MPI_Copy_function *comm_copy_attr_fn,
+  MPI_Delete_function *comm_delete_attr_fn,
+  int *comm_keyval,
+  void *extra_state
+)
+{
+	aislinn_call_4(
+		"MPI_Keyval_create",
+		(AislinnArgType) comm_copy_attr_fn,
+		(AislinnArgType) comm_copy_attr_fn,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) extra_state);
+	return 0;
+}
+
+int MPI_Attr_put(
+  MPI_Comm comm,
+  int comm_keyval,
+  void *attribute_val)
+{
+	aislinn_call_3(
+		"MPI_Attr_put",
+		(AislinnArgType) comm,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) attribute_val);
+	return 0;
+}
+
+int MPI_Attr_set(
+  MPI_Comm comm,
+  int comm_keyval,
+  void *attribute_val)
+{
+	aislinn_call_3(
+		"MPI_Attr_set",
+		(AislinnArgType) comm,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) attribute_val);
+	return 0;
+}
+
+
+int MPI_Attr_delete(MPI_Comm comm, int comm_keyval)
+{
+	aislinn_call_2(
+		"MPI_Attr_delete",
+		(AislinnArgType) comm,
+		(AislinnArgType) comm_keyval);
+	return 0;
+}
+
+int MPI_Keyval_free(int *comm_keyval)
+{
+	aislinn_call_1(
+		"MPI_Keyval_free",
+		(AislinnArgType) comm_keyval);
+	return 0;
+}
+
+/* ----------------------------------------------------------------------------
+/  Dummy functions
+/  --------------------------------------------------------------------------*/
 
 double MPI_Wtime()
 {
