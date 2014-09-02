@@ -9,7 +9,7 @@ void MPI_Init(int *argc, char ***argv)
 int MPI_Finalize()
 {
 	// Currently do nothing
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_rank(MPI_Comm comm, int *rank)
@@ -18,7 +18,7 @@ int MPI_Comm_rank(MPI_Comm comm, int *rank)
 		"MPI_Comm_rank",
 		(AislinnArgType) comm,
 		(AislinnArgType) rank);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_size(MPI_Comm comm, int *size)
@@ -27,7 +27,7 @@ int MPI_Comm_size(MPI_Comm comm, int *size)
 		"MPI_Comm_size",
 		(AislinnArgType) comm,
 		(AislinnArgType) size);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Get_count(
@@ -38,7 +38,7 @@ int MPI_Get_count(
 		(AislinnArgType) status,
 		(AislinnArgType) datatype,
 		(AislinnArgType) count);
-	return 0;
+	return MPI_SUCCESS;
 
 }
 
@@ -53,7 +53,7 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Send", args, 6);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
@@ -68,7 +68,7 @@ int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Isend", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
@@ -83,7 +83,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) status;
 	aislinn_call_args("MPI_Recv", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
@@ -98,7 +98,7 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Irecv", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Wait(MPI_Request *request, MPI_Status *status)
@@ -107,7 +107,7 @@ int MPI_Wait(MPI_Request *request, MPI_Status *status)
 		"MPI_Wait",
 		(AislinnArgType) request,
 		(AislinnArgType) status);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Waitall(int count, MPI_Request array_of_requests[],
@@ -118,7 +118,7 @@ int MPI_Waitall(int count, MPI_Request array_of_requests[],
 		(AislinnArgType) count,
 		(AislinnArgType) array_of_requests,
 		(AislinnArgType) array_of_statuses);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
@@ -128,7 +128,7 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
 		(AislinnArgType) request,
 		(AislinnArgType) flag,
 		(AislinnArgType) status);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Barrier(MPI_Comm comm)
@@ -136,7 +136,7 @@ int MPI_Barrier(MPI_Comm comm)
 	aislinn_call_1(
 		"MPI_Barrier",
 		(AislinnArgType) comm);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Gather(const void *sendbuf,
@@ -158,7 +158,7 @@ int MPI_Gather(const void *sendbuf,
 	args[6] = (AislinnArgType) root;
 	args[7] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Gather", args, 8);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Gatherv(const void *sendbuf,
@@ -182,7 +182,7 @@ int MPI_Gatherv(const void *sendbuf,
 	args[7] = (AislinnArgType) root;
 	args[8] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Gatherv", args, 9);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Scatter(const void *sendbuf,
@@ -204,7 +204,7 @@ int MPI_Scatter(const void *sendbuf,
 	args[6] = (AislinnArgType) root;
 	args[7] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Scatter", args, 8);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Scatterv(const void *sendbuf,
@@ -228,7 +228,7 @@ int MPI_Scatterv(const void *sendbuf,
 	args[7] = (AislinnArgType) root;
 	args[8] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Scatterv", args, 9);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Reduce(const void *sendbuf,
@@ -248,7 +248,7 @@ int MPI_Reduce(const void *sendbuf,
 	args[5] = (AislinnArgType) root;
 	args[6] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Reduce", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Allreduce(void *sendbuf, void *recvbuf, int count,
@@ -262,7 +262,7 @@ int MPI_Allreduce(void *sendbuf, void *recvbuf, int count,
 	args[4] = (AislinnArgType) op;
 	args[5] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Allreduce", args, 6);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype,
@@ -275,7 +275,7 @@ int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype,
 	args[3] = (AislinnArgType) root;
 	args[4] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Bcast", args, 5);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Ibarrier(MPI_Comm comm, MPI_Request *request)
@@ -284,7 +284,7 @@ int MPI_Ibarrier(MPI_Comm comm, MPI_Request *request)
 		"MPI_Ibarrier",
 		(AislinnArgType) comm,
 		(AislinnArgType) request);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Scan(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype,
@@ -298,7 +298,7 @@ int MPI_Scan(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatyp
 	args[4] = (AislinnArgType) op;
 	args[5] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Scan", args, 6);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
@@ -314,7 +314,7 @@ int MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
 	args[5] = (AislinnArgType) recvtype;
 	args[6] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Allgather", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
@@ -330,7 +330,7 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
 	args[5] = (AislinnArgType) recvtype;
 	args[6] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Alltoall", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Alltoallv(const void *sendbuf, const int *sendcounts,
@@ -349,7 +349,7 @@ int MPI_Alltoallv(const void *sendbuf, const int *sendcounts,
 	args[7] = (AislinnArgType) recvtype;
 	args[8] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Alltoallv", args, 9);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Allgatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
@@ -366,7 +366,7 @@ int MPI_Allgatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
 	args[6] = (AislinnArgType) recvtype;
 	args[7] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Allgatherv", args, 8);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Igather(const void *sendbuf,
@@ -390,7 +390,7 @@ int MPI_Igather(const void *sendbuf,
 	args[7] = (AislinnArgType) comm;
 	args[8] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Igather", args, 9);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Igatherv(const void *sendbuf,
@@ -416,7 +416,7 @@ int MPI_Igatherv(const void *sendbuf,
 	args[8] = (AislinnArgType) comm;
 	args[9] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Igatherv", args, 10);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Iscatter(const void *sendbuf,
@@ -440,7 +440,7 @@ int MPI_Iscatter(const void *sendbuf,
 	args[7] = (AislinnArgType) comm;
 	args[8] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iscatter", args, 9);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Iscatterv(const void *sendbuf,
@@ -466,7 +466,7 @@ int MPI_Iscatterv(const void *sendbuf,
 	args[8] = (AislinnArgType) comm;
 	args[9] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iscatterv", args, 10);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Ireduce(const void *sendbuf,
@@ -488,7 +488,7 @@ int MPI_Ireduce(const void *sendbuf,
 	args[6] = (AislinnArgType) comm;
 	args[7] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Ireduce", args, 8);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Iallreduce(void *sendbuf, void *recvbuf, int count,
@@ -503,7 +503,7 @@ int MPI_Iallreduce(void *sendbuf, void *recvbuf, int count,
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Iallreduce", args, 7);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Ibcast(void *buffer, int count, MPI_Datatype datatype,
@@ -517,7 +517,7 @@ int MPI_Ibcast(void *buffer, int count, MPI_Datatype datatype,
 	args[4] = (AislinnArgType) comm;
 	args[5] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Ibcast", args, 6);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
@@ -528,7 +528,7 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm)
 		(AislinnArgType) color,
 		(AislinnArgType) key,
 		(AislinnArgType) newcomm);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm)
@@ -537,7 +537,7 @@ int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm)
 		"MPI_Comm_dup",
 		(AislinnArgType) comm,
 		(AislinnArgType) newcomm);
-	return 0;
+	return MPI_SUCCESS;
 
 }
 
@@ -546,7 +546,7 @@ int MPI_Comm_free(MPI_Comm *comm)
 	aislinn_call_1(
 		"MPI_Comm_free",
 		(AislinnArgType) comm);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Type_size(MPI_Datatype datatype, int *size)
@@ -555,7 +555,7 @@ int MPI_Type_size(MPI_Datatype datatype, int *size)
 		"MPI_Type_size",
 		(AislinnArgType) datatype,
 		(AislinnArgType) size);
-	return 0;
+	return MPI_SUCCESS;
 
 }
 
@@ -572,7 +572,7 @@ int MPI_Comm_create_keyval(
 		(AislinnArgType) comm_copy_attr_fn,
 		(AislinnArgType) comm_keyval,
 		(AislinnArgType) extra_state);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_get_attr(
@@ -587,7 +587,7 @@ int MPI_Comm_get_attr(
 		(AislinnArgType) comm_keyval,
 		(AislinnArgType) attribute_val,
 		(AislinnArgType) flag);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_set_attr(
@@ -600,7 +600,7 @@ int MPI_Comm_set_attr(
 		(AislinnArgType) comm,
 		(AislinnArgType) comm_keyval,
 		(AislinnArgType) attribute_val);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Comm_free_keyval(int *comm_keyval)
@@ -608,7 +608,7 @@ int MPI_Comm_free_keyval(int *comm_keyval)
 	aislinn_call_1(
 		"MPI_Comm_free_keyval",
 		(AislinnArgType) comm_keyval);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 /* ----------------------------------------------------------------------------
@@ -628,7 +628,7 @@ int MPI_Keyval_create(
 		(AislinnArgType) comm_copy_attr_fn,
 		(AislinnArgType) comm_keyval,
 		(AislinnArgType) extra_state);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Attr_put(
@@ -641,7 +641,7 @@ int MPI_Attr_put(
 		(AislinnArgType) comm,
 		(AislinnArgType) comm_keyval,
 		(AislinnArgType) attribute_val);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Attr_set(
@@ -654,7 +654,7 @@ int MPI_Attr_set(
 		(AislinnArgType) comm,
 		(AislinnArgType) comm_keyval,
 		(AislinnArgType) attribute_val);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 
@@ -664,7 +664,7 @@ int MPI_Attr_delete(MPI_Comm comm, int comm_keyval)
 		"MPI_Attr_delete",
 		(AislinnArgType) comm,
 		(AislinnArgType) comm_keyval);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 int MPI_Keyval_free(int *comm_keyval)
@@ -672,7 +672,7 @@ int MPI_Keyval_free(int *comm_keyval)
 	aislinn_call_1(
 		"MPI_Keyval_free",
 		(AislinnArgType) comm_keyval);
-	return 0;
+	return MPI_SUCCESS;
 }
 
 /* ----------------------------------------------------------------------------

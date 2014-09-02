@@ -28,8 +28,10 @@ typedef int MPI_Op;
 typedef int MPI_Fint;
 
 /* Constants */
+static const int MPI_SUCCESS = 0;
 static const int MPI_UNDEFINED = -0x0BEFBEEF;
 static const int MPI_KEYVAL_INVALID = -0x0BEEFBEF;
+static const int MPI_TAG_UB = 0x64400001;
 
 static const MPI_Comm MPI_COMM_NULL = 0x0000CC00;
 static const MPI_Comm MPI_COMM_SELF = 0x0000CC01;
