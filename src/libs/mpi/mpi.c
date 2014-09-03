@@ -611,6 +611,25 @@ int MPI_Comm_free_keyval(int *comm_keyval)
 	return MPI_SUCCESS;
 }
 
+int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler)
+{
+	aislinn_call_2(
+		"MPI_Comm_set_errhandler",
+		(AislinnArgType) comm,
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+}
+
+int MPI_Abort(MPI_Comm comm, int errorcode)
+{
+	aislinn_call_2(
+		"MPI_Abort",
+		(AislinnArgType) comm,
+		(AislinnArgType) errorcode);
+	return MPI_SUCCESS;
+}
+
+
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE
 /  --------------------------------------------------------------------------*/
@@ -675,6 +694,14 @@ int MPI_Keyval_free(int *comm_keyval)
 	return MPI_SUCCESS;
 }
 
+int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler)
+{
+	aislinn_call_2(
+		"MPI_Errhandler_set",
+		(AislinnArgType) comm,
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+}
 /* ----------------------------------------------------------------------------
 /  Dummy functions
 /  --------------------------------------------------------------------------*/

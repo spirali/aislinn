@@ -26,16 +26,15 @@ typedef int MPI_Datatype;
 typedef int MPI_Op;
 
 typedef int MPI_Fint;
+typedef int MPI_Errhandler;
+typedef int MPI_Info;
+typedef unsigned long MPI_Aint;
 
 /* Constants */
 static const int MPI_SUCCESS = 0;
 static const int MPI_UNDEFINED = -0x0BEFBEEF;
 static const int MPI_KEYVAL_INVALID = -0x0BEEFBEF;
 static const int MPI_TAG_UB = 0x64400001;
-
-static const MPI_Comm MPI_COMM_NULL = 0x0000CC00;
-static const MPI_Comm MPI_COMM_SELF = 0x0000CC01;
-static const MPI_Comm MPI_COMM_WORLD = 0x0000CC02;
 
 static const MPI_Datatype MPI_PACKED = 0xFF00101;
 static const MPI_Datatype MPI_BYTE = 0xFF00102;
@@ -74,16 +73,39 @@ static const MPI_Op MPI_BXOR = 0xDD0010B;
 static const MPI_Op MPI_MINLOC = 0xDD0010C;
 static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
+#define MPI_COMM_NULL ((MPI_Comm) 0x0000CC00)
+#define MPI_COMM_SELF ((MPI_Comm) 0x0000CC01)
+#define MPI_COMM_WORD ((MPI_Comm) 0x0000CC02)
+
+#define MPI_BOTTOM         ((void*) 0)
+
+#define MPI_ERR_FILE        0x00001001
+#define MPI_ERR_ACCESS      0x00001002
+#define MPI_ERR_AMODE       0x00001003
+#define MPI_ERR_BAD_FILE    0x00001004
+#define MPI_ERR_FILE_EXISTS 0x00001005
+#define MPI_ERR_FILE_IN_USE 0x00001006
+#define MPI_ERR_NO_SPACE    0x00001007
+#define MPI_ERR_NO_SUCH_FILE 0x00001008
+#define MPI_ERR_IO          0x00001009
+#define MPI_ERR_READ_ONLY   0x0000100A
+#define MPI_ERR_CONVERSION  0x0000100B
+#define MPI_ERR_DUP_DATAREP 0x0000100C
+#define MPI_ERR_UNSUPPORTED_DATAREP   0x0000100D
+
+#define MPI_INFO_NULL ((MPI_Info)0x99000000)
+#define MPI_INFO_ENV ((MPI_Info)0x99000001)
+
 #define MPI_STATUS_IGNORE ((MPI_Status*) 0)
 #define MPI_STATUSES_IGNORE ((MPI_Status*) 0)
-#define MPI_ANY_SOURCE -0x00AA00
-#define MPI_ANY_TAG -0x00BB00
+#define MPI_ANY_SOURCE -0x0000AA00
+#define MPI_ANY_TAG -0x0000BB00
+#define MPI_PROC_NULL -0x0000CC00
 
 #define MPI_KEYVAL_INVALID 0x24000000
 
 #define MPI_COMM_NULL_COPY_FN ((MPI_Comm_copy_attr_function*)0)
 #define MPI_COMM_NULL_DELETE_FN ((MPI_Comm_delete_attr_function*)0)
-
 
 /* Functions prototypes */
 typedef int MPI_Comm_copy_attr_function(
@@ -295,6 +317,10 @@ int MPI_Comm_free_keyval(
   int *comm_keyval
 );
 
+int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
+
+int MPI_Abort(MPI_Comm comm, int errorcode);
+
 double MPI_Wtime();
 
 /* ----------------------------------------------------------------------------
@@ -322,6 +348,8 @@ int MPI_Attr_put(MPI_Comm comm, int comm_keyval, void *attribute_val);
 int MPI_Attr_delete(MPI_Comm comm, int keyval);
 
 int MPI_Keyval_free(int *comm_keyval);
+
+int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler);
 
 #ifdef __cplusplus
 }
