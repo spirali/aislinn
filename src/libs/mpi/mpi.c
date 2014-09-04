@@ -702,6 +702,17 @@ int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler)
 		(AislinnArgType) errhandler);
 	return MPI_SUCCESS;
 }
+
+int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype)
+{
+	aislinn_call_3(
+		"MPI_Type_contiguous",
+		(AislinnArgType) count,
+		(AislinnArgType) oldtype,
+		(AislinnArgType) newtype);
+	return MPI_SUCCESS;
+}
+
 /* ----------------------------------------------------------------------------
 /  Dummy functions
 /  --------------------------------------------------------------------------*/

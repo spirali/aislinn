@@ -200,9 +200,10 @@ class Generator:
                             request.status_ptr, [ message.source,
                                                   message.tag,
                                                   message.size ])
-
-                self.controller.write_buffer(request.data_ptr,
-                                             message.vg_buffer.id)
+                request.datatype.unpack(self.controller,
+                                        message.vg_buffer,
+                                        request.count,
+                                        request.data_ptr)
                 state.remove_message(message)
             if request.is_collective():
                 op = state.gstate.get_operation_by_cc_id(request.comm_id,
@@ -427,11 +428,15 @@ class Generator:
         event.stacktrace = stacktrace
         context.add_event(event)
 
-    def new_buffer(self, buf_ptr, size):
-        # TODO: use in MPI_Send and MPI_Isend
-        buffer_id, hash = self.controller.new_buffer(buf_ptr, size, hash=True)
+    def new_buffer(self, size):
+        buffer_id = self.controller.new_buffer(size)
         vg_buffer = self.vg_buffers.new(buffer_id)
-        vg_buffer.hash = hash
+        return vg_buffer
+
+    def new_buffer_and_pack(self, datatype, count, addr):
+        vg_buffer = self.new_buffer(datatype.size * count)
+        datatype.pack(self.controller, addr, vg_buffer, count)
+        vg_buffer.hash = self.controller.hash_buffer(vg_buffer.id)
         return vg_buffer
 
     def add_node(self, prev, gstate, do_hash=True):

@@ -47,9 +47,9 @@ def MPI_Comm_size(generator, args, state, context):
     return False
 
 def MPI_Type_size(generator, args, state, context):
-    datatype, ptr = convert_types(args, ("int", "ptr"))
-    size = check.check_datatype_get_size(datatype, 1)
-    generator.controller.write_int(ptr, size)
+    datatype_id, ptr = convert_types(args, ("int", "ptr"))
+    datatype = check.check_datatype(state, datatype_id, 1)
+    generator.controller.write_int(ptr, datatype.size)
     return False
 
 def MPI_Send(generator, args, state, context):
@@ -451,10 +451,11 @@ def MPI_Comm_free(generator, args, state, context):
 
 
 def MPI_Get_count(generator, args, state, context):
-    status_ptr, datatype, count_ptr = convert_types(args, ("ptr", "int", "ptr"))
-    tsize = check.check_datatype_get_size(datatype, 2)
+    status_ptr, datatype_id, count_ptr = convert_types(args,
+                                                       ("ptr", "int", "ptr"))
+    datatype = check.check_datatype(state, datatype_id, 2)
     size = generator.controller.read_int(status_ptr + 2 * INT_SIZE)
-    generator.controller.write_int(count_ptr, size / tsize)
+    generator.controller.write_int(count_ptr, size / datatype.size)
     return False
 
 def call_collective_operation(generator,
@@ -509,7 +510,7 @@ def make_send_request(generator, state, message):
 
 def call_send(generator, args, state, context, blocking, name):
     if blocking:
-        buf_ptr, count, datatype, target, tag, comm_id = \
+        buf_ptr, count, datatype_id, target, tag, comm_id = \
             convert_types(args,
                           ("ptr", # buf_ptr
                            "int", # count
@@ -519,7 +520,7 @@ def call_send(generator, args, state, context, blocking, name):
                            "int", # comm
                           ))
     else:
-        buf_ptr, count, datatype, target, tag, comm_id, request_ptr = \
+        buf_ptr, count, datatype_id, target, tag, comm_id, request_ptr = \
             convert_types(args,
                           ("ptr", # buf_ptr
                            "int", # count
@@ -534,12 +535,11 @@ def call_send(generator, args, state, context, blocking, name):
     check.check_count(count, 2)
     check.check_rank(comm, target, 4, False)
     check.check_tag(tag, 5, False)
-    size = count * check.check_datatype_get_size(datatype, 3)
-    buffer_id, hash = generator.controller.new_buffer(buf_ptr, size, hash=True)
-    vg_buffer = generator.vg_buffers.new(buffer_id)
+    datatype = check.check_datatype(state, datatype_id, 3)
+    sz = count * datatype.size
+    vg_buffer = generator.new_buffer_and_pack(datatype, count, buf_ptr)
     target_pid = comm.group.rank_to_pid(target)
-    message = Message(
-            comm_id, state.get_rank(comm), target, tag, vg_buffer, size, hash)
+    message = Message(comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
     state.gstate.get_state(target_pid).add_message(message)
 
     request_id = make_send_request(generator, state, message)
@@ -555,7 +555,7 @@ def call_send(generator, args, state, context, blocking, name):
     return blocking
 
 def call_recv(generator, args, state, context, blocking, name):
-    buf_ptr, count, datatype, source, tag, comm_id, ptr = \
+    buf_ptr, count, datatype_id, source, tag, comm_id, ptr = \
         convert_types(args,
                       ("ptr", # buf_ptr
                        "int", # count
@@ -575,12 +575,13 @@ def call_recv(generator, args, state, context, blocking, name):
     check.check_rank(comm, source, 4, True)
     check.check_tag(tag, 5, True)
 
-    size = count * check.check_datatype_get_size(datatype, 3)
+    datatype = check.check_datatype(state, datatype_id, 3)
 
     e = event.CommEvent(name, state.pid, source, tag)
     generator.add_call_event(context, e)
 
-    request_id = state.add_recv_request(comm_id, source, tag, buf_ptr, size)
+    request_id = state.add_recv_request(
+            comm_id, source, tag, buf_ptr, datatype, count)
 
     if blocking:
         if status_ptr:

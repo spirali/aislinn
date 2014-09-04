@@ -75,7 +75,7 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
 #define MPI_COMM_NULL ((MPI_Comm) 0x0000CC00)
 #define MPI_COMM_SELF ((MPI_Comm) 0x0000CC01)
-#define MPI_COMM_WORD ((MPI_Comm) 0x0000CC02)
+#define MPI_COMM_WORLD ((MPI_Comm) 0x0000CC02)
 
 #define MPI_BOTTOM         ((void*) 0)
 
@@ -316,6 +316,8 @@ int MPI_Comm_set_attr(
 int MPI_Comm_free_keyval(
   int *comm_keyval
 );
+
+int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype);
 
 int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
 

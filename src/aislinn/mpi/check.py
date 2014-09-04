@@ -64,11 +64,11 @@ def check_color(color, arg_position):
                                  arg_position,
                                  "Color has to be non-negative.").throw()
 
-def check_datatype_get_size(datatype, arg_position):
-    size = types.get_datatype_size(datatype)
-    if size is None:
+def check_datatype(state, type_id, arg_position):
+    datatype = state.get_datatype(type_id)
+    if datatype is None:
         errormsg.InvalidArgument(datatype, arg_position).throw()
-    return size
+    return datatype
 
 def check_and_get_comm(state, comm_id, arg_position):
     if comm_id == consts.MPI_COMM_NULL:

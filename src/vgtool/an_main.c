@@ -737,12 +737,11 @@ static void memspace_hash(AN_(MD5_CTX) *ctx)
  *  Buffer management
  * --------------------------------------------------------*/
 
-static void* buffer_new(void* addr, UWord size)
+static void* buffer_new(UWord size)
 {
    stats.buffers_size += size;
    UWord *buffer = VG_(malloc)("an.buffers", sizeof(UWord) + size);
    *buffer = size;
-   VG_(memcpy)(buffer + 1, addr, size);
    return buffer;
 }
 
@@ -1252,20 +1251,27 @@ void process_commands(CommandsEnterType cet)
          return;
       }
 
+      if (!VG_(strcmp(cmd, "WRITE_BUFFER"))) {
+         Addr buffer = (Addr) next_token_uword();
+         UWord index = (UWord) next_token_uword();
+         Addr addr = (Addr) next_token_uword();
+         UWord size = (UWord) next_token_uword();
+         VG_(memcpy)((void*) (buffer + sizeof(UWord) + index), (void*) addr, size);
+         write_message("Ok\n");
+         continue;
+      }
+
       if (!VG_(strcmp(cmd, "NEW_BUFFER"))) { // Create buffer
-         void* addr = (void*) next_token_uword();
          UWord size = next_token_uword();
-         void* buffer = buffer_new(addr, size);
+         void* buffer = buffer_new(size);
          VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
                       "%lu\n", (UWord) buffer));
          write_message(command);
          continue;
       }
 
-      if (!VG_(strcmp(cmd, "NEW_BUFFER_HASH"))) { // Create buffer
-         void* addr = (void*) next_token_uword();
-         UWord size = next_token_uword();
-         void* buffer = buffer_new(addr, size);
+      if (!VG_(strcmp(cmd, "HASH_BUFFER"))) {
+         void* buffer = (void*) next_token_uword();
          MD5_Digest digest;
          char digest_str[33]; // 16 * 2 + 1
          AN_(MD5_CTX) ctx;
@@ -1274,7 +1280,7 @@ void process_commands(CommandsEnterType cet)
          AN_(MD5_Final)(&digest, &ctx);
          hash_to_string(&digest, digest_str);
          VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH,
-                      "%lu %s\n", (UWord) buffer, digest_str);
+                      "%s\n", digest_str);
          write_message(command);
          continue;
       }

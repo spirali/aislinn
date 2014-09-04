@@ -69,13 +69,8 @@ class Controller:
         assert state_id is not None
         return self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
 
-    def new_buffer(self, addr, size, hash=False):
-        if hash:
-            return self.send_and_receive("NEW_BUFFER_HASH {0} {1}\n" \
-                    .format(addr, size)).split()
-        else:
-            return self.send_and_receive_int("NEW_BUFFER {0} {1}\n" \
-                    .format(addr, size))
+    def new_buffer(self, size):
+        return self.send_and_receive_int("NEW_BUFFER {0}\n".format(size))
 
     def free_buffer(self, buffer_id):
         self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
@@ -91,6 +86,10 @@ class Controller:
         else:
             self.send_and_receive_ok("WRITE {0} buffer-part {1} {2} {3}\n" \
                     .format(addr, buffer_addr, index, size))
+
+    def write_into_buffer(self, buffer_addr, index, addr, size):
+        self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n" \
+                    .format(buffer_addr, index, addr, size))
 
     def write_int(self, addr, value):
         self.send_and_receive_ok("WRITE {0} int {1}\n".format(addr, value))
@@ -125,6 +124,9 @@ class Controller:
         #e = time.time()
         #print e - s
         return h
+
+    def hash_buffer(self, buffer_id):
+        return self.send_and_receive("HASH_BUFFER {0}\n".format(buffer_id))
 
     def get_stacktrace(self):
         return self.send_and_receive("STACKTRACE\n")

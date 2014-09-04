@@ -26,6 +26,7 @@ from request import \
 import consts
 import copy
 import comm
+import types
 
 class State:
 
@@ -89,6 +90,10 @@ class State:
             self.vg_state.dec_ref()
         for message in self.messages:
             message.vg_buffer.dec_ref()
+
+    def get_datatype(self, type_id):
+        datatype = types.buildin_types.get(type_id)
+        return datatype
 
     def _cc_id_counter_index(self, comm):
         if comm.comm_id == consts.MPI_COMM_WORLD:
@@ -166,9 +171,10 @@ class State:
         self.requests[request_id] = request
         return request_id
 
-    def add_recv_request(self, comm_id, source, tag, data_ptr, size):
+    def add_recv_request(self, comm_id, source, tag, data_ptr, datatype, count):
         request_id = self._new_request_index()
-        request = ReceiveRequest(comm_id, source, tag, data_ptr, size)
+        request = ReceiveRequest(
+                comm_id, source, tag, data_ptr, datatype, count)
         self.requests[request_id] = request
         return request_id
 
