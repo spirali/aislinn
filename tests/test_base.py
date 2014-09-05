@@ -88,6 +88,13 @@ class BaseTests(TestCase):
         self.execute(1, stdout="4 8 16\n")
         self.no_errors()
 
+    def test_contiguous(self):
+        output = "1.11\n2.22\n3.33\n4.44\n5.55\n" \
+                 "6.66\n7.77\n8.88\n9.99\n10.101\n"
+        self.program("contiguous")
+        self.execute(2, stdout=output)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

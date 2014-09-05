@@ -713,6 +713,12 @@ int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype)
 	return MPI_SUCCESS;
 }
 
+int MPI_Type_commit(MPI_Datatype *datatype)
+{
+	aislinn_call_1("MPI_Type_commit", (AislinnArgType) datatype);
+	return MPI_SUCCESS;
+}
+
 /* ----------------------------------------------------------------------------
 /  Dummy functions
 /  --------------------------------------------------------------------------*/

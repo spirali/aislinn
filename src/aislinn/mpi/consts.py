@@ -56,6 +56,7 @@ MPI_2INT = 0xFF00115
 MPI_SHORT_INT = 0xFF00116
 MPI_LONG_DOUBLE_INT = 0xFF00117
 
+USER_DEFINED_TYPES = 0x0FF00FFF
 
 # ---- Operations -----------------------------------------
 MPI_MAX = 0xDD00101

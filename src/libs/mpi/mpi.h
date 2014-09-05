@@ -293,6 +293,8 @@ int MPI_Comm_free(MPI_Comm *comm);
 
 int MPI_Type_size(MPI_Datatype datatype, int *size);
 
+int MPI_Type_commit(MPI_Datatype *datatype);
+
 int MPI_Comm_create_keyval(
   MPI_Comm_copy_attr_function *comm_copy_attr_fn,
   MPI_Comm_delete_attr_function *comm_delete_attr_fn,

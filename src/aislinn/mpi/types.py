@@ -4,17 +4,22 @@ import consts
 # TODO: vgtool should inform about real sizes of the architecture,
 # this constants are just for amd64 on my configuration ...
 
+
 class Datatype(object):
 
-    def __init__(self, type_id):
-        self.type_id = type_id
+    def __init__(self):
+        self.type_id = None
+        self.commited = False
+
 
 class BuildinType(Datatype):
 
     def __init__(self, type_id, name, size):
-        Datatype.__init__(self, type_id)
+        Datatype.__init__(self)
+        self.type_id = type_id
         self.name = name
         self.size = size
+        self.commited = True
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         controller.write_into_buffer(vg_buffer.id,
@@ -25,6 +30,23 @@ class BuildinType(Datatype):
 
     def unpack(self, controller, vg_buffer, count, pointer, index=0):
         controller.write_buffer(pointer, vg_buffer.id, index, self.size * count)
+
+
+class ContiguousType(Datatype):
+
+    def __init__(self, datatype, count):
+        self.datatype = datatype
+        self.count = count
+        self.size = datatype.size * count
+
+    def pack(self, controller, pointer, vg_buffer, count, index=0):
+        self.datatype.pack(
+                controller, pointer, vg_buffer, count * self.count, index)
+
+    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+        self.datatype.unpack(
+                controller, vg_buffer, count * self.count, pointer, index)
+
 
 buildin_types = dict((t.type_id, t) for t in [
     BuildinType(consts.MPI_PACKED, "MPI_PACKED", 1),

@@ -42,10 +42,11 @@ class State:
         self.vg_state = vg_state
         self.status = State.StatusInited
         self.messages = []
-        self.comms = []
+        self.comms = [] # <-- Copy on write!
         self.requests = [None]
         self.active_request_ids = None
         self.flag_ptr = None
+        self.user_defined_types = [] # <-- Copy on write!
         self.cc_id_counters = None
 
         # cc_id_counters - when first touched, is should be
@@ -61,17 +62,21 @@ class State:
             return self
         if self.vg_state:
             self.vg_state.inc_ref()
-        state = State(gstate, self.pid, self.vg_state)
-        state.status = self.status
+        state = copy.copy(self)
+        state.gstate = state
         state.messages = copy.copy(self.messages)
-        state.comms = self.comms # <--- Copy on write!
         for message in state.messages:
             message.vg_buffer.inc_ref()
         state.requests = copy.copy(self.requests)
         state.active_request_ids = copy.copy(self.active_request_ids)
-        state.flag_ptr = self.flag_ptr
         state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
+
+    def add_datatype(self, datatype):
+        datatype.type_id = \
+            consts.USER_DEFINED_TYPES + len(self.user_defined_types)
+        self.user_defined_types = copy.copy(self.user_defined_types)
+        self.user_defined_types.append(datatype)
 
     def add_comm(self, comm):
         if self.cc_id_counters is None:
@@ -92,8 +97,21 @@ class State:
             message.vg_buffer.dec_ref()
 
     def get_datatype(self, type_id):
-        datatype = types.buildin_types.get(type_id)
-        return datatype
+        if type_id >= consts.USER_DEFINED_TYPES and \
+           type_id < consts.USER_DEFINED_TYPES + len(self.user_defined_types):
+               return self.user_defined_types[type_id
+                                              - consts.USER_DEFINED_TYPES]
+        return types.buildin_types.get(type_id)
+
+    def commit_datatype(self, datatype):
+        """ datatype has to be valid type for this state """
+        if datatype.type_id >= consts.USER_DEFINED_TYPES:
+            i = datatype.type_id - consts.USER_DEFINED_TYPES
+            assert self.user_defined_types[i] == datatype
+            self.user_defined_types = copy.copy(self.user_defined_types)
+            self.user_defined_types[i] == copy.copy(datatype)
+            self.user_defined_types[i].commited = True
+        # Build in types are already commited
 
     def _cc_id_counter_index(self, comm):
         if comm.comm_id == consts.MPI_COMM_WORLD:

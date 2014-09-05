@@ -24,6 +24,7 @@ import event
 import consts
 import check
 import errormsg
+import types
 from comm import comm_id_name
 
 # TODO: Universal architecture detection
@@ -430,8 +431,6 @@ def MPI_Comm_dup(generator, args, state, context):
     state.set_wait((request_id,))
     return True
 
-
-
 def MPI_Comm_free(generator, args, state, context):
     assert len(args) == 1
     comm_ptr = convert_type(args[0], "ptr")
@@ -449,13 +448,28 @@ def MPI_Comm_free(generator, args, state, context):
     generator.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
     return False
 
-
 def MPI_Get_count(generator, args, state, context):
     status_ptr, datatype_id, count_ptr = convert_types(args,
                                                        ("ptr", "int", "ptr"))
     datatype = check.check_datatype(state, datatype_id, 2)
     size = generator.controller.read_int(status_ptr + 2 * INT_SIZE)
     generator.controller.write_int(count_ptr, size / datatype.size)
+    return False
+
+def MPI_Type_contiguous(generator, args, state, context):
+    count, oldtype, newtype_ptr = convert_types(args, ("int", "int", "ptr"))
+    check.check_count(count, 1)
+    datatype = check.check_datatype(state, oldtype, 2)
+    newtype = types.ContiguousType(datatype, count)
+    state.add_datatype(newtype)
+    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    return False
+
+def MPI_Type_commit(generator, args, state, context):
+    datatype_ptr = convert_types(args, ("ptr",))[0]
+    type_id = generator.controller.read_int(datatype_ptr)
+    datatype = check.check_datatype(state, type_id, 1)
+    state.commit_datatype(datatype)
     return False
 
 def call_collective_operation(generator,
@@ -627,4 +641,6 @@ calls = {
         "MPI_Iallreduce" : MPI_Iallreduce,
         "MPI_Ibcast" : MPI_Ibcast,
         "MPI_Type_size" : MPI_Type_size,
+        "MPI_Type_contiguous" : MPI_Type_contiguous,
+        "MPI_Type_commit" : MPI_Type_commit,
 }
