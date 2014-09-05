@@ -85,7 +85,7 @@ class BaseTests(TestCase):
 
     def test_typesize(self):
         self.program("typesize")
-        self.execute(1, stdout="4 8 16\n")
+        self.execute(1, stdout="4 8 16 40\n")
         self.no_errors()
 
     def test_contiguous(self):
@@ -95,6 +95,10 @@ class BaseTests(TestCase):
         self.execute(2, stdout=output)
         self.no_errors()
 
+    def test_uncommited(self):
+        self.program("uncommited")
+        self.execute(2, stdout="")
+        self.single_error("uncommited")
 
 if __name__ == "__main__":
     unittest.main()

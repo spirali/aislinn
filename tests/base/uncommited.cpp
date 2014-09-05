@@ -14,7 +14,6 @@ int main(int argc, char *argv[])
 	MPI_Init(&argc, &argv);
  
 	MPI_Type_contiguous(5, MPI_DOUBLE, &type);
-	MPI_Type_commit(&type);
  
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
  
@@ -25,12 +24,7 @@ int main(int argc, char *argv[])
 	else if (rank == 1)
 	{
 	double b[10];
-	int i;
-	memset(b, 0, sizeof(double) * 10);
 		MPI_Recv(b, 2, type, 0, 123, MPI_COMM_WORLD, &status);
-	for (i = 0; i < 10; i++) {
-		printf("%g\n", b[i]);
-	}
 	}
  
 	MPI_Finalize();

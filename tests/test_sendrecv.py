@@ -139,7 +139,7 @@ class SendRecvTests(TestCase):
 
     def test_getcount(self):
         self.program("getcount")
-        self.execute(2, stdout="")
+        self.execute(2, stdout=set(["369 123"]))
         self.no_errors()
 
 if __name__ == "__main__":

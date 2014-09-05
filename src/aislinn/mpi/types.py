@@ -35,6 +35,7 @@ class BuildinType(Datatype):
 class ContiguousType(Datatype):
 
     def __init__(self, datatype, count):
+        Datatype.__init__(self)
         self.datatype = datatype
         self.count = count
         self.size = datatype.size * count

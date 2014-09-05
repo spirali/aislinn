@@ -459,7 +459,7 @@ def MPI_Get_count(generator, args, state, context):
 def MPI_Type_contiguous(generator, args, state, context):
     count, oldtype, newtype_ptr = convert_types(args, ("int", "int", "ptr"))
     check.check_count(count, 1)
-    datatype = check.check_datatype(state, oldtype, 2)
+    datatype = check.check_datatype(state, oldtype, 2, True)
     newtype = types.ContiguousType(datatype, count)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
@@ -468,7 +468,7 @@ def MPI_Type_contiguous(generator, args, state, context):
 def MPI_Type_commit(generator, args, state, context):
     datatype_ptr = convert_types(args, ("ptr",))[0]
     type_id = generator.controller.read_int(datatype_ptr)
-    datatype = check.check_datatype(state, type_id, 1)
+    datatype = check.check_datatype(state, type_id, 1, True)
     state.commit_datatype(datatype)
     return False
 

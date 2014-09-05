@@ -63,7 +63,7 @@ class State:
         if self.vg_state:
             self.vg_state.inc_ref()
         state = copy.copy(self)
-        state.gstate = state
+        state.gstate = gstate
         state.messages = copy.copy(self.messages)
         for message in state.messages:
             message.vg_buffer.inc_ref()

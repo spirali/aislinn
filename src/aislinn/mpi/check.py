@@ -64,10 +64,16 @@ def check_color(color, arg_position):
                                  arg_position,
                                  "Color has to be non-negative.").throw()
 
-def check_datatype(state, type_id, arg_position):
+def check_datatype(state, type_id, arg_position, allow_uncommited=False):
     datatype = state.get_datatype(type_id)
     if datatype is None:
         errormsg.InvalidArgument(datatype, arg_position).throw()
+    if not datatype.commited and not allow_uncommited:
+        e = errormsg.CallError()
+        e.name = "uncommited"
+        e.short_description = "Uncommited datatype"
+        e.description = "Uncommited datatype used in communication"
+        e.throw()
     return datatype
 
 def check_and_get_comm(state, comm_id, arg_position):
