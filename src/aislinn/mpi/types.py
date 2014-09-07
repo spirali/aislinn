@@ -49,6 +49,44 @@ class ContiguousType(Datatype):
                 controller, vg_buffer, count * self.count, pointer, index)
 
 
+class VectorType(Datatype):
+
+    def __init__(self, datatype, count, blocksize, stride, is_hvector):
+        Datatype.__init__(self)
+        self.datatype = datatype
+        self.count = count
+        self.blocksize = blocksize
+
+        if is_hvector: # In hvector, stride is already given in bytes
+            self.stride = stride
+        else:
+            self.stride = stride * datatype.size
+        self.size = datatype.size * count * blocksize
+
+    def pack(self, controller, pointer, vg_buffer, count, index=0):
+        step_index = self.datatype.size * self.blocksize
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.pack(
+                        controller, pointer, vg_buffer, self.blocksize, index)
+                pointer += self.stride
+                index += step_index
+            pointer -= self.stride
+            pointer += step_index
+
+    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+        step_index = self.datatype.size * self.blocksize
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.unpack(
+                        controller, vg_buffer, self.blocksize, pointer, index)
+                pointer += self.stride
+                index += step_index
+            pointer -= self.stride
+            pointer += step_index
+
+
+
 buildin_types = dict((t.type_id, t) for t in [
     BuildinType(consts.MPI_PACKED, "MPI_PACKED", 1),
     BuildinType(consts.MPI_BYTE, "MPI_BYTE", 1),

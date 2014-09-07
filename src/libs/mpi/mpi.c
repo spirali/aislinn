@@ -713,6 +713,34 @@ int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype)
 	return MPI_SUCCESS;
 }
 
+int MPI_Type_vector(
+	int count, int blocklength, int stride,
+	MPI_Datatype oldtype, MPI_Datatype *newtype)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) count;
+	args[1] = (AislinnArgType) blocklength;
+	args[2] = (AislinnArgType) stride;
+	args[3] = (AislinnArgType) oldtype;
+	args[4] = (AislinnArgType) newtype;
+	aislinn_call_args("MPI_Type_vector", args, 5);
+	return MPI_SUCCESS;
+}
+
+int MPI_Type_hvector(
+	int count, int blocklength, int stride,
+	MPI_Datatype oldtype, MPI_Datatype *newtype)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) count;
+	args[1] = (AislinnArgType) blocklength;
+	args[2] = (AislinnArgType) stride;
+	args[3] = (AislinnArgType) oldtype;
+	args[4] = (AislinnArgType) newtype;
+	aislinn_call_args("MPI_Type_hvector", args, 5);
+	return MPI_SUCCESS;
+}
+
 int MPI_Type_commit(MPI_Datatype *datatype)
 {
 	aislinn_call_1("MPI_Type_commit", (AislinnArgType) datatype);

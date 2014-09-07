@@ -465,6 +465,28 @@ def MPI_Type_contiguous(generator, args, state, context):
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
+def MPI_Type_vector(generator, args, state, context):
+    count, blocksize, stride, oldtype, newtype_ptr = \
+            convert_types(args, ("int", "int", "int", "int", "ptr"))
+    check.check_count(count, 1)
+    check.check_count(blocksize, 2)
+    datatype = check.check_datatype(state, oldtype, 3, True)
+    newtype = types.VectorType(datatype, count, blocksize, stride, False)
+    state.add_datatype(newtype)
+    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    return False
+
+def MPI_Type_hvector(generator, args, state, context):
+    count, blocksize, stride, oldtype, newtype_ptr = \
+            convert_types(args, ("int", "int", "int", "int", "ptr"))
+    check.check_count(count, 1)
+    check.check_count(blocksize, 2)
+    datatype = check.check_datatype(state, oldtype, 3, True)
+    newtype = types.VectorType(datatype, count, blocksize, stride, True)
+    state.add_datatype(newtype)
+    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    return False
+
 def MPI_Type_commit(generator, args, state, context):
     datatype_ptr = convert_types(args, ("ptr",))[0]
     type_id = generator.controller.read_int(datatype_ptr)
@@ -642,5 +664,7 @@ calls = {
         "MPI_Ibcast" : MPI_Ibcast,
         "MPI_Type_size" : MPI_Type_size,
         "MPI_Type_contiguous" : MPI_Type_contiguous,
+        "MPI_Type_vector" : MPI_Type_vector,
+        "MPI_Type_hvector" : MPI_Type_hvector,
         "MPI_Type_commit" : MPI_Type_commit,
 }

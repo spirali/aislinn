@@ -321,6 +321,14 @@ int MPI_Comm_free_keyval(
 
 int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype);
 
+int MPI_Type_vector(
+	int count, int blocklength, int stride,
+	MPI_Datatype oldtype, MPI_Datatype *newtype);
+
+int MPI_Type_hvector(
+	int count, int blocklength, int stride,
+	MPI_Datatype oldtype, MPI_Datatype *newtype);
+
 int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
 
 int MPI_Abort(MPI_Comm comm, int errorcode);

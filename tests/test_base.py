@@ -95,6 +95,28 @@ class BaseTests(TestCase):
         self.execute(2, stdout=output)
         self.no_errors()
 
+    def test_vector(self):
+        output = "0 1 2 3 4 5 10 11 12 13 14 15 16 17 18 19 20 21 26 27 28 29 "\
+                 "30 31 32 33 34 35 36 37 42 43 44 45 46 47 48 49 50 51 52 53 "\
+                 "58 59 60 61 62 63 -1 -1 \n"\
+                 "0 1 2 3 4 5 -1 10 11 12 13 14 15 -1 16 17 18 19 20 21 -1 26 "\
+                 "27 28 29 30 31 32 33 34 35 36 37 -1 42 43 44 45 46 47 -1 48 "\
+                 "49 50 51 52 53 -1 58 59 \n"
+        self.program("vector")
+        self.execute(2, stdout=output)
+        self.no_errors()
+
+    def test_hvector(self):
+        output = "0 1 2 3 4 5 10 11 12 13 14 15 16 17 18 19 20 21 26 27 28 29 "\
+                 "30 31 32 33 34 35 36 37 42 43 44 45 46 47 48 49 50 51 52 53 "\
+                 "58 59 60 61 62 63 -1 -1 \n"\
+                 "0 1 2 3 4 5 -1 10 11 12 13 14 15 -1 16 17 18 19 20 21 -1 26 "\
+                 "27 28 29 30 31 32 33 34 35 36 37 -1 42 43 44 45 46 47 -1 48 "\
+                 "49 50 51 52 53 -1 58 59 \n"
+        self.program("hvector")
+        self.execute(2, stdout=output)
+        self.no_errors()
+
     def test_uncommited(self):
         self.program("uncommited")
         self.execute(2, stdout="")
