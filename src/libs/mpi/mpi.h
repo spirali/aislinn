@@ -335,6 +335,12 @@ int MPI_Abort(MPI_Comm comm, int errorcode);
 
 double MPI_Wtime();
 
+inline int MPI_Get_address(const void *location, MPI_Aint *address)
+{
+	*address = (MPI_Aint) location;
+	return MPI_SUCCESS;
+}
+
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE
 /  --------------------------------------------------------------------------*/
@@ -362,6 +368,11 @@ int MPI_Attr_delete(MPI_Comm comm, int keyval);
 int MPI_Keyval_free(int *comm_keyval);
 
 int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler);
+
+inline int MPI_Address(const void *location, MPI_Aint *address)
+{
+	return MPI_Get_address(location, address);
+}
 
 #ifdef __cplusplus
 }
