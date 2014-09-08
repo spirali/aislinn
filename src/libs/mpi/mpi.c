@@ -629,6 +629,79 @@ int MPI_Abort(MPI_Comm comm, int errorcode)
 	return MPI_SUCCESS;
 }
 
+int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype)
+{
+	aislinn_call_3(
+		"MPI_Type_contiguous",
+		(AislinnArgType) count,
+		(AislinnArgType) oldtype,
+		(AislinnArgType) newtype);
+	return MPI_SUCCESS;
+}
+
+int MPI_Type_vector(
+	int count, int blocklength, int stride,
+	MPI_Datatype oldtype, MPI_Datatype *newtype)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) count;
+	args[1] = (AislinnArgType) blocklength;
+	args[2] = (AislinnArgType) stride;
+	args[3] = (AislinnArgType) oldtype;
+	args[4] = (AislinnArgType) newtype;
+	aislinn_call_args("MPI_Type_vector", args, 5);
+	return MPI_SUCCESS;
+}
+
+int MPI_Type_hvector(
+	int count, int blocklength, int stride,
+	MPI_Datatype oldtype, MPI_Datatype *newtype)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) count;
+	args[1] = (AislinnArgType) blocklength;
+	args[2] = (AislinnArgType) stride;
+	args[3] = (AislinnArgType) oldtype;
+	args[4] = (AislinnArgType) newtype;
+	aislinn_call_args("MPI_Type_hvector", args, 5);
+	return MPI_SUCCESS;
+}
+
+int MPI_Type_indexed(int count,
+                    const int *array_of_blocklengths,
+                    const int *array_of_displacements,
+                    MPI_Datatype oldtype,
+                    MPI_Datatype *newtype)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) count;
+	args[1] = (AislinnArgType) array_of_blocklengths;
+	args[2] = (AislinnArgType) array_of_displacements;
+	args[3] = (AislinnArgType) oldtype;
+	args[4] = (AislinnArgType) newtype;
+	aislinn_call_args("MPI_Type_indexed", args, 5);
+	return MPI_SUCCESS;
+}
+
+int MPI_Type_create_hindexed(
+
+			  int count,
+			  const int *array_of_blocklengths,
+			  const MPI_Aint *array_of_displacements,
+			  MPI_Datatype oldtype,
+			  MPI_Datatype *newtype
+)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) count;
+	args[1] = (AislinnArgType) array_of_blocklengths;
+	args[2] = (AislinnArgType) array_of_displacements;
+	args[3] = (AislinnArgType) oldtype;
+	args[4] = (AislinnArgType) newtype;
+	aislinn_call_args("MPI_Type_create_hindexed", args, 5);
+	return MPI_SUCCESS;
+}
+
 
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE
@@ -703,42 +776,21 @@ int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler)
 	return MPI_SUCCESS;
 }
 
-int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype)
-{
-	aislinn_call_3(
-		"MPI_Type_contiguous",
-		(AislinnArgType) count,
-		(AislinnArgType) oldtype,
-		(AislinnArgType) newtype);
-	return MPI_SUCCESS;
-}
-
-int MPI_Type_vector(
-	int count, int blocklength, int stride,
-	MPI_Datatype oldtype, MPI_Datatype *newtype)
+int MPI_Type_hindexed(int count,
+                    const int *array_of_blocklengths,
+                    const MPI_Aint *array_of_displacements,
+                    MPI_Datatype oldtype,
+                    MPI_Datatype *newtype)
 {
 	AislinnArgType args[5];
 	args[0] = (AislinnArgType) count;
-	args[1] = (AislinnArgType) blocklength;
-	args[2] = (AislinnArgType) stride;
+	args[1] = (AislinnArgType) array_of_blocklengths;
+	args[2] = (AislinnArgType) array_of_displacements;
 	args[3] = (AislinnArgType) oldtype;
 	args[4] = (AislinnArgType) newtype;
-	aislinn_call_args("MPI_Type_vector", args, 5);
+	aislinn_call_args("MPI_Type_hindexed", args, 5);
 	return MPI_SUCCESS;
-}
 
-int MPI_Type_hvector(
-	int count, int blocklength, int stride,
-	MPI_Datatype oldtype, MPI_Datatype *newtype)
-{
-	AislinnArgType args[5];
-	args[0] = (AislinnArgType) count;
-	args[1] = (AislinnArgType) blocklength;
-	args[2] = (AislinnArgType) stride;
-	args[3] = (AislinnArgType) oldtype;
-	args[4] = (AislinnArgType) newtype;
-	aislinn_call_args("MPI_Type_hvector", args, 5);
-	return MPI_SUCCESS;
 }
 
 int MPI_Type_commit(MPI_Datatype *datatype)

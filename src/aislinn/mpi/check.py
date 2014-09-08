@@ -58,6 +58,21 @@ def check_count(size, arg_position):
                                  arg_position,
                                  "Count has to be non-negative.").throw()
 
+def check_size(size, arg_position):
+    if size < 0:
+        errormsg.InvalidArgument(size,
+                                 arg_position,
+                                 "Size has to be non-negative.").throw()
+
+def check_sizes(sizes, arg_position):
+    for i, size in enumerate(sizes):
+        if size < 0:
+            errormsg.InvalidArgument(size,
+                                     arg_position,
+                                     "Size has to be non-negative. "
+                                     "({0}. item of array)".format(i)
+                                     ).throw()
+
 def check_color(color, arg_position):
     if color != consts.MPI_UNDEFINED and color < 0:
         errormsg.InvalidArgument(color,

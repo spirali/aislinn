@@ -469,7 +469,7 @@ def MPI_Type_vector(generator, args, state, context):
     count, blocksize, stride, oldtype, newtype_ptr = \
             convert_types(args, ("int", "int", "int", "int", "ptr"))
     check.check_count(count, 1)
-    check.check_count(blocksize, 2)
+    check.check_size(blocksize, 2)
     datatype = check.check_datatype(state, oldtype, 3, True)
     newtype = types.VectorType(datatype, count, blocksize, stride, False)
     state.add_datatype(newtype)
@@ -480,9 +480,35 @@ def MPI_Type_hvector(generator, args, state, context):
     count, blocksize, stride, oldtype, newtype_ptr = \
             convert_types(args, ("int", "int", "int", "int", "ptr"))
     check.check_count(count, 1)
-    check.check_count(blocksize, 2)
+    check.check_size(blocksize, 2)
     datatype = check.check_datatype(state, oldtype, 3, True)
     newtype = types.VectorType(datatype, count, blocksize, stride, True)
+    state.add_datatype(newtype)
+    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    return False
+
+def MPI_Type_indexed(generator, args, state, context):
+    count, sizes_ptr, displs_ptr, oldtype, newtype_ptr = \
+            convert_types(args, ("int", "ptr", "ptr", "int", "ptr"))
+    check.check_count(count, 1)
+    datatype = check.check_datatype(state, oldtype, 3, True)
+    sizes = generator.controller.read_ints(sizes_ptr, count)
+    check.check_sizes(sizes, 2)
+    displs = generator.controller.read_ints(displs_ptr, count)
+    newtype = types.IndexedType(datatype, count, sizes, displs, False)
+    state.add_datatype(newtype)
+    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    return False
+
+def MPI_Type_hindexed(generator, args, state, context):
+    count, sizes_ptr, displs_ptr, oldtype, newtype_ptr = \
+            convert_types(args, ("int", "ptr", "ptr", "int", "ptr"))
+    check.check_count(count, 1)
+    datatype = check.check_datatype(state, oldtype, 3, True)
+    sizes = generator.controller.read_ints(sizes_ptr, count)
+    check.check_sizes(sizes, 2)
+    displs = generator.controller.read_pointers(displs_ptr, count)
+    newtype = types.IndexedType(datatype, count, sizes, displs, True)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
@@ -666,5 +692,8 @@ calls = {
         "MPI_Type_contiguous" : MPI_Type_contiguous,
         "MPI_Type_vector" : MPI_Type_vector,
         "MPI_Type_hvector" : MPI_Type_hvector,
+        "MPI_Type_indexed" : MPI_Type_indexed,
+        "MPI_Type_hindexed" : MPI_Type_hindexed,
+        "MPI_Type_create_hindexed" : MPI_Type_hindexed,
         "MPI_Type_commit" : MPI_Type_commit,
 }

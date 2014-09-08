@@ -86,6 +86,46 @@ class VectorType(Datatype):
             pointer += step_index
 
 
+class IndexedType(Datatype):
+
+    def __init__(self, datatype, count, sizes, displs, is_hindexed):
+        assert count == len(sizes) == len(displs)
+        Datatype.__init__(self)
+        self.datatype = datatype
+        self.count = count
+        self.sizes = sizes
+        if is_hindexed: # In hindexed, displs is already given in bytes
+            self.displs = displs
+        else:
+            self.displs = [ displ * datatype.size for displ in displs ]
+        self.size = datatype.size * count * sum(sizes)
+        self.unpack_size = max(displ + self.datatype.size * size
+                               for size, displ in zip(self.sizes, self.displs))
+
+    def pack(self, controller, pointer, vg_buffer, count, index=0):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.pack(
+                        controller,
+                        pointer + self.displs[j],
+                        vg_buffer,
+                        self.sizes[j],
+                        index)
+                index += self.sizes[j] * self.datatype.size
+            pointer += self.unpack_size
+
+    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.unpack(
+                        controller,
+                        vg_buffer,
+                        self.sizes[j],
+                        pointer + self.displs[j],
+                        index)
+                index += self.sizes[j] * self.datatype.size
+            pointer += self.unpack_size
+
 
 buildin_types = dict((t.type_id, t) for t in [
     BuildinType(consts.MPI_PACKED, "MPI_PACKED", 1),

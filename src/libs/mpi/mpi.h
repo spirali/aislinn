@@ -321,6 +321,18 @@ int MPI_Comm_free_keyval(
 
 int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype);
 
+int MPI_Type_indexed(int count,
+                    const int *array_of_blocklengths,
+                    const int *array_of_displacements,
+                    MPI_Datatype oldtype,
+                    MPI_Datatype *newtype);
+
+int MPI_Type_create_hindexed(int count,
+                    const int *array_of_blocklengths,
+                    const MPI_Aint *array_of_displacements,
+                    MPI_Datatype oldtype,
+                    MPI_Datatype *newtype);
+
 int MPI_Type_vector(
 	int count, int blocklength, int stride,
 	MPI_Datatype oldtype, MPI_Datatype *newtype);
@@ -373,6 +385,12 @@ inline int MPI_Address(const void *location, MPI_Aint *address)
 {
 	return MPI_Get_address(location, address);
 }
+
+int MPI_Type_hindexed(int count,
+                    const int *array_of_blocklengths,
+                    const MPI_Aint *array_of_displacements,
+                    MPI_Datatype oldtype,
+                    MPI_Datatype *newtype);
 
 #ifdef __cplusplus
 }
