@@ -78,6 +78,10 @@ class State:
         self.user_defined_types = copy.copy(self.user_defined_types)
         self.user_defined_types.append(datatype)
 
+    def remove_datatype(self, datatype):
+        i = self.user_defined_types.index(datatype)
+        self.user_defined_types[i] = None
+
     def add_comm(self, comm):
         if self.cc_id_counters is None:
             self.cc_id_counters = [0] * (2 + len(self.comms))

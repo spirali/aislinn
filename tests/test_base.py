@@ -134,5 +134,16 @@ class BaseTests(TestCase):
         self.execute(2, stdout="")
         self.single_error("uncommited")
 
+    def test_typefree1(self):
+        self.program("typefree1")
+        self.execute(2, stdout="")
+        self.single_error("invalidarg")
+
+    def test_typefree2(self):
+        self.program("typefree2")
+        self.execute(2, stdout="")
+        self.single_error("remove-buildin-type")
+
+
 if __name__ == "__main__":
     unittest.main()

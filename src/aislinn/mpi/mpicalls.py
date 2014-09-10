@@ -523,6 +523,23 @@ def MPI_Type_commit(generator, args, state, context):
     state.commit_datatype(datatype)
     return False
 
+def MPI_Type_free(generator, args, state, context):
+    datatype_ptr = convert_types(args, ("ptr",))[0]
+    type_id = generator.controller.read_int(datatype_ptr)
+    datatype = check.check_datatype(state, type_id, 1, True)
+
+    if datatype.is_buildin():
+        e = errormsg.CallError()
+        e.name = "remove-buildin-type"
+        e.short_description = "Freeing predefined type"
+        e.description = "Predefined datatype '{0}' cannot be freed" \
+                .format(datatype.name)
+        e.throw()
+
+    state.remove_datatype(datatype)
+    generator.controller.write_int(datatype_ptr, consts.MPI_DATATYPE_NULL)
+    return False
+
 def call_collective_operation(generator,
                               state,
                               context,
@@ -699,4 +716,5 @@ calls = {
         "MPI_Type_hindexed" : MPI_Type_hindexed,
         "MPI_Type_create_hindexed" : MPI_Type_hindexed,
         "MPI_Type_commit" : MPI_Type_commit,
+        "MPI_Type_free" : MPI_Type_free,
 }

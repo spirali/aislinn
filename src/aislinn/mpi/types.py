@@ -17,6 +17,9 @@ class Datatype(object):
         else:
             return None
 
+    def is_buildin(self):
+        return False
+
 class BuildinType(Datatype):
 
     def __init__(self, type_id, name, size):
@@ -25,6 +28,9 @@ class BuildinType(Datatype):
         self.name = name
         self.size = size
         self.commited = True
+
+    def is_buildin(self):
+        return True
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         controller.write_into_buffer(vg_buffer.id,

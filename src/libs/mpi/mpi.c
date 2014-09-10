@@ -799,6 +799,12 @@ int MPI_Type_commit(MPI_Datatype *datatype)
 	return MPI_SUCCESS;
 }
 
+int MPI_Type_free(MPI_Datatype *datatype)
+{
+	aislinn_call_1("MPI_Type_free", (AislinnArgType) datatype);
+	return MPI_SUCCESS;
+}
+
 /* ----------------------------------------------------------------------------
 /  Dummy functions
 /  --------------------------------------------------------------------------*/

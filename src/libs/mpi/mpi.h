@@ -36,6 +36,7 @@ static const int MPI_UNDEFINED = -0x0BEFBEEF;
 static const int MPI_KEYVAL_INVALID = -0x0BEEFBEF;
 static const int MPI_TAG_UB = 0x64400001;
 
+static const MPI_Datatype MPI_DATATYPE_NULL = 0xFF00100;
 static const MPI_Datatype MPI_PACKED = 0xFF00101;
 static const MPI_Datatype MPI_BYTE = 0xFF00102;
 static const MPI_Datatype MPI_CHAR = 0xFF00103;
@@ -340,6 +341,8 @@ int MPI_Type_vector(
 int MPI_Type_hvector(
 	int count, int blocklength, int stride,
 	MPI_Datatype oldtype, MPI_Datatype *newtype);
+
+int MPI_Type_free(MPI_Datatype *datatype);
 
 int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
 
