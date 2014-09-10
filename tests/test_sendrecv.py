@@ -142,5 +142,14 @@ class SendRecvTests(TestCase):
         self.execute(2, stdout=set(["369 123"]))
         self.no_errors()
 
+    def test_partialrecv(self):
+        self.program("partialrecv")
+        self.execute(2, "2", stdout="2 0\n12\n13\n-1\n-1\n-1\n")
+        self.no_errors()
+        self.execute(2, "4", stdout="4 0\n12\n13\n15\n21\n-1\n")
+        self.no_errors()
+        self.execute(2, "6")
+        self.single_error("message-truncated")
+
 if __name__ == "__main__":
     unittest.main()

@@ -190,7 +190,7 @@ class Generator:
             for vg_buffer in vg_buffers:
                 self.controller.free_buffer(vg_buffer.id)
 
-    def apply_matching(self, state, matching):
+    def apply_matching(self, node, state, matching):
         for request, message in matching:
             assert not request.is_receive() or message is not None
             state.set_request_as_completed(request)
@@ -200,15 +200,33 @@ class Generator:
                             request.status_ptr, [ message.source,
                                                   message.tag,
                                                   message.size ])
+                count = request.datatype.get_count(message.size)
+                if count == None:
+                    # TODO
+                    # This should never happen after
+                    # type signature check will be implemeted
+                    raise Exception("Internal error")
+                if count > request.count:
+                    e = errormsg.ErrorMessage()
+                    e.node = node
+                    e.name = "message-truncated"
+                    e.short_description = "Message truncated"
+                    e.description = "Message is bigger than receive buffer"
+                    self.add_error_message(e)
+                    self.fatal_error = True
+                    # TODO: In fact it is not fatal error, it should be handle
+                    # in a way that we can continue
+                    return False
                 request.datatype.unpack(self.controller,
                                         message.vg_buffer,
-                                        request.count,
+                                        count,
                                         request.data_ptr)
                 state.remove_message(message)
             if request.is_collective():
                 op = state.gstate.get_operation_by_cc_id(request.comm_id,
                                                          request.cc_id)
                 op.complete(self, state)
+        return True
 
     def fast_expand_node(self, node, gstate):
         for state in gstate.states:
@@ -223,7 +241,8 @@ class Generator:
 
                 logging.debug("Fast expand status=wait pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
-                self.apply_matching(state, matches[0])
+                if not self.apply_matching(node, state, matches[0]):
+                    return
                 state.remove_active_requests()
                 self.execute_state_and_add_node(node, state)
                 return True
@@ -338,7 +357,8 @@ class Generator:
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
             self.controller.restore_state(new_state.vg_state.id)
-            self.apply_matching(new_state, matching)
+            if not self.apply_matching(node, new_state, matching):
+                return
             if not covered:
                 # Not all active requests are ready, so just apply matchings
                 # and create new state

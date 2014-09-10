@@ -11,6 +11,11 @@ class Datatype(object):
         self.type_id = None
         self.commited = False
 
+    def get_count(self, size):
+        if size % self.size == 0:
+            return size / self.size
+        else:
+            return None
 
 class BuildinType(Datatype):
 
@@ -98,7 +103,7 @@ class IndexedType(Datatype):
             self.displs = displs
         else:
             self.displs = [ displ * datatype.size for displ in displs ]
-        self.size = datatype.size * count * sum(sizes)
+        self.size = datatype.size * sum(sizes)
         self.unpack_size = max(displ + self.datatype.size * size
                                for size, displ in zip(self.sizes, self.displs))
 

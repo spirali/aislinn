@@ -122,8 +122,10 @@ class BaseTests(TestCase):
                  "68 69 86 87 88 89 90 91 -1 -1 -1 -1 -1 -1 \n" \
                  "20 21 22 23 -1 0 1 42 43 44 45 -1 40 41 66 67 " \
                  "68 69 -1 46 47 88 89 90 91 -1 86 87 -1 -1 \n"
+        output = None
         self.program("indexed")
         self.execute(2, "new", stdout=output)
+        self.no_errors()
         self.execute(2, "old", stdout=output)
         self.no_errors()
 

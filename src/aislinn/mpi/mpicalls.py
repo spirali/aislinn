@@ -453,7 +453,10 @@ def MPI_Get_count(generator, args, state, context):
                                                        ("ptr", "int", "ptr"))
     datatype = check.check_datatype(state, datatype_id, 2)
     size = generator.controller.read_int(status_ptr + 2 * INT_SIZE)
-    generator.controller.write_int(count_ptr, size / datatype.size)
+    result = datatype.get_count(size)
+    if result is None:
+        result = consts.MPI_UNDEFINED
+    generator.controller.write_int(count_ptr, result)
     return False
 
 def MPI_Type_contiguous(generator, args, state, context):
