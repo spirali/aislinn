@@ -348,9 +348,15 @@ int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
 
 int MPI_Abort(MPI_Comm comm, int errorcode);
 
-double MPI_Wtime();
+int MPI_Dims_create(int nnodes, int ndims, int dims[]);
 
 int MPI_Get_address(const void *location, MPI_Aint *address);
+
+/* ----------------------------------------------------------------------------
+/  DUMMY FUNCTIONS
+/  --------------------------------------------------------------------------*/
+
+double MPI_Wtime();
 
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE

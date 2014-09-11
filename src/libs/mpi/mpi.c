@@ -816,6 +816,15 @@ int MPI_Address(const void *location, MPI_Aint *address)
 	return MPI_Get_address(location, address);
 }
 
+int MPI_Dims_create(int nnodes, int ndims, int dims[])
+{
+	aislinn_call_3("MPI_Dims_create",
+		(AislinnArgType) nnodes,
+		(AislinnArgType) ndims,
+		(AislinnArgType) dims);
+	return MPI_SUCCESS;
+}
+
 /* ----------------------------------------------------------------------------
 /  Dummy functions
 /  --------------------------------------------------------------------------*/

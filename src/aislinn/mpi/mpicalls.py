@@ -25,6 +25,7 @@ import consts
 import check
 import errormsg
 import types
+import misc
 from comm import comm_id_name
 
 # TODO: Universal architecture detection
@@ -540,6 +541,36 @@ def MPI_Type_free(generator, args, state, context):
     generator.controller.write_int(datatype_ptr, consts.MPI_DATATYPE_NULL)
     return False
 
+def MPI_Dims_create(generator, args, state, context):
+    nnodes, ndims, dims_ptr = convert_types(args, ("int", "int", "ptr"))
+
+    if ndims < 1:
+        errormsg.InvalidArgument(ndims,
+                                 2,
+                                 "Invalid number of dimensions").throw()
+
+    dims = generator.controller.read_ints(dims_ptr, ndims)
+    count = 0
+    for d in dims:
+        if d < 0 or (d > 0 and nnodes % d != 0):
+            errormsg.InvalidArgument(d,
+                                     3,
+                                     "Invalid dimension value").throw()
+        if d > 0:
+            nnodes /= d
+        else:
+            count += 1
+    if count > 0:
+        factors = misc.factors(nnodes, count)
+        count = 0
+        for i in xrange(len(dims)):
+            if dims[i] == 0:
+                dims[i] = factors[count]
+                count += 1
+
+    generator.controller.write_ints(dims_ptr, dims)
+    return False
+
 def call_collective_operation(generator,
                               state,
                               context,
@@ -717,4 +748,5 @@ calls = {
         "MPI_Type_create_hindexed" : MPI_Type_hindexed,
         "MPI_Type_commit" : MPI_Type_commit,
         "MPI_Type_free" : MPI_Type_free,
+        "MPI_Dims_create" : MPI_Dims_create,
 }
