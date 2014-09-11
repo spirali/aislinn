@@ -12,6 +12,12 @@ int MPI_Finalize()
 	return MPI_SUCCESS;
 }
 
+int MPI_Get_address(const void *location, MPI_Aint *address)
+{
+	*address = (MPI_Aint) location;
+	return MPI_SUCCESS;
+}
+
 int MPI_Comm_rank(MPI_Comm comm, int *rank)
 {
 	aislinn_call_2(
@@ -803,6 +809,11 @@ int MPI_Type_free(MPI_Datatype *datatype)
 {
 	aislinn_call_1("MPI_Type_free", (AislinnArgType) datatype);
 	return MPI_SUCCESS;
+}
+
+int MPI_Address(const void *location, MPI_Aint *address)
+{
+	return MPI_Get_address(location, address);
 }
 
 /* ----------------------------------------------------------------------------
