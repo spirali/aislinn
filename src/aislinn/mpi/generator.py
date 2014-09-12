@@ -190,16 +190,28 @@ class Generator:
             for vg_buffer in vg_buffers:
                 self.controller.free_buffer(vg_buffer.id)
 
+    def write_status(self, status_ptr, source, tag, size):
+        self.controller.write_ints(status_ptr, [ source, tag, size ])
+
     def apply_matching(self, node, state, matching):
         for request, message in matching:
-            assert not request.is_receive() or message is not None
+            assert not request.is_receive() or \
+                   message is not None or \
+                   request.source == consts.MPI_PROC_NULL
             state.set_request_as_completed(request)
+            if request.is_receive() \
+               and request.source == consts.MPI_PROC_NULL \
+               and request.status_ptr:
+                self.write_status(request.status_ptr,
+                                  consts.MPI_PROC_NULL,
+                                  consts.MPI_ANY_TAG,
+                                  0)
             if message:
                 if request.status_ptr:
-                    self.controller.write_ints(
-                            request.status_ptr, [ message.source,
-                                                  message.tag,
-                                                  message.size ])
+                    self.write_status(request.status_ptr,
+                                      message.source,
+                                      message.tag,
+                                      message.size)
                 count = request.datatype.get_count(message.size)
                 if count == None:
                     # TODO

@@ -646,16 +646,20 @@ def call_send(generator, args, state, context, blocking, name):
 
     comm = check.check_and_get_comm(state, comm_id, 6)
     check.check_count(count, 2)
-    check.check_rank(comm, target, 4, False)
+    check.check_rank(comm, target, 4, False, True)
     check.check_tag(tag, 5, False)
     datatype = check.check_datatype(state, datatype_id, 3)
-    sz = count * datatype.size
-    vg_buffer = generator.new_buffer_and_pack(datatype, count, buf_ptr)
-    target_pid = comm.group.rank_to_pid(target)
-    message = Message(comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
-    state.gstate.get_state(target_pid).add_message(message)
 
-    request_id = make_send_request(generator, state, message)
+    if target != consts.MPI_PROC_NULL:
+        sz = count * datatype.size
+        vg_buffer = generator.new_buffer_and_pack(datatype, count, buf_ptr)
+        target_pid = comm.group.rank_to_pid(target)
+        message = Message(comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
+        state.gstate.get_state(target_pid).add_message(message)
+        request_id = make_send_request(generator, state, message)
+    else:
+        request_id = state.add_completed_request()
+
     if blocking:
         state.set_wait((request_id,))
     else:
@@ -685,7 +689,7 @@ def call_recv(generator, args, state, context, blocking, name):
 
     comm = check.check_and_get_comm(state, comm_id, 6)
     check.check_count(count, 2)
-    check.check_rank(comm, source, 4, True)
+    check.check_rank(comm, source, 4, True, True)
     check.check_tag(tag, 5, True)
 
     datatype = check.check_datatype(state, datatype_id, 3)
@@ -693,8 +697,16 @@ def call_recv(generator, args, state, context, blocking, name):
     e = event.CommEvent(name, state.pid, source, tag)
     generator.add_call_event(context, e)
 
-    request_id = state.add_recv_request(
-            comm_id, source, tag, buf_ptr, datatype, count)
+    if source != consts.MPI_PROC_NULL or not blocking:
+        request_id = state.add_recv_request(
+                comm_id, source, tag, buf_ptr, datatype, count)
+    else:
+        if status_ptr:
+            generator.write_status(status_ptr,
+                                   consts.MPI_PROC_NULL,
+                                   consts.MPI_ANY_TAG,
+                                   0)
+        return False
 
     if blocking:
         if status_ptr:

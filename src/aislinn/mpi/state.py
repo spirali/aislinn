@@ -281,9 +281,12 @@ class State:
                 if gstate.get_operation_by_cc_id(r.comm_id, r.cc_id) \
                         .can_be_completed(self):
                     non_recv_requests.append((r, None))
+            if r.is_receive() and r.source == consts.MPI_PROC_NULL:
+                non_recv_requests.append((r, None))
 
         result = []
-        recvs = [ r for r in requests if r.is_receive() ]
+        recvs = [ r for r in requests
+                  if r.is_receive() and r.source != consts.MPI_PROC_NULL ]
         if recvs:
             matching = self.collect_messages(recvs)
             if matching:

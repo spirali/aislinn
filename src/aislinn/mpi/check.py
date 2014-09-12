@@ -29,9 +29,15 @@ def check_op(op,
 def check_rank(comm,
                rank,
                arg_position,
-               any_source_allowed=False):
+               any_source_allowed=False,
+               proc_null_allowed=False):
 
-    if rank == consts.MPI_ANY_SOURCE:
+    if rank == consts.MPI_PROC_NULL:
+        if not proc_null_allowed:
+            errormsg.InvalidArgument("MPI_PROC_NULL",
+                                     arg_position,
+                                     "MPI_PROC_NULL not allowed").throw()
+    elif rank == consts.MPI_ANY_SOURCE:
         if not any_source_allowed:
             errormsg.InvalidArgument("MPI_ANY_SOURCE",
                                      arg_position,

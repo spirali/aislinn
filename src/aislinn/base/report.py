@@ -36,6 +36,8 @@ collective_operations = [
     "Scatterv",
     "Reduce",
     "Allreduce",
+    "Allreduce",
+    "Bcast",
 
     "Igather",
     "Igatherv",
@@ -44,6 +46,7 @@ collective_operations = [
     "Iscatterv",
     "Ireduce",
     "Iallreduce"
+    "Ibcast",
 ]
 
 def make_chart(data, ydata, units):

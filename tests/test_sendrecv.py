@@ -41,6 +41,11 @@ class SendRecvTests(TestCase):
         self.execute(2)
         self.no_errors()
 
+    def test_nullproc(self):
+        self.program("nullproc")
+        self.execute(2, stdout="")
+        self.no_errors()
+
     def test_waitall(self):
         result = [
             "101 201 103 203",
