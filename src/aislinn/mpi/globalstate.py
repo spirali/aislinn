@@ -46,7 +46,7 @@ class GlobalState(EqMixin):
     def copy(self):
         gstate = copy.copy(self)
         gstate.states = [ state.copy(gstate) for state in self.states ]
-        if self.collective_operations:
+        if self.collective_operations is not None:
             gstate.collective_operations = [ op.copy() \
                                              for op in self.collective_operations ]
         return gstate

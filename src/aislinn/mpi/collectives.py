@@ -57,6 +57,7 @@ class CollectiveOperation:
             e.description = "Blocking collective operation mixed " \
                             "with nonblocking"
             e.throw()
+
     def copy(self):
         op = copy.copy(self)
         op.after_copy()
