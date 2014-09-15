@@ -657,6 +657,8 @@ def call_send(generator, args, state, context, blocking, name):
         message = Message(comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
         state.gstate.get_state(target_pid).add_message(message)
         request_id = make_send_request(generator, state, message)
+
+        generator.message_sizes.add(datatype.size * count)
     else:
         request_id = state.add_completed_request()
 

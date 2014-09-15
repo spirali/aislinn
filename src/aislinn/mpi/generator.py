@@ -65,6 +65,7 @@ class Generator:
         self.process_count = None
         self.working_queue = deque()
         self.error_messages = []
+        self.message_sizes = set()
         self.vg_states = base.resource.ResourceManager("vg_state")
         self.vg_buffers = base.resource.ResourceManager("vg_buffer")
 

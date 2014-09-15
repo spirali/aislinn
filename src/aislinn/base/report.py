@@ -116,10 +116,19 @@ class Report:
         self.analysis_info.add("init-time",
                       generator.init_time,
                       "Start time")
+        execution_time = generator.end_time - generator.init_time
         self.analysis_info.add("execution-time",
-                      generator.end_time - generator.init_time,
+                      execution_time,
                       "Execution time")
-
+        self.analysis_info.add("speed",
+                      generator.statespace.nodes_count
+                          / execution_time.total_seconds(),
+                      "Nodes per second")
+        sizes = list(generator.message_sizes)
+        sizes.sort()
+        self.analysis_info.add("message-sizes",
+                      sizes,
+                      "Sizes of unicast messages")
         self.error_messages = generator.error_messages
 
     def entries_to_xml(self, parent_name, entry_list):
