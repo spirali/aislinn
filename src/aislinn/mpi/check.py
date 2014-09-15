@@ -88,7 +88,9 @@ def check_color(color, arg_position):
 def check_datatype(state, type_id, arg_position, allow_uncommited=False):
     datatype = state.get_datatype(type_id)
     if datatype is None:
-        errormsg.InvalidArgument(datatype, arg_position).throw()
+        errormsg.InvalidArgument(type_id,
+                                 arg_position,
+                                 "Invalid datatype").throw()
     if not datatype.commited and not allow_uncommited:
         e = errormsg.CallError()
         e.name = "uncommited"
