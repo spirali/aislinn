@@ -28,13 +28,13 @@ from globalstate import GlobalState
 from base.report import Report
 from base.utils import convert_type
 import consts
-
+import mpicalls
 import event
 import base.resource
+
 import logging
 import sys
-import types
-import mpicalls
+import datetime
 
 class ExecutionContext:
 
@@ -76,6 +76,9 @@ class Generator:
         self.send_protocol_randezvous_threshold = \
                 aislinn_args.send_protocol_randezvous_threshold
 
+        self.init_time = None
+        self.end_time = None
+
         if aislinn_args.stats:
             self.statistics_tick = aislinn_args.stats
             self.statistics = []
@@ -112,6 +115,7 @@ class Generator:
             self.add_error_message(error_message)
 
     def run(self, process_count):
+        self.init_time = datetime.datetime.now()
         self.process_count = process_count
         result = self.controller.start()
         if result is None:
@@ -175,6 +179,7 @@ class Generator:
 
         finally:
             self.controller.kill()
+            self.end_time = datetime.datetime.now()
         return True
 
     def cleanup(self):

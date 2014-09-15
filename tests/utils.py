@@ -235,4 +235,4 @@ class Report:
 
     @property
     def number_of_nodes(self):
-        return int(self.root.find("info").find("nodes").text)
+        return int(self.root.find("analysis-info").find("nodes").text)

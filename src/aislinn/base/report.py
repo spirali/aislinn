@@ -91,26 +91,34 @@ class EntryList:
 class Report:
 
     def __init__(self, generator):
-        self.info = EntryList()
+        self.program_info = EntryList()
+        self.analysis_info = EntryList()
         self.process_count = generator.process_count
         self.statistics = generator.get_statistics()
 
-        self.info.add(
+        self.program_info.add(
                 "program-args", " ".join(generator.args), "Program arguments")
-        self.info.add(
+        self.program_info.add(
+                "processes", generator.process_count, "Number of processes")
+        self.program_info.add(
                 "send-protocol", generator.send_protocol, "Send protocol")
         if generator.send_protocol == "threshold":
-            self.info.add(
+            self.program_info.add(
                     "send-protocol-thresholds",
                     "{0}:{1}".format(
                         generator.send_protocol_eager_threshold,
                         generator.send_protocol_randezvous_threshold),
                     "Threshold values")
-        self.info.add(
-                "processes", generator.process_count, "Number of processes")
-        self.info.add("nodes",
+
+        self.analysis_info.add("nodes",
                       generator.statespace.nodes_count,
                       "Number of nodes in statespace")
+        self.analysis_info.add("init-time",
+                      generator.init_time,
+                      "Start time")
+        self.analysis_info.add("execution-time",
+                      generator.end_time - generator.init_time,
+                      "Execution time")
 
         self.error_messages = generator.error_messages
 
@@ -128,7 +136,9 @@ class Report:
 
     def create_xml(self):
         root = xml.Element("report")
-        info = self.entries_to_xml("info", self.info)
+        info = self.entries_to_xml("program-info", self.program_info)
+        root.append(info)
+        info = self.entries_to_xml("analysis-info", self.analysis_info)
         root.append(info)
         for error in self.error_messages:
             e = self.entries_to_xml("error", error.get_entries())
@@ -215,8 +225,11 @@ class Report:
         div = section.child("div", id="column")
         div.set("class", "inner")
 
-        div.child("h2", "Basic information")
-        self.entries_to_html(div, self.info)
+        div.child("h2", "Program information")
+        self.entries_to_html(div, self.program_info)
+
+        div.child("h2", "Analysis information")
+        self.entries_to_html(div, self.analysis_info)
 
         div.child("h2", "Errors")
 
