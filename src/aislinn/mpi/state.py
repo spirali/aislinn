@@ -79,6 +79,7 @@ class State:
         self.user_defined_types.append(datatype)
 
     def remove_datatype(self, datatype):
+        self.user_defined_types = copy.copy(self.user_defined_types)
         i = self.user_defined_types.index(datatype)
         self.user_defined_types[i] = None
 
@@ -90,6 +91,7 @@ class State:
         self.comms.append(comm)
 
     def remove_comm(self, comm):
+        self.comms = copy.copy(self.comms)
         i = self.comms.index(comm)
         del self.cc_id_counters[i + 2]
         del self.comms[i]
