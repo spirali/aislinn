@@ -399,6 +399,7 @@ class Generator:
             hash = self.controller.hash_state()
             vg_state = self.vg_state_cache.get(hash)
             if vg_state:
+                logging.debug("State %s retrieved from cache", hash)
                 vg_state.inc_ref()
                 return vg_state
         else:
@@ -444,6 +445,7 @@ class Generator:
                 else:
                     raise Exception("Unkown function call: " + repr(call))
         except errormsg.ExecutionError as e:
+            logging.debug("ExecutionError: %s", e.error_message)
             error_message = e.error_message
             error_message.stacktrace = self.controller.get_stacktrace()
             error_message.function_name = call[1]
@@ -451,7 +453,6 @@ class Generator:
             # TODO: It is not necessary to stop everything, just expansion of
             # this state
             self.fatal_error = True
-
         state.vg_state = self.save_state(True)
         return context
 
