@@ -698,10 +698,10 @@ static void memimage_restore(MemoryImage *memimage)
       AuxMapEnt *nyu = (AuxMapEnt*) VG_(OSetGen_AllocNode)(auxmap, sizeof(AuxMapEnt));
       nyu->base = page->base;
       nyu->page = page;
+      page->ref_count++;
       VG_(OSetGen_Insert)(auxmap, nyu);
       AuxMapEnt *ent = VG_(OSetGen_Lookup)(old_auxmap, nyu);
       if (ent) {
-         page->ref_count++;
          if (ent->page == page) {
              continue; // We are replacing the page by the same page
          }
