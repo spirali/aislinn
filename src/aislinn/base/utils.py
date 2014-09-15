@@ -32,7 +32,7 @@ class EqMixin(object):
         return not self.__eq__(other)
 
 
-integer_parser = re.compile("\d+")
+integer_parser = re.compile("^\d+$")
 def is_integer(value):
     return bool(integer_parser.match(value))
 
