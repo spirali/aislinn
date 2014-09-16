@@ -383,6 +383,8 @@ class Generator:
             if not covered:
                 # Not all active requests are ready, so just apply matchings
                 # and create new state
+                new_state.vg_state.dec_ref()
+                new_state.vg_state = self.save_state(True)
                 new_node = self.add_node(node, new_gstate)
                 node.add_arc(Arc(new_node, ()))
                 return
