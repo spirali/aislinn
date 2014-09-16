@@ -87,6 +87,8 @@ class Generator:
             self.statistics_tick = None
             self.statistics = None
 
+        self.debug_state = aislinn_args.debug_state
+
     def get_statistics(self):
         if self.statistics is None:
             return None
@@ -280,6 +282,7 @@ class Generator:
                 requests = state.fork_standard_sends()
                 if requests is None:
                     continue
+                logging.debug("Forking because of standard send {0}", requests)
                 for buffered, synchronous in requests:
                     if self.send_protocol == "dynamic":
                        eager_threshold, randezvous_threshold = \
@@ -489,15 +492,26 @@ class Generator:
         else:
             hash = None
 
-        uids = [ state.vg_state.id if state.vg_state is not None else "F"
-                 for state in gstate.states ]
+        uids = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
+                 for state in gstate.states ])
         #uids += [ [ m.vg_buffer.id for m in s.messages ] for s in gstate.states ]
 
-        node = Node(str(uids), hash)
+        node = Node(uids, hash)
         if prev:
             node.prev = prev
         self.statespace.add_node(node)
         self.working_queue.append((node, gstate))
+
+        if self.debug_state == uids:
+            e = errormsg.ErrorMessage()
+            e.node = node
+            e.name = "captured-state"
+            e.short_description = "Captured state"
+            e.description = "The state {0} was captured " \
+                            "because of option --debug-state".format(uids)
+            self.add_error_message(e)
+            self.fatal_error = True
+            return node
         return node
 
     def create_report(self):
