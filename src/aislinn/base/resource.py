@@ -26,9 +26,9 @@ class Resource:
         self.id = id
 
     def inc_ref(self):
-        if self.ref_count == 0:
-            self.manager.not_used_resources.remove(self)
         self.ref_count += 1
+        if self.ref_count == 1:
+            self.manager.revive(self)
 
     def dec_ref(self):
         self.ref_count -= 1
@@ -52,6 +52,11 @@ class ResourceManager:
     def new(self, id):
         self.resource_count += 1
         return Resource(self, id)
+
+    def revive(self, resource):
+        assert resource.ref_count == 1
+        self.resource_count += 1
+        self.not_used_resources.remove(resource)
 
     def pickup_resources_to_clean(self):
         r = self.not_used_resources
