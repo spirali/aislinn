@@ -248,7 +248,33 @@ class Generator:
                 op.complete(self, state)
         return True
 
+    def fast_partial_expand(self, node, gstate):
+        for state in gstate.states:
+            if state.status == State.StatusWait:
+                if not state.are_requests_deterministic():
+                    continue
+                matches = state.check_requests(upto_active=True)
+                len(matches) == 1 # Active request are deterministic here
+
+                if not matches[0]:
+                    continue
+
+                logging.debug("Fast partial expand pid=%s", state.pid)
+
+                self.controller.restore_state(state.vg_state.id)
+
+                if not self.apply_matching(node, state, matches[0]):
+                    return False
+
+                state.vg_state.dec_ref()
+                state.vg_state = self.save_state(True)
+                new_node = self.add_node(node, gstate)
+                node.add_arc(Arc(new_node, ()))
+                return True
+        return False
+
     def fast_expand_node(self, node, gstate):
+        partial_found = False
         for state in gstate.states:
             if state.status == State.StatusWait:
                 if not state.are_requests_deterministic():
@@ -257,12 +283,13 @@ class Generator:
                 len(matches) == 1 # Active request are deterministic here
 
                 if not state.is_matching_covers_active_requests(matches[0]):
-                    continue
+                   partial_found = True
+                   continue
 
                 logging.debug("Fast expand status=wait pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
                 if not self.apply_matching(node, state, matches[0]):
-                    return
+                    return False
                 state.remove_active_requests()
                 self.execute_state_and_add_node(node, state)
                 return True
@@ -272,6 +299,8 @@ class Generator:
                 self.controller.restore_state(state.vg_state.id)
                 self.execute_state_and_add_node(node, state)
                 return True
+        if partial_found:
+            return self.fast_partial_expand(node, gstate)
         return False
 
     def fork_standard_sends(self, node, gstate):
