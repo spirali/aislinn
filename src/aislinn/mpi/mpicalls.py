@@ -66,6 +66,37 @@ def MPI_ISend(generator, args, state, context):
 def MPI_IRecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
 
+def MPI_Iprobe(generator, args, state, context):
+    source, tag, comm_id, flag_ptr, status_ptr = \
+        convert_types(args, ("int", # source
+                             "int", # tag
+                             "int", # comm
+                             "ptr", # flag_ptr
+                             "ptr", # status_ptr
+                             ))
+
+    comm = check.check_and_get_comm(state, comm_id, 3)
+    check.check_rank(comm, source, 1, True, True)
+    check.check_tag(tag, 2, True)
+
+    e = event.CommEvent("IProbe", state.pid, source, tag)
+    generator.add_call_event(context, e)
+
+    if source != consts.MPI_PROC_NULL:
+        state.set_probe(comm, source, tag, flag_ptr, status_ptr)
+    else:
+        generator.controller.write_int(flag_ptr, 1)
+        if status_ptr:
+            generator.write_status(status_ptr,
+                                   consts.MPI_PROC_NULL,
+                                   consts.MPI_ANY_TAG,
+                                   0)
+
+        # We cannot simply return False, because we need to create state
+        # (with hash), to detect possible cyclic computation
+        state.set_ready()
+    return True
+
 def MPI_Wait(generator, args, state, context):
     request_ptr, status_ptr = \
         convert_types(args, ("ptr", # request_ptr
@@ -734,6 +765,7 @@ calls = {
         "MPI_Recv" : MPI_Recv,
         "MPI_Isend" : MPI_ISend,
         "MPI_Irecv" : MPI_IRecv,
+        "MPI_Iprobe" : MPI_Iprobe,
         "MPI_Wait" : MPI_Wait,
         "MPI_Test" : MPI_Test,
         "MPI_Waitall" : MPI_Waitall,

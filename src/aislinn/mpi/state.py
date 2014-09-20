@@ -30,24 +30,27 @@ import types
 
 class State:
 
-    StatusInited = 0
+    StatusReady = 0
     StatusFinished = 1
     StatusWait = 2
     StatusTest = 3
+    StatusProbe = 4
 
     def __init__(self, gstate, pid, vg_state):
         assert vg_state is not None
         self.gstate = gstate
         self.pid = pid
         self.vg_state = vg_state
-        self.status = State.StatusInited
+        self.status = State.StatusReady
         self.messages = []
+        self.probed_messages = None # [ (comm_id, source, tag, message) ] or None
         self.comms = [] # <-- Copy on write!
         self.requests = [None]
         self.active_request_ids = None
         self.flag_ptr = None
         self.user_defined_types = [] # <-- Copy on write!
         self.cc_id_counters = None
+        self.probe_data = None
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
@@ -67,6 +70,8 @@ class State:
         state.messages = copy.copy(self.messages)
         for message in state.messages:
             message.vg_buffer.inc_ref()
+        if self.probed_messages is not None:
+            state.probed_messages = copy.copy(self.probed_messages)
         state.requests = copy.copy(self.requests)
         state.active_request_ids = copy.copy(self.active_request_ids)
         state.cc_id_counters = copy.copy(self.cc_id_counters)
@@ -174,8 +179,13 @@ class State:
         return message
 
     def remove_message(self, message):
-        message.vg_buffer.dec_ref()
+        if self.probed_messages:
+            for i, v in enumerate(self.probed_messages[:]):
+                cid, s, t, m = v
+                if m == message:
+                    self.probed_messages.remove(v)
         self.messages.remove(message)
+        message.vg_buffer.dec_ref()
 
     def add_standard_send_request(self, message):
         request_id = self._new_request_index()
@@ -221,6 +231,16 @@ class State:
         self.status = None
         self.active_request_ids = None
         self.flag_ptr = None
+        self.probe_data = None
+
+    def set_ready(self):
+        self.reset_state()
+        self.status = self.StatusReady
+
+    def set_probe(self, comm, source, tag, flag_ptr, status_ptr):
+        self.reset_state()
+        self.status = self.StatusProbe
+        self.probe_data = (comm.comm_id, source, tag, flag_ptr, status_ptr)
 
     def set_wait(self, request_ids, status_ptrs=None):
         self.reset_state()
@@ -315,15 +335,60 @@ class State:
             return False
         return self.requests[request_id] is not None
 
+    def probe_messages(self, comm_id, source, tag):
+        messages = []
+
+        if self.probed_messages:
+            for cid, s, t, m in self.probed_messages:
+                if comm_id == cid and s == source and t == tag:
+                    messages.append(m)
+                    return messages, True
+
+        ranks = []
+
+        for message in self.messages:
+            if (comm_id == message.comm_id) and \
+               (source == consts.MPI_ANY_SOURCE or
+                    source == message.source) and \
+               (tag == consts.MPI_ANY_TAG or
+                    tag == message.tag) and \
+               source not in ranks:
+                   ranks.append(message.source)
+                   messages.append(message)
+        return messages, False
+
+    def add_probed_message(self, comm_id, source, tag, message):
+        if self.probed_messages is None:
+            self.probed_messages = []
+        for cid, s, t, m in self.probed_messages:
+            if comm_id == cid and s == source and t == tag:
+                assert m == message
+                return
+        self.probed_messages.append((comm_id, source, tag, message))
+
     def collect_messages(self, requests):
         matched = [] # [(request, message)]
         result = [] # [[(request, message)]]
+
+        if self.probed_messages is not None:
+            probed_messages = self.probed_messages[:]
+        else:
+            probed_messages = None
+
         def already_matched(message):
             for r, m in matched:
                 if m == message:
                     return True
             return False
+
         def collect_messages_helper(index):
+            def match(reqeust, message):
+                flags[message.source] = True
+                matched.append((request, message))
+                collect_messages_helper(index + 1)
+                matched.pop()
+
+
             if index == len(requests):
                 result.append(matched[:])
                 return
@@ -331,20 +396,32 @@ class State:
             flags = [ False ] * self.gstate.process_count
             found = False
 
-            for message in self.messages:
-                if (request.comm_id == message.comm_id) and \
-                   (request.source == consts.MPI_ANY_SOURCE or
-                        request.source == message.source) and \
-                   (request.tag == consts.MPI_ANY_TAG or
-                        request.tag == message.tag) and \
-                   not flags[message.source]:
-                    if already_matched(message):
-                         continue # Message already taken from other request
-                    flags[message.source] = True
-                    found = True
-                    matched.append((request, message))
-                    collect_messages_helper(index + 1)
-                    matched.pop()
+            if probed_messages:
+                for v in probed_messages:
+                    cid, s, t, m = v
+                    if (request.comm_id == cid and
+                            request.source == s and
+                            request.tag == t):
+                        if already_matched(m):
+                            continue
+                        found = True
+                        probed_messages.remove(v)
+                        match(request, m)
+                        probed_messages.append(v)
+                        break
+
+            if not found:
+                for message in self.messages:
+                    if (request.comm_id == message.comm_id) and \
+                       (request.source == consts.MPI_ANY_SOURCE or
+                            request.source == message.source) and \
+                       (request.tag == consts.MPI_ANY_TAG or
+                            request.tag == message.tag) and \
+                       not flags[message.source]:
+                        if already_matched(message):
+                             continue # Message already taken from other request
+                        found = True
+                        match(request, message)
 
             if not found:
                 collect_messages_helper(index + 1)

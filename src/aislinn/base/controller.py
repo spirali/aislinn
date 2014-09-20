@@ -84,6 +84,9 @@ class Controller:
             self.send_and_receive_ok("WRITE {0} buffer {1}\n" \
                     .format(addr, buffer_addr))
         else:
+            assert size is not None
+            if size == 0:
+                return
             self.send_and_receive_ok("WRITE {0} buffer-part {1} {2} {3}\n" \
                     .format(addr, buffer_addr, index, size))
 

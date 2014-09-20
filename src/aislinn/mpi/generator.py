@@ -294,7 +294,7 @@ class Generator:
                 self.execute_state_and_add_node(node, state)
                 return True
 
-            if state.status == State.StatusInited:
+            if state.status == State.StatusReady:
                 logging.debug("Fast expand status=init pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
                 self.execute_state_and_add_node(node, state)
@@ -369,6 +369,8 @@ class Generator:
                 self.process_wait_or_test(node, state, False)
             elif state.status == State.StatusTest:
                 self.process_wait_or_test(node, state, True)
+            elif state.status == State.StatusProbe:
+                self.process_probe(node, state)
             elif state.status == State.StatusFinished:
                 continue
             else:
@@ -386,6 +388,45 @@ class Generator:
     def restore_state(self, state):
         # TODO: Use in code of generator
         self.controller.restore_state(state.vg_state.id)
+
+    def process_probe(self, node, state):
+        # TODO: Move deterministic (no ANY_SOURCE or flag=0) probe into fast expand
+
+        comm_id, source, tag, flag_ptr, status_ptr = state.probe_data
+
+        for request in state.requests:
+            if request is not None and \
+                    request.is_receive() and \
+                    request.comm_id == comm_id:
+                raise Exception("Probe with pending recv request in the same"
+                                "communicator is not supported now. Sorry")
+                # TODO: To make it correct, we need finish all compatible recv
+                # first
+
+        messages, already_probed = state.probe_messages(comm_id, source, tag)
+
+        if flag_ptr and not already_probed: # It is Iprobe
+            new_gstate = state.gstate.copy()
+            new_state = new_gstate.get_state(state.pid)
+            self.controller.restore_state(new_state.vg_state.id)
+            self.controller.write_int(flag_ptr, 0)
+            self.execute_state_and_add_node(node, new_state)
+            if status_ptr:
+                # TODO: Set status as undefined
+                pass
+
+        for message in messages:
+            new_gstate = state.gstate.copy()
+            new_state = new_gstate.get_state(state.pid)
+            self.controller.restore_state(new_state.vg_state.id)
+            self.controller.write_int(flag_ptr, 1)
+            if status_ptr:
+                self.write_status(status_ptr,
+                                  message.source,
+                                  message.tag,
+                                  message.size)
+            new_state.add_probed_message(comm_id, source, tag, message)
+            self.execute_state_and_add_node(node, new_state)
 
     def process_wait_or_test(self, node, state, test):
         if test:

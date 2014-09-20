@@ -107,6 +107,29 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	return MPI_SUCCESS;
 }
 
+int MPI_Probe(int source, int tag, MPI_Comm comm, MPI_Status *status)
+{
+	aislinn_call_4("MPI_Probe",
+			(AislinnArgType) source,
+			(AislinnArgType) tag,
+			(AislinnArgType) comm,
+			(AislinnArgType) status);
+	return MPI_SUCCESS;
+}
+
+int MPI_Iprobe(
+	int source, int tag, MPI_Comm comm, int *flag, MPI_Status *status)
+{
+	AislinnArgType args[5];
+	args[0] = (AislinnArgType) source;
+	args[1] = (AislinnArgType) tag;
+	args[2] = (AislinnArgType) comm;
+	args[3] = (AislinnArgType) flag;
+	args[4] = (AislinnArgType) status;
+	aislinn_call_args("MPI_Iprobe", args, 5);
+	return MPI_SUCCESS;
+}
+
 int MPI_Wait(MPI_Request *request, MPI_Status *status)
 {
 	aislinn_call_2(

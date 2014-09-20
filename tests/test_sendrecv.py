@@ -121,12 +121,23 @@ class SendRecvTests(TestCase):
 
     def test_status(self):
         output = "0 111\n2 333\n2 333\n0 111\n"
+        output2 = ("First1 0 111\n"
+                   "First2 0 111 1\n"
+                   "First3 0 111\n"
+                   "Second 2 333\n"
+                   "First1 2 333\n"
+                   "First2 2 333 1\n"
+                   "First3 2 333\n"
+                   "Second 0 111\n")
+
         self.program("status")
         self.execute(3, "wait", send_protocol="randezvous", stdout=output)
         self.no_errors()
         self.execute(3, "waitall", send_protocol="randezvous", stdout=output)
         self.no_errors()
         self.execute(3, "recv", send_protocol="randezvous", stdout=output)
+        self.no_errors()
+        self.execute(3, "probe", send_protocol="randezvous", stdout=output2)
         self.no_errors()
 
     def test_tag(self):
