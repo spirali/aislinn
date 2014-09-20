@@ -79,7 +79,7 @@ def MPI_Iprobe(generator, args, state, context):
     check.check_rank(comm, source, 1, True, True)
     check.check_tag(tag, 2, True)
 
-    e = event.CommEvent("IProbe", state.pid, source, tag)
+    e = event.CommEvent("Iprobe", state.pid, source, tag)
     generator.add_call_event(context, e)
 
     if source != consts.MPI_PROC_NULL:

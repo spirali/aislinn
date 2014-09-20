@@ -232,6 +232,7 @@ class Generator:
                     e.name = "message-truncated"
                     e.short_description = "Message truncated"
                     e.description = "Message is bigger than receive buffer"
+                    e.pid = state.pid
                     self.add_error_message(e)
                     self.fatal_error = True
                     # TODO: In fact it is not fatal error, it should be handle
