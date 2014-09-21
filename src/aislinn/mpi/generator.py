@@ -406,7 +406,7 @@ class Generator:
 
         messages, already_probed = state.probe_messages(comm_id, source, tag)
 
-        if flag_ptr and not already_probed: # It is Iprobe
+        if flag_ptr is not None and not already_probed: # It is Iprobe
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
             self.controller.restore_state(new_state.vg_state.id)
@@ -420,7 +420,8 @@ class Generator:
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
             self.controller.restore_state(new_state.vg_state.id)
-            self.controller.write_int(flag_ptr, 1)
+            if flag_ptr is not None:
+                self.controller.write_int(flag_ptr, 1)
             if status_ptr:
                 self.write_status(status_ptr,
                                   message.source,

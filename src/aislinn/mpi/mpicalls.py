@@ -97,6 +97,33 @@ def MPI_Iprobe(generator, args, state, context):
         state.set_ready()
     return True
 
+def MPI_Probe(generator, args, state, context):
+    source, tag, comm_id, status_ptr = \
+        convert_types(args, ("int", # source
+                             "int", # tag
+                             "int", # comm
+                             "ptr", # status_ptr
+                             ))
+
+    comm = check.check_and_get_comm(state, comm_id, 3)
+    check.check_rank(comm, source, 1, True, True)
+    check.check_tag(tag, 2, True)
+
+    e = event.CommEvent("Probe", state.pid, source, tag)
+    generator.add_call_event(context, e)
+
+    if source != consts.MPI_PROC_NULL:
+        state.set_probe(comm, source, tag, None, status_ptr)
+        return True
+    else:
+        generator.controller.write_int(flag_ptr, 1)
+        if status_ptr:
+            generator.write_status(status_ptr,
+                                   consts.MPI_PROC_NULL,
+                                   consts.MPI_ANY_TAG,
+                                   0)
+        return False
+
 def MPI_Wait(generator, args, state, context):
     request_ptr, status_ptr = \
         convert_types(args, ("ptr", # request_ptr
@@ -766,6 +793,7 @@ calls = {
         "MPI_Isend" : MPI_ISend,
         "MPI_Irecv" : MPI_IRecv,
         "MPI_Iprobe" : MPI_Iprobe,
+        "MPI_Probe" : MPI_Probe,
         "MPI_Wait" : MPI_Wait,
         "MPI_Test" : MPI_Test,
         "MPI_Waitall" : MPI_Waitall,

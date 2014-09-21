@@ -139,6 +139,8 @@ class SendRecvTests(TestCase):
         self.no_errors()
         self.execute(3, "probe", send_protocol="randezvous", stdout=output2)
         self.no_errors()
+        self.execute(3, "iprobe", send_protocol="randezvous", stdout=output2)
+        self.no_errors()
 
     def test_tag(self):
         self.program("tag")

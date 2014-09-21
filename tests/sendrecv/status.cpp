@@ -40,6 +40,16 @@ int main(int argc, char **argv)
 			printf("%i %i\n", s.MPI_SOURCE, s.MPI_TAG);
 		} else if (!strcmp(argv[1], "probe")) {
 			MPI_Status s;
+			MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
+			printf("First1 %i %i\n", s.MPI_SOURCE, s.MPI_TAG);
+			MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
+			printf("First2 %i %i 1\n", s.MPI_SOURCE, s.MPI_TAG);
+			MPI_Recv(&d, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
+			printf("First3 %i %i\n", s.MPI_SOURCE, s.MPI_TAG);
+			MPI_Recv(&d, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
+			printf("Second %i %i\n", s.MPI_SOURCE, s.MPI_TAG);
+		} else if (!strcmp(argv[1], "iprobe")) {
+			MPI_Status s;
 			int flag = 0;
 			while (!flag) {
 				MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &s);
