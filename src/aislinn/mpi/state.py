@@ -45,6 +45,7 @@ class State:
         self.messages = []
         self.probed_messages = None # [ (comm_id, source, tag, message) ] or None
         self.comms = [] # <-- Copy on write!
+        self.groups = {} # <-- Copy on write!
         self.requests = [None]
         self.active_request_ids = None
         self.flag_ptr = None
@@ -100,6 +101,29 @@ class State:
         i = self.comms.index(comm)
         del self.cc_id_counters[i + 2]
         del self.comms[i]
+
+    def add_group(self, group):
+        self.groups = copy.copy(self.groups)
+        i = consts.MPI_GROUP_NULL + 1
+        while True:
+            if i not in self.groups:
+                break
+            i += 1
+        self.groups[i] = group
+        return i
+
+    def remove_group(self, group):
+        self.groups = copy.copy(self.groups)
+        for i, g in self.groups.items():
+            if g is group:
+                del self.groups[i]
+                return
+        raise Exception("Group not found")
+
+
+
+    def get_group(self, group_id):
+        return self.groups.get(group_id)
 
     def dispose(self):
         if self.vg_state is not None:

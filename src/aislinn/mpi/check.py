@@ -111,6 +111,14 @@ def check_and_get_comm(state, comm_id, arg_position):
                                  "Invalid communicator").throw()
     return comm
 
+def check_and_get_group(state, group_id, arg_position):
+    group = state.get_group(group_id)
+    if group is None:
+        errormsg.InvalidArgument(group_id,
+                                 arg_position,
+                                 "Invalid group").throw()
+    return group
+
 def check_request_ids(state, request_ids):
     for request_id in request_ids:
         if not state.is_request_id_valid(request_id):

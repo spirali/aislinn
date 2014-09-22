@@ -48,6 +48,27 @@ def MPI_Comm_size(generator, args, state, context):
     generator.controller.write_int(ptr, comm.group.size)
     return False
 
+def MPI_Comm_group(generator, args, state, context):
+    comm_id, group_ptr = convert_types(args, ("int", "ptr"))
+    comm = check.check_and_get_comm(state, comm_id, 1)
+    group_id = state.add_group(comm.group)
+    generator.controller.write_int(group_ptr, group_id)
+    return False
+
+def MPI_Group_free(generator, args, state, context):
+    group_ptr = convert_types(args, ("ptr",))[0]
+    group_id = generator.controller.read_int(group_ptr)
+    group = check.check_and_get_group(state, group_id, 1)
+    state.remove_group(group)
+    generator.controller.write_int(group_ptr, consts.MPI_GROUP_NULL)
+    return False
+
+def MPI_Group_size(generator, args, state, context):
+    group_id, ptr = convert_types(args, ("int", "ptr",))
+    group = check.check_and_get_group(state, group_id, 1)
+    generator.controller.write_int(ptr, group.size)
+    return False
+
 def MPI_Type_size(generator, args, state, context):
     datatype_id, ptr = convert_types(args, ("int", "ptr"))
     datatype = check.check_datatype(state, datatype_id, 1)
@@ -787,6 +808,9 @@ calls = {
         "MPI_Comm_split" : MPI_Comm_split,
         "MPI_Comm_dup" : MPI_Comm_dup,
         "MPI_Comm_free" : MPI_Comm_free,
+        "MPI_Comm_group" : MPI_Comm_group,
+        "MPI_Group_free" : MPI_Group_free,
+        "MPI_Group_size" : MPI_Group_size,
         "MPI_Get_count" : MPI_Get_count,
         "MPI_Send" : MPI_Send,
         "MPI_Recv" : MPI_Recv,

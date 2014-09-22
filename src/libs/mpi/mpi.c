@@ -752,6 +752,29 @@ int MPI_Dims_create(int nnodes, int ndims, int dims[])
 	return MPI_SUCCESS;
 }
 
+int MPI_Comm_group(MPI_Comm comm, MPI_Group *group)
+{
+	aislinn_call_2(
+		"MPI_Comm_group", (AislinnArgType) comm, (AislinnArgType) group);
+	return MPI_SUCCESS;
+}
+
+int MPI_Group_free(MPI_Group *group)
+{
+	aislinn_call_1(
+		"MPI_Group_free", (AislinnArgType) group);
+	return MPI_SUCCESS;
+}
+
+int MPI_Group_size(MPI_Group group, int *size)
+{
+	aislinn_call_2(
+		"MPI_Group_size",
+		(AislinnArgType) group,
+		(AislinnArgType) size);
+	return MPI_SUCCESS;
+}
+
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE
 /  --------------------------------------------------------------------------*/

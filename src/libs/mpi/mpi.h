@@ -28,6 +28,7 @@ typedef int MPI_Op;
 typedef int MPI_Fint;
 typedef int MPI_Errhandler;
 typedef int MPI_Info;
+typedef int MPI_Group;
 typedef unsigned long MPI_Aint;
 
 /* Constants */
@@ -77,6 +78,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMM_NULL ((MPI_Comm) 0x0000CC00)
 #define MPI_COMM_SELF ((MPI_Comm) 0x0000CC01)
 #define MPI_COMM_WORLD ((MPI_Comm) 0x0000CC02)
+
+#define MPI_GROUP_NULL ((MPI_Group) 0x0000DD00)
 
 #define MPI_BOTTOM         ((void*) 0)
 
@@ -356,6 +359,14 @@ int MPI_Dims_create(int nnodes, int ndims, int dims[]);
 int MPI_Get_address(const void *location, MPI_Aint *address);
 
 int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
+
+int MPI_Comm_group(MPI_Comm comm, MPI_Group *group);
+
+int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm);
+
+int MPI_Group_free(MPI_Group *group);
+
+int MPI_Group_size(MPI_Group group, int *size);
 
 /* ----------------------------------------------------------------------------
 /  DUMMY FUNCTIONS

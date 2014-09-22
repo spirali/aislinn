@@ -144,6 +144,11 @@ class BaseTests(TestCase):
         self.execute(2, stdout="")
         self.single_error("remove-buildin-type")
 
+    def test_group(self):
+        self.program("group")
+        self.execute(3, stdout="")
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

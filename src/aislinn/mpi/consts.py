@@ -32,6 +32,9 @@ MPI_COMM_SELF = 0x0000CC01
 MPI_COMM_WORLD = 0x0000CC02
 MPI_COMM_USERDEF = 0x0000CC03
 
+# ---- Groups --------------------------------------
+MPI_GROUP_NULL = 0x0000DD00
+
 # ---- Data types -----------------------------------------
 MPI_DATATYPE_NULL = 0xFF00100
 MPI_PACKED = 0xFF00101
