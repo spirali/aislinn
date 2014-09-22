@@ -86,6 +86,8 @@ def parse_args():
                        action="store_true")
     parser.add_argument("--debug-under-valgrind",
                        action="store_true")
+    parser.add_argument("--profile-under-valgrind",
+                       action="store_true")
     parser.add_argument("--debug-state",
                        metavar="NAME",
                        type=str,

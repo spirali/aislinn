@@ -26,6 +26,7 @@ import time
 class Controller:
 
     debug_under_valgrind = False
+    profile_under_valgrind = False
 
     def __init__(self, args, cwd=None):
         self.process = None
@@ -189,13 +190,18 @@ class Controller:
             "--port={0}".format(port)
         ) + tuple(self.valgrind_args) + tuple(self.args)
 
-        if self.debug_under_valgrind:
+        if self.debug_under_valgrind or self.profile_under_valgrind:
+            if self.profile_under_valgrind:
+                extra = ("--tool=callgrind",)
+            else:
+                extra = ()
+
             args = (
                 "valgrind",
                 "--sim-hints=enable-outer",
                 "--trace-children=yes",
                 "--smc-check=all-non-file",
-                "--run-libc-freeres=no") + args
+                "--run-libc-freeres=no") + extra + args
 
         self.process = subprocess.Popen(args, cwd=self.cwd)
 
