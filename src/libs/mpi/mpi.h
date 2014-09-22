@@ -349,13 +349,13 @@ int MPI_Type_hvector(
 
 int MPI_Type_free(MPI_Datatype *datatype);
 
-int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
-
 int MPI_Abort(MPI_Comm comm, int errorcode);
 
 int MPI_Dims_create(int nnodes, int ndims, int dims[]);
 
 int MPI_Get_address(const void *location, MPI_Aint *address);
+
+int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
 
 /* ----------------------------------------------------------------------------
 /  DUMMY FUNCTIONS

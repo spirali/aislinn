@@ -731,6 +731,26 @@ int MPI_Type_create_hindexed(
 	return MPI_SUCCESS;
 }
 
+int MPI_Type_commit(MPI_Datatype *datatype)
+{
+	aislinn_call_1("MPI_Type_commit", (AislinnArgType) datatype);
+	return MPI_SUCCESS;
+}
+
+int MPI_Type_free(MPI_Datatype *datatype)
+{
+	aislinn_call_1("MPI_Type_free", (AislinnArgType) datatype);
+	return MPI_SUCCESS;
+}
+
+int MPI_Dims_create(int nnodes, int ndims, int dims[])
+{
+	aislinn_call_3("MPI_Dims_create",
+		(AislinnArgType) nnodes,
+		(AislinnArgType) ndims,
+		(AislinnArgType) dims);
+	return MPI_SUCCESS;
+}
 
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE
@@ -805,6 +825,7 @@ int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler)
 	return MPI_SUCCESS;
 }
 
+
 int MPI_Type_hindexed(int count,
                     const int *array_of_blocklengths,
                     const MPI_Aint *array_of_displacements,
@@ -822,30 +843,9 @@ int MPI_Type_hindexed(int count,
 
 }
 
-int MPI_Type_commit(MPI_Datatype *datatype)
-{
-	aislinn_call_1("MPI_Type_commit", (AislinnArgType) datatype);
-	return MPI_SUCCESS;
-}
-
-int MPI_Type_free(MPI_Datatype *datatype)
-{
-	aislinn_call_1("MPI_Type_free", (AislinnArgType) datatype);
-	return MPI_SUCCESS;
-}
-
 int MPI_Address(const void *location, MPI_Aint *address)
 {
 	return MPI_Get_address(location, address);
-}
-
-int MPI_Dims_create(int nnodes, int ndims, int dims[])
-{
-	aislinn_call_3("MPI_Dims_create",
-		(AislinnArgType) nnodes,
-		(AislinnArgType) ndims,
-		(AislinnArgType) dims);
-	return MPI_SUCCESS;
 }
 
 /* ----------------------------------------------------------------------------
