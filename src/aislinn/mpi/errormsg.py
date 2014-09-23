@@ -82,7 +82,6 @@ class Deadlock(ErrorMessage):
     name = "deadlock"
     short_description = "Deadlock"
 
-
 class CallError(ErrorMessage):
     name = "callerror"
 

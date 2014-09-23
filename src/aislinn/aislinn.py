@@ -88,6 +88,8 @@ def parse_args():
                        action="store_true")
     parser.add_argument("--profile-under-valgrind",
                        action="store_true")
+    parser.add_argument("--profile",
+                       action="store_true")
     parser.add_argument("--debug-state",
                        metavar="NAME",
                        type=str,
@@ -159,8 +161,19 @@ def main():
     logging.debug("Run args: %s", run_args)
     logging.debug("Valgrind args: %s", valgrind_args)
 
+    if args.profile:
+        import cProfile
+        import pstats
+        pr = cProfile.Profile()
+        pr.enable()
     if not generator.run(args.p):
-        sys.exit(1)
+            sys.exit(1)
+    if args.profile:
+        pr.disable()
+        with open("aislinn.stats", "w") as f:
+            ps = pstats.Stats(pr, stream=f).sort_stats("cumulative")
+            ps.print_stats()
+        logging.info("Profile written into 'aislinn.stats'")
 
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
