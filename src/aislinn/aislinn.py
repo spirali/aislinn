@@ -78,6 +78,11 @@ def parse_args():
                         type=str,
                         help="Output type: xml, html, none",
                         default="html")
+    parser.add_argument("--search",
+                        metavar="SEARCH",
+                        type=str,
+                        default="bfs",
+                        help="Statespace search strategy (bfs or dfs)")
     parser.add_argument("--stats",
                        metavar="TICKS",
                        type=int,
@@ -115,6 +120,10 @@ def parse_args():
 
     if args.output not in ("xml", "html", "none"):
         logging.error("Invalid output type (parameter --output)")
+        sys.exit(1)
+
+    if args.search != "bfs" and args.search != "dfs":
+        logging.error("Invalid argument for --search")
         sys.exit(1)
 
     valgrind_args = []

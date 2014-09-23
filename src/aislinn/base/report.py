@@ -102,6 +102,10 @@ class Report:
                 "processes", generator.process_count, "Number of processes")
         self.program_info.add(
                 "send-protocol", generator.send_protocol, "Send protocol")
+        self.program_info.add("search",
+                              generator.search,
+                              "Search strategy")
+
         if generator.send_protocol == "threshold":
             self.program_info.add(
                     "send-protocol-thresholds",
@@ -109,7 +113,6 @@ class Report:
                         generator.send_protocol_eager_threshold,
                         generator.send_protocol_randezvous_threshold),
                     "Threshold values")
-
         self.analysis_info.add("nodes",
                       generator.statespace.nodes_count,
                       "Number of nodes in statespace")

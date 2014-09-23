@@ -89,6 +89,7 @@ class Generator:
             self.statistics_tick = None
             self.statistics = None
 
+        self.search = aislinn_args.search
         self.debug_state = aislinn_args.debug_state
 
     def get_statistics(self):
@@ -161,7 +162,10 @@ class Generator:
             tick_counter = tick
 
             while self.working_queue:
-                node, gstate = self.working_queue.popleft()
+                if self.search == "dfs":
+                    node, gstate = self.working_queue.pop()
+                else: # bfs
+                    node, gstate = self.working_queue.popleft()
                 self.expand_node(node, gstate)
                 if self.fatal_error:
                     return True
