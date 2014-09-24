@@ -78,6 +78,10 @@ def parse_args():
                         type=str,
                         help="Output type: xml, html, none",
                         default="html")
+    parser.add_argument("--max-states",
+                       metavar="N",
+                       type=int,
+                       default=9999999)
     parser.add_argument("--search",
                         metavar="SEARCH",
                         type=str,

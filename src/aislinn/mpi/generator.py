@@ -90,7 +90,9 @@ class Generator:
             self.statistics = None
 
         self.search = aislinn_args.search
+        self.max_states = aislinn_args.max_states
         self.debug_state = aislinn_args.debug_state
+        self.is_full_statespace = False
 
     def get_statistics(self):
         if self.statistics is None:
@@ -177,6 +179,10 @@ class Generator:
                         tick_counter = tick
                         self.record_statistics()
 
+                if self.statespace.nodes_count > self.max_states:
+                    logging.info("Maximal number of states reached")
+                    return True
+
             # Check there is no memory leak
             assert self.vg_states.resource_count == 0
             assert self.vg_buffers.resource_count == 0
@@ -185,6 +191,7 @@ class Generator:
             # All pages are active, i.e. we have freed everyhing else
             assert stats["pages"] == stats["active-pages"]
             assert stats["buffers-size"] == 0
+            self.is_full_statespace = True
 
         finally:
             self.controller.kill()

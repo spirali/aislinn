@@ -116,6 +116,9 @@ class Report:
         self.analysis_info.add("nodes",
                       generator.statespace.nodes_count,
                       "Number of nodes in statespace")
+        self.analysis_info.add("full-statespace",
+                      generator.is_full_statespace,
+                      "Full statespace")
         self.analysis_info.add("init-time",
                       generator.init_time,
                       "Start time")
