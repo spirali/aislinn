@@ -689,37 +689,39 @@ static void memimage_free(MemoryImage *memimage)
 
 static void memimage_restore(MemoryImage *memimage)
 {
-   OSet *old_auxmap = current_memspace->auxmap;
-   OSet *auxmap = VG_(OSetGen_EmptyClone)(old_auxmap);
+    OSet *auxmap = current_memspace->auxmap;
+    UWord i = 0;
+    AuxMapEnt *elem;
 
-   UWord i;
-   for (i = 0; i < memimage->pages_count; i++) {
-      Page *page = memimage->pages[i];
-      AuxMapEnt *nyu = (AuxMapEnt*) VG_(OSetGen_AllocNode)(auxmap, sizeof(AuxMapEnt));
-      nyu->base = page->base;
-      nyu->page = page;
-      page->ref_count++;
-      VG_(OSetGen_Insert)(auxmap, nyu);
-      AuxMapEnt *ent = VG_(OSetGen_Lookup)(old_auxmap, nyu);
-      if (ent) {
-         if (ent->page == page) {
-             continue; // We are replacing the page by the same page
-         }
-      }
-      memimage_restore_page_content(page);
-   }
+    VG_(OSetGen_ResetIter)(auxmap);
+    while(i < memimage->pages_count &&
+          (elem = VG_(OSetGen_Next(auxmap)))) {
+        Page *page = memimage->pages[i];
+        if (LIKELY(page->base == elem->base)) {
+            if (elem->page != page) {
+                page_dispose(elem->page);
+                elem->page = page;
+                page->ref_count++;
+                memimage_restore_page_content(page);
+            }
+            i++;
+        } else {
+            tl_assert(page->base > elem->base);
+            page_dispose(elem->page);
+            // TODO: make a shared copy of an empty page
+            elem->page = page_new(elem->base);
+        }
+    }
+    tl_assert(i == memimage->pages_count);
+    while ((elem = VG_(OSetGen_Next(auxmap)))) {
+        page_dispose(elem->page);
+        // TODO: make a shared copy of an empty page
+        elem->page = page_new(elem->base);
+    }
 
-   VG_(deleteXA)(current_memspace->allocation_blocks);
-   current_memspace->allocation_blocks = VG_(cloneXA)("an.allocations",
-                                                      memimage->allocation_blocks);
-
-   VG_(OSetGen_ResetIter)(old_auxmap);
-   AuxMapEnt *elem;
-   while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
-      page_dispose(elem->page);
-   }
-   VG_(OSetGen_Destroy(old_auxmap));
-   current_memspace->auxmap = auxmap;
+    VG_(deleteXA)(current_memspace->allocation_blocks);
+    current_memspace->allocation_blocks = VG_(cloneXA)("an.allocations",
+                                                       memimage->allocation_blocks);
 }
 
 static void memspace_hash(AN_(MD5_CTX) *ctx)
