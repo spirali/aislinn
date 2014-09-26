@@ -352,6 +352,12 @@ int MPI_Type_hvector(
 	int count, int blocklength, int stride,
 	MPI_Datatype oldtype, MPI_Datatype *newtype);
 
+int MPI_Type_struct(int count,
+	const int *array_of_blocklengths,
+	const MPI_Aint *array_of_displacements,
+	const MPI_Datatype *array_of_types,
+	MPI_Datatype *newtype);
+
 int MPI_Type_free(MPI_Datatype *datatype);
 
 int MPI_Abort(MPI_Comm comm, int errorcode);

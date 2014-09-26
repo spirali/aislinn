@@ -99,6 +99,10 @@ def check_datatype(state, type_id, arg_position, allow_uncommited=False):
         e.throw()
     return datatype
 
+def check_datatypes(state, type_ids, arg_position, allow_uncommited=False):
+    return [ check_datatype(state, type_id, arg_position, allow_uncommited)
+             for type_id in type_ids ]
+
 def check_and_get_comm(state, comm_id, arg_position):
     if comm_id == consts.MPI_COMM_NULL:
         errormsg.InvalidArgument("MPI_COMM_NULL",

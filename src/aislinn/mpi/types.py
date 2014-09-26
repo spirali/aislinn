@@ -138,6 +138,47 @@ class IndexedType(Datatype):
             pointer += self.unpack_size
 
 
+class StructType(Datatype):
+
+    def __init__(self, datatypes, counts, displs):
+        assert len(datatypes) == len(counts) == len(displs)
+        Datatype.__init__(self)
+        self.datatypes = datatypes
+        self.counts = counts
+        self.displs = displs
+        self.size = sum(datatype.size * count
+                        for datatype, count in zip(datatypes, counts))
+        self.unpack_size = max(displ + datatype.size * count
+                               for datatype, count, displ
+                               in zip(datatypes, counts, displs))
+
+    def pack(self, controller, pointer, vg_buffer, count, index=0):
+        for i in xrange(count):
+            for datatype, c, displ in \
+                zip(self.datatypes, self.counts, self.displs):
+                    datatype.pack(
+                            controller,
+                            pointer + displ,
+                            vg_buffer,
+                            c,
+                            index)
+                    index += c * datatype.size
+            pointer += self.unpack_size
+
+    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+        for i in xrange(count):
+            for datatype, c, displ in \
+                zip(self.datatypes, self.counts, self.displs):
+                    datatype.unpack(
+                            controller,
+                            vg_buffer,
+                            count,
+                            pointer + displ,
+                            index)
+                    index += c * datatype.size
+            pointer += self.unpack_size
+
+
 buildin_types = dict((t.type_id, t) for t in [
     BuildinType(consts.MPI_PACKED, "MPI_PACKED", 1),
     BuildinType(consts.MPI_BYTE, "MPI_BYTE", 1),

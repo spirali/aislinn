@@ -71,7 +71,7 @@ def MPI_Group_size(generator, args, state, context):
 
 def MPI_Type_size(generator, args, state, context):
     datatype_id, ptr = convert_types(args, ("int", "ptr"))
-    datatype = check.check_datatype(state, datatype_id, 1)
+    datatype = check.check_datatype(state, datatype_id, 1, True)
     generator.controller.write_int(ptr, datatype.size)
     return False
 
@@ -553,7 +553,7 @@ def MPI_Type_vector(generator, args, state, context):
             convert_types(args, ("int", "int", "int", "int", "ptr"))
     check.check_count(count, 1)
     check.check_size(blocksize, 2)
-    datatype = check.check_datatype(state, oldtype, 3, True)
+    datatype = check.check_datatype(state, oldtype, 4, True)
     newtype = types.VectorType(datatype, count, blocksize, stride, False)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
@@ -564,7 +564,7 @@ def MPI_Type_hvector(generator, args, state, context):
             convert_types(args, ("int", "int", "int", "int", "ptr"))
     check.check_count(count, 1)
     check.check_size(blocksize, 2)
-    datatype = check.check_datatype(state, oldtype, 3, True)
+    datatype = check.check_datatype(state, oldtype, 4, True)
     newtype = types.VectorType(datatype, count, blocksize, stride, True)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
@@ -574,7 +574,7 @@ def MPI_Type_indexed(generator, args, state, context):
     count, sizes_ptr, displs_ptr, oldtype, newtype_ptr = \
             convert_types(args, ("int", "ptr", "ptr", "int", "ptr"))
     check.check_count(count, 1)
-    datatype = check.check_datatype(state, oldtype, 3, True)
+    datatype = check.check_datatype(state, oldtype, 4, True)
     sizes = generator.controller.read_ints(sizes_ptr, count)
     check.check_sizes(sizes, 2)
     displs = generator.controller.read_ints(displs_ptr, count)
@@ -587,7 +587,7 @@ def MPI_Type_hindexed(generator, args, state, context):
     count, sizes_ptr, displs_ptr, oldtype, newtype_ptr = \
             convert_types(args, ("int", "ptr", "ptr", "int", "ptr"))
     check.check_count(count, 1)
-    datatype = check.check_datatype(state, oldtype, 3, True)
+    datatype = check.check_datatype(state, oldtype, 4, True)
     sizes = generator.controller.read_ints(sizes_ptr, count)
     check.check_sizes(sizes, 2)
     displs = generator.controller.read_pointers(displs_ptr, count)
@@ -595,6 +595,22 @@ def MPI_Type_hindexed(generator, args, state, context):
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
+
+def MPI_Type_struct(generator, args, state, context):
+    count, sizes_ptr, displs_ptr, types_ptr, newtype_ptr = \
+            convert_types(args, ("int", "ptr", "ptr", "ptr", "ptr"))
+    check.check_count(count, 1)
+    sizes = generator.controller.read_ints(sizes_ptr, count)
+    check.check_sizes(sizes, 2)
+    displs = generator.controller.read_pointers(displs_ptr, count)
+    type_ids = generator.controller.read_ints(types_ptr, count)
+    datatypes = check.check_datatypes(state, type_ids, 4, True)
+
+    newtype = types.StructType(datatypes, sizes, displs)
+    state.add_datatype(newtype)
+    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    return False
+
 
 def MPI_Type_commit(generator, args, state, context):
     datatype_ptr = convert_types(args, ("ptr",))[0]
@@ -843,6 +859,7 @@ calls = {
         "MPI_Type_hvector" : MPI_Type_hvector,
         "MPI_Type_indexed" : MPI_Type_indexed,
         "MPI_Type_hindexed" : MPI_Type_hindexed,
+        "MPI_Type_struct" : MPI_Type_struct,
         "MPI_Type_create_hindexed" : MPI_Type_hindexed,
         "MPI_Type_commit" : MPI_Type_commit,
         "MPI_Type_free" : MPI_Type_free,

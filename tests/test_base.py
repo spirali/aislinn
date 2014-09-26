@@ -106,6 +106,21 @@ class BaseTests(TestCase):
         self.execute(2, stdout=output)
         self.no_errors()
 
+    def test_struct(self):
+        output = ("0 0 1 1 inf\n"
+                  "1 1 2 2 5\n"
+                  "2 2 3 3 2.5\n"
+                  "0 3 4 4 1.66667\n"
+                  "1 4 5 5 1.25\n"
+                  "2 5 6 6 1\n"
+                  "0 6 7 0 0.833333\n"
+                  "1 7 8 1 0.714286\n"
+                  "2 8 9 2 0.625\n"
+                  "0 9 10 3 0.555556\n")
+        self.program("struct")
+        self.execute(2, stdout=output)
+        self.no_errors()
+
     def test_hvector(self):
         output = "0 1 2 3 4 5 10 11 12 13 14 15 16 17 18 19 20 21 26 27 28 29 "\
                  "30 31 32 33 34 35 36 37 42 43 44 45 46 47 48 49 50 51 52 53 "\
