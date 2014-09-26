@@ -759,6 +759,28 @@ int MPI_Comm_group(MPI_Comm comm, MPI_Group *group)
 	return MPI_SUCCESS;
 }
 
+int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm)
+{
+	aislinn_call_3(
+		"MPI_Comm_create",
+		(AislinnArgType) comm,
+		(AislinnArgType) group,
+		(AislinnArgType) newcomm);
+	return MPI_SUCCESS;
+}
+
+int MPI_Comm_create_errhandler(
+  MPI_Comm_errhandler_function *function,
+  MPI_Errhandler *errhandler
+)
+{
+	aislinn_call_2(
+		"MPI_Comm_create_errhandler",
+		(AislinnArgType) function,
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+}
+
 int MPI_Group_free(MPI_Group *group)
 {
 	aislinn_call_1(

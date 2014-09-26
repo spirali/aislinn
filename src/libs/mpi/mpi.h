@@ -111,6 +111,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMM_NULL_COPY_FN ((MPI_Comm_copy_attr_function*)0)
 #define MPI_COMM_NULL_DELETE_FN ((MPI_Comm_delete_attr_function*)0)
 
+typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
+
 /* Functions prototypes */
 typedef int MPI_Comm_copy_attr_function(
 	MPI_Comm oldcomm,
@@ -368,6 +370,11 @@ int MPI_Group_free(MPI_Group *group);
 
 int MPI_Group_size(MPI_Group group, int *size);
 
+int MPI_Comm_create_errhandler(
+  MPI_Comm_errhandler_function *function,
+  MPI_Errhandler *errhandler
+);
+
 /* ----------------------------------------------------------------------------
 /  DUMMY FUNCTIONS
 /  --------------------------------------------------------------------------*/
@@ -378,6 +385,7 @@ double MPI_Wtime();
 /  DEPRECATED INTERFACE
 /  --------------------------------------------------------------------------*/
 
+typedef MPI_Comm_errhandler_function MPI_Comm_errhandler_fn;
 typedef MPI_Comm_delete_attr_function MPI_Delete_function;
 typedef MPI_Comm_copy_attr_function MPI_Copy_function;
 
