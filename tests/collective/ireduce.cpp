@@ -13,6 +13,7 @@ int main(int argc, char **argv)
 	int rank, size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	MPI_Request r[2];
 	const int root = 1 % size;
 	const int mysize = 4; 
 
@@ -26,10 +27,12 @@ int main(int argc, char **argv)
 	double out1d[mysize], out2d[mysize];
 
 	if (!strcmp(argv[1], "ok")) {
-		MPI_Reduce(d, out1, mysize, MPI_INT, MPI_SUM, root, MPI_COMM_WORLD);
-		MPI_Reduce(d, out2, mysize, MPI_INT, MPI_PROD, root, MPI_COMM_WORLD);
-		MPI_Reduce(dd, out1d, mysize, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
-		MPI_Reduce(dd, out2d, mysize, MPI_DOUBLE, MPI_PROD, root, MPI_COMM_WORLD);
+		MPI_Ireduce(d, out1, mysize, MPI_INT, MPI_SUM, root, MPI_COMM_WORLD, &r[0]);
+		MPI_Ireduce(d, out2, mysize, MPI_INT, MPI_PROD, root, MPI_COMM_WORLD, &r[1]);
+		MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
+		MPI_Ireduce(dd, out1d, mysize, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD, &r[0]);
+		MPI_Ireduce(dd, out2d, mysize, MPI_DOUBLE, MPI_PROD, root, MPI_COMM_WORLD, &r[1]);
+		MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
 	}
 
 	/*

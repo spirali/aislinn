@@ -31,6 +31,11 @@ class CollectiveTests(TestCase):
         self.execute(3, "b", stdout=check_output2)
         self.no_errors()
 
+    def test_barrier(self):
+        self.program("barrier")
+        self.execute(3, stdout=set(["a = 0; b = 200"]))
+        self.no_errors()
+
     def test_gatherv(self):
         output1 = "OUT1: 100 101\n" \
                   "OUT2: 100 101\n"
@@ -122,6 +127,16 @@ class CollectiveTests(TestCase):
         self.execute(3, "2", stdout=output)
         self.no_errors()
 
+    def test_ireduce(self):
+        output = "OUT1: 600 603 606 609\n" \
+                 "OUT2: 6000000 6110601 6222408 6335427\n" \
+                 "OUT1d: 0.6 0.603 0.606 0.609\n" \
+                 "OUT2d: 0.006 0.0061106 0.00622241 0.00633543\n"
+        self.program("ireduce")
+
+        self.execute(3, "ok", stdout=output)
+        self.no_errors()
+
     def test_reduce(self):
         output = "OUT1: 600 603 606 609\n" \
                  "OUT2: 6000000 6110601 6222408 6335427\n" \
@@ -139,7 +154,9 @@ class CollectiveTests(TestCase):
                  "OUT2d: 0.006 0.0061106 0.00622241 0.00633543\n"
         self.program("allreduce")
 
-        self.execute(3, "ok", stdout=output * 3)
+        self.execute(3, "allreduce", stdout=output * 3)
+        self.no_errors()
+        self.execute(3, "iallreduce", stdout=output * 3)
         self.no_errors()
 
     def test_loc(self):

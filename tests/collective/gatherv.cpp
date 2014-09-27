@@ -43,19 +43,34 @@ int main(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "waitall")) {
+		MPI_Gatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
+		MPI_Gatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
+	}
+
+	if (!strcmp(argv[1], "wait")) {
+		MPI_Gatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
+		MPI_Gatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
+	}
+
+	if (!strcmp(argv[1], "mismatch")) {
+		MPI_Gatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, rank, MPI_COMM_WORLD);
+		MPI_Gatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, rank, MPI_COMM_WORLD);
+	}
+
+	if (!strcmp(argv[1], "iwaitall")) {
 		MPI_Igatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, root, MPI_COMM_WORLD, &r[0]);
 		MPI_Igatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, root, MPI_COMM_WORLD, &r[1]);
 		MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
 	}
 
-	if (!strcmp(argv[1], "wait")) {
+	if (!strcmp(argv[1], "iwait")) {
 		MPI_Igatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, root, MPI_COMM_WORLD, &r[0]);
 		MPI_Wait(&r[0], MPI_STATUS_IGNORE);
 		MPI_Igatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, root, MPI_COMM_WORLD, &r[1]);
 		MPI_Wait(&r[1], MPI_STATUS_IGNORE);
 	}
 
-	if (!strcmp(argv[1], "mismatch")) {
+	if (!strcmp(argv[1], "imismatch")) {
 		MPI_Igatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, rank, MPI_COMM_WORLD, &r[0]);
 		MPI_Wait(&r[0], MPI_STATUS_IGNORE);
 		MPI_Igatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, rank, MPI_COMM_WORLD, &r[1]);

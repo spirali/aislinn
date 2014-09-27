@@ -25,7 +25,14 @@ int main(int argc, char **argv)
 	int out1[mysize], out2[mysize];
 	double out1d[mysize], out2d[mysize];
 
-	if (!strcmp(argv[1], "ok")) {
+	if (!strcmp(argv[1], "allreduce")) {
+		MPI_Allreduce(d, out1, mysize, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(d, out2, mysize, MPI_INT, MPI_PROD, MPI_COMM_WORLD);
+		MPI_Allreduce(dd, out1d, mysize, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(dd, out2d, mysize, MPI_DOUBLE, MPI_PROD, MPI_COMM_WORLD);
+	}
+
+	if (!strcmp(argv[1], "iallreduce")) {
 		MPI_Iallreduce(d, out1, mysize, MPI_INT, MPI_SUM, MPI_COMM_WORLD, &r[0]);
 		MPI_Iallreduce(d, out2, mysize, MPI_INT, MPI_PROD, MPI_COMM_WORLD, &r[1]);
 		MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
@@ -33,14 +40,6 @@ int main(int argc, char **argv)
 		MPI_Iallreduce(dd, out2d, mysize, MPI_DOUBLE, MPI_PROD, MPI_COMM_WORLD, &r[1]);
 		MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
 	}
-
-	/*
-	if (!strcmp(argv[1], "mismatch")) {
-		MPI_Igatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, rank, MPI_COMM_WORLD, &r[0]);
-		MPI_Wait(&r[0], MPI_STATUS_IGNORE);
-		MPI_Igatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, rank, MPI_COMM_WORLD, &r[1]);
-		MPI_Wait(&r[1], MPI_STATUS_IGNORE);
-	}*/
 
 	printf("OUT1:");
 	for (int i = 0; i < mysize; i++) {
