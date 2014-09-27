@@ -111,6 +111,13 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMM_NULL_COPY_FN ((MPI_Comm_copy_attr_function*)0)
 #define MPI_COMM_NULL_DELETE_FN ((MPI_Comm_delete_attr_function*)0)
 
+#define MPI_Comm_c2f(comm) (MPI_Fint)(comm)
+#define MPI_Comm_f2c(comm) (MPI_Comm)(comm)
+#define MPI_Type_c2f(datatype) (MPI_Fint)(datatype)
+#define MPI_Type_f2c(datatype) (MPI_Datatype)(datatype)
+#define MPI_Group_c2f(group) (MPI_Fint)(group)
+#define MPI_Group_f2c(group) (MPI_Group)(group)
+
 typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
 
 /* Functions prototypes */
