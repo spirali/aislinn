@@ -52,7 +52,6 @@ class WaitEvent(Event):
         Event.__init__(self, name, pid)
         self.request_ids = request_ids
 
-
 class ExitEvent(Event):
 
     def __init__(self, name, pid, exitcode):

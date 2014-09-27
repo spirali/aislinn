@@ -139,6 +139,8 @@ void MPI_Init(int *argc, char ***argv);
 
 int MPI_Finalize();
 
+int MPI_Finalized(int *flag);
+
 int MPI_Comm_rank(MPI_Comm comm, int *rank);
 
 int MPI_Comm_size(MPI_Comm comm, int *size);

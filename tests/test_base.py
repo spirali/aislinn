@@ -164,6 +164,11 @@ class BaseTests(TestCase):
         self.execute(3, stdout="")
         self.no_errors()
 
+    def test_finalized(self):
+        self.program("finalized")
+        self.execute(1)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

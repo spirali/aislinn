@@ -8,7 +8,13 @@ void MPI_Init(int *argc, char ***argv)
 
 int MPI_Finalize()
 {
-	// Currently do nothing
+	aislinn_call_0("MPI_Finalize");
+	return MPI_SUCCESS;
+}
+
+int MPI_Finalized(int *flag)
+{
+	aislinn_call_1("MPI_Finalized", (AislinnArgType) flag);
 	return MPI_SUCCESS;
 }
 

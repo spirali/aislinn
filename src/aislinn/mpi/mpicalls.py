@@ -33,6 +33,30 @@ POINTER_SIZE = 8
 INT_SIZE = 4
 STATUS_SIZE = 3 * INT_SIZE
 
+def MPI_Finalize(generator, args, state, context):
+    assert len(args) == 0
+
+    if state.finalized:
+        e = errormsg.CallError()
+        e.name = "doublefinalize"
+        e.short_description = "MPI_Finalize was called twice"
+        e.description = "MPI_Finalized was called twice"
+        e.throw()
+
+    state.finalized = True
+    e = event.Event("MPI_Finalize", state.pid)
+    generator.add_call_event(context, e)
+    return False
+
+def MPI_Finalized(generator, args, state, context):
+    ptr = convert_types(args, ("ptr",))[0]
+    if state.finalized:
+        flag = 1
+    else:
+        flag = 0
+    generator.controller.write_int(ptr, flag)
+    return False
+
 def MPI_Comm_rank(generator, args, state, context):
     comm_id, ptr = convert_types(args, ("int", "ptr"))
     comm = check.check_and_get_comm(state, comm_id, 1)
@@ -819,6 +843,8 @@ def call_recv(generator, args, state, context, blocking, name):
     return blocking
 
 calls = {
+        "MPI_Finalize" : MPI_Finalize,
+        "MPI_Finalized" : MPI_Finalized,
         "MPI_Comm_rank" : MPI_Comm_rank,
         "MPI_Comm_size" : MPI_Comm_size,
         "MPI_Comm_split" : MPI_Comm_split,

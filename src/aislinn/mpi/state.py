@@ -52,6 +52,7 @@ class State:
         self.user_defined_types = [] # <-- Copy on write!
         self.cc_id_counters = None
         self.probe_data = None
+        self.finalized = False
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
