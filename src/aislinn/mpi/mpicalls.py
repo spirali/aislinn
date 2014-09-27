@@ -382,7 +382,7 @@ def MPI_Type_create_hindexed(generator, args, state, context):
 def MPI_Type_hindexed(generator, args, state, context):
     return MPI_Type_create_hindexed(generator, args, state, context)
 
-def MPI_Type_struct(generator, args, state, context):
+def MPI_Type_create_struct(generator, args, state, context):
     count, sizes_ptr, displs_ptr, types_ptr, newtype_ptr = args
     sizes = generator.controller.read_ints(sizes_ptr, count)
     check.check_sizes(sizes, 2)
@@ -395,6 +395,8 @@ def MPI_Type_struct(generator, args, state, context):
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
+def MPI_Type_struct(generator, args, state, context):
+    return MPI_Type_create_struct(generator, args, state, context)
 
 def MPI_Type_commit(generator, args, state, context):
     datatype_ptr = args[0]
@@ -657,6 +659,8 @@ calls = dict((c.name, c) for c in [
                             at.DatatypeU, at.Pointer)),
      Call(MPI_Type_create_hindexed, (at.Count, at.Pointer, at.Pointer,
                             at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_create_struct, (at.Count, at.Pointer, at.Pointer,
+                                   at.Pointer, at.Pointer)),
      Call(MPI_Type_struct, (at.Count, at.Pointer, at.Pointer,
                             at.Pointer, at.Pointer)),
      Call(MPI_Get_count, (at.Pointer, at.Datatype, at.Pointer)),

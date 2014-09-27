@@ -361,7 +361,7 @@ int MPI_Type_hvector(
 	int count, int blocklength, int stride,
 	MPI_Datatype oldtype, MPI_Datatype *newtype);
 
-int MPI_Type_struct(int count,
+int MPI_Type_create_struct(int count,
 	const int *array_of_blocklengths,
 	const MPI_Aint *array_of_displacements,
 	const MPI_Datatype *array_of_types,
@@ -432,6 +432,12 @@ int MPI_Type_hindexed(int count,
                     const MPI_Aint *array_of_displacements,
                     MPI_Datatype oldtype,
                     MPI_Datatype *newtype);
+
+int MPI_Type_struct(int count,
+	const int *array_of_blocklengths,
+	const MPI_Aint *array_of_displacements,
+	const MPI_Datatype *array_of_types,
+	MPI_Datatype *newtype);
 
 #ifdef __cplusplus
 }
