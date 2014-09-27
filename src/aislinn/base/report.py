@@ -49,6 +49,12 @@ collective_operations = [
     "Ibcast",
 ]
 
+wait_operations = [
+    "Wait",
+    "Waitall",
+    "Probe"
+]
+
 def make_chart(data, ydata, units):
     fig = plt.figure(figsize=(8, 2))
     plt.plot(ydata, data, "-")
@@ -206,7 +212,7 @@ class Report:
                     titles[r] = e.stacktrace.replace("|", "\n")
                 if name in collective_operations:
                     classes[r] = "Collective"
-                elif name.startswith("W"):
+                elif name in wait_operations:
                     classes[r] = "Wait"
                 elif name.endswith("end"):
                     classes[r] = "Send"

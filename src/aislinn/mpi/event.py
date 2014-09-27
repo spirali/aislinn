@@ -32,25 +32,8 @@ class Event:
     def get_entries(self):
         return EntryList()
 
-
-class CommEvent(Event):
-
-    def __init__(self, name, pid, target, tag, request_id=None):
-        Event.__init__(self, name, pid)
-        self.target = target
-        self.tag = tag
-        self.request_id = request_id
-
-class CollectiveEvent(Event):
-
-    def __init__(self, name, pid):
-        Event.__init__(self, name, pid)
-
-class WaitEvent(Event):
-
-    def __init__(self, name, pid, request_ids):
-        Event.__init__(self, name, pid)
-        self.request_ids = request_ids
+class CallEvent(Event):
+    pass
 
 class ExitEvent(Event):
 

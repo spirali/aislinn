@@ -42,8 +42,6 @@ def MPI_Finalize(generator, args, state, context):
         e.throw()
 
     state.finalized = True
-    e = event.Event("MPI_Finalize", state.pid)
-    generator.add_call_event(context, e)
     return False
 
 def MPI_Finalized(generator, args, state, context):
@@ -106,8 +104,6 @@ def MPI_Irecv(generator, args, state, context):
 def MPI_Iprobe(generator, args, state, context):
     source, tag, comm, flag_ptr, status_ptr = args
     check.check_rank(comm, source, 1, True, True)
-    e = event.CommEvent("Iprobe", state.pid, source, tag)
-    generator.add_call_event(context, e)
 
     if source != consts.MPI_PROC_NULL:
         state.set_probe(comm, source, tag, flag_ptr, status_ptr)
@@ -127,8 +123,6 @@ def MPI_Iprobe(generator, args, state, context):
 def MPI_Probe(generator, args, state, context):
     source, tag, comm, status_ptr = args
     check.check_rank(comm, source, 1, True, True)
-    e = event.CommEvent("Probe", state.pid, source, tag)
-    generator.add_call_event(context, e)
 
     if source != consts.MPI_PROC_NULL:
         state.set_probe(comm, source, tag, None, status_ptr)
@@ -151,9 +145,6 @@ def MPI_Wait(generator, args, state, context):
         status_ptrs = None
     check.check_request_ids(state, request_ids)
     state.set_wait(request_ids, status_ptrs)
-
-    e = event.WaitEvent("Wait", state.pid, request_ids)
-    generator.add_call_event(context, e)
     return True
 
 def MPI_Test(generator, args, state, context):
@@ -161,9 +152,6 @@ def MPI_Test(generator, args, state, context):
     request_ids = [ generator.controller.read_int(request_ptr) ]
     check.check_request_ids(state, request_ids)
     state.set_test(request_ids, flag_ptr)
-
-    e = event.WaitEvent("Test", state.pid, request_ids)
-    generator.add_call_event(context, e)
     return True
 
 def MPI_Waitall(generator, args, state, context):
@@ -176,9 +164,6 @@ def MPI_Waitall(generator, args, state, context):
 
     check.check_request_ids(state, request_ids)
     state.set_wait(request_ids, status_ptrs)
-
-    e = event.WaitEvent("Waitall", state.pid, request_ids)
-    generator.add_call_event(context, e)
     return True
 
 def MPI_Barrier(generator, args, state, context):
@@ -486,7 +471,6 @@ def call_collective_operation(generator,
         state.set_wait((request_id,))
     else:
         generator.controller.write_int(request_ptr, request_id)
-    generator.add_call_event(context, op.get_event(state))
     return blocking
 
 def make_send_request(generator, state, message):
@@ -540,9 +524,6 @@ def call_send(generator, args, state, context, blocking, name):
     else:
         generator.controller.write_int(request_ptr, request_id)
 
-    e = event.CommEvent(name, state.pid, target, tag)
-    generator.add_call_event(context, e)
-
     # TODO: Optimization : If message use eager protocol then nonblock
     return blocking
 
@@ -554,9 +535,6 @@ def call_recv(generator, args, state, context, blocking, name):
         status_ptr = ptr
     else:
         request_ptr = ptr
-
-    e = event.CommEvent(name, state.pid, source, tag)
-    generator.add_call_event(context, e)
 
     if source != consts.MPI_PROC_NULL or not blocking:
         request_id = state.add_recv_request(
@@ -588,6 +566,7 @@ class Call:
     def __init__(self, fn, args):
         self.fn = fn
         self.args = args
+        self.event_name = self.name[4:]
 
     @property
     def name(self):
@@ -597,7 +576,10 @@ class Call:
         assert len(args) == len(self.args)
         args = [ self.args[i].make_conversion(args[i], i, state)
                  for i in xrange(len(args)) ]
-        return self.fn(generator, args, state, context)
+        r = self.fn(generator, args, state, context)
+        generator.add_call_event(context,
+                                 event.CallEvent(self.event_name, state.pid))
+        return r
 
 
 calls = dict((c.name, c) for c in [

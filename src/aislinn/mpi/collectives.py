@@ -21,7 +21,6 @@ import types
 import copy
 import logging
 import errormsg
-import event
 import check
 import consts
 import comm
@@ -107,9 +106,6 @@ class CollectiveOperation:
                        self.remaining_processes_complete,
                        self.remaining_processes_enter))
         self.compute_hash_data(hashthread)
-
-    def get_event(self, state):
-        return event.CollectiveEvent(self.mpi_name, state.pid)
 
     @property
     def mpi_name(self):
