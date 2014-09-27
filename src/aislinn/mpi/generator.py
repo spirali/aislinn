@@ -534,9 +534,9 @@ class Generator:
                             self.make_error_message_from_report(call))
                     self.fatal_error = True
                     return context
-                fn = mpicalls.calls.get(call[1])
-                if fn is not None:
-                    if fn(self, call[2:], state, context):
+                call_class = mpicalls.calls.get(call[1])
+                if call_class is not None:
+                    if call_class.run(self, call[2:], state, context):
                         break
                 else:
                     raise Exception("Unkown function call: " + repr(call))

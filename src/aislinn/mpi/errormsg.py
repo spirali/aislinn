@@ -101,8 +101,8 @@ class InvalidArgument(CallError):
     def description(self):
         return "Function '{0.function_name}' was called with an invalid " \
                 "value ({0.arg_value}) " \
-               "in {0.arg_position}. argument. {1}" \
-               .format(self, self.extra_message)
+               "in {2}. argument. {1}" \
+               .format(self, self.extra_message, self.arg_position + 1)
 
 
 class RuntimeErr(ErrorMessage):

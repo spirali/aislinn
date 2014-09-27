@@ -18,7 +18,6 @@
 #
 
 from message import Message
-from base.utils import convert_types, convert_type
 import collectives
 import event
 import consts
@@ -26,6 +25,7 @@ import check
 import errormsg
 import types
 import misc
+import atypes as at
 from comm import comm_id_name
 
 # TODO: Universal architecture detection
@@ -34,8 +34,6 @@ INT_SIZE = 4
 STATUS_SIZE = 3 * INT_SIZE
 
 def MPI_Finalize(generator, args, state, context):
-    assert len(args) == 0
-
     if state.finalized:
         e = errormsg.CallError()
         e.name = "doublefinalize"
@@ -49,17 +47,15 @@ def MPI_Finalize(generator, args, state, context):
     return False
 
 def MPI_Finalized(generator, args, state, context):
-    ptr = convert_types(args, ("ptr",))[0]
     if state.finalized:
         flag = 1
     else:
         flag = 0
-    generator.controller.write_int(ptr, flag)
+    generator.controller.write_int(args[0], flag)
     return False
 
 def MPI_Comm_rank(generator, args, state, context):
-    comm_id, ptr = convert_types(args, ("int", "ptr"))
-    comm = check.check_and_get_comm(state, comm_id, 1)
+    comm, ptr = args
     rank = comm.group.pid_to_rank(state.pid)
     if rank is None:
         rank = consts.MPI_UNDEFINED
@@ -67,20 +63,18 @@ def MPI_Comm_rank(generator, args, state, context):
     return False
 
 def MPI_Comm_size(generator, args, state, context):
-    comm_id, ptr = convert_types(args, ("int", "ptr"))
-    comm = check.check_and_get_comm(state, comm_id, 1)
+    comm, ptr = args
     generator.controller.write_int(ptr, comm.group.size)
     return False
 
 def MPI_Comm_group(generator, args, state, context):
-    comm_id, group_ptr = convert_types(args, ("int", "ptr"))
-    comm = check.check_and_get_comm(state, comm_id, 1)
+    comm, group_ptr = args
     group_id = state.add_group(comm.group)
     generator.controller.write_int(group_ptr, group_id)
     return False
 
 def MPI_Group_free(generator, args, state, context):
-    group_ptr = convert_types(args, ("ptr",))[0]
+    group_ptr = args[0]
     group_id = generator.controller.read_int(group_ptr)
     group = check.check_and_get_group(state, group_id, 1)
     state.remove_group(group)
@@ -88,14 +82,12 @@ def MPI_Group_free(generator, args, state, context):
     return False
 
 def MPI_Group_size(generator, args, state, context):
-    group_id, ptr = convert_types(args, ("int", "ptr",))
-    group = check.check_and_get_group(state, group_id, 1)
+    group, ptr = args
     generator.controller.write_int(ptr, group.size)
     return False
 
 def MPI_Type_size(generator, args, state, context):
-    datatype_id, ptr = convert_types(args, ("int", "ptr"))
-    datatype = check.check_datatype(state, datatype_id, 1, True)
+    datatype, ptr = args
     generator.controller.write_int(ptr, datatype.size)
     return False
 
@@ -105,25 +97,15 @@ def MPI_Send(generator, args, state, context):
 def MPI_Recv(generator, args, state, context):
     return call_recv(generator, args, state, context, True, "Recv")
 
-def MPI_ISend(generator, args, state, context):
+def MPI_Isend(generator, args, state, context):
     return call_send(generator, args, state, context, False, "Isend")
 
-def MPI_IRecv(generator, args, state, context):
+def MPI_Irecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
 
 def MPI_Iprobe(generator, args, state, context):
-    source, tag, comm_id, flag_ptr, status_ptr = \
-        convert_types(args, ("int", # source
-                             "int", # tag
-                             "int", # comm
-                             "ptr", # flag_ptr
-                             "ptr", # status_ptr
-                             ))
-
-    comm = check.check_and_get_comm(state, comm_id, 3)
+    source, tag, comm, flag_ptr, status_ptr = args
     check.check_rank(comm, source, 1, True, True)
-    check.check_tag(tag, 2, True)
-
     e = event.CommEvent("Iprobe", state.pid, source, tag)
     generator.add_call_event(context, e)
 
@@ -143,17 +125,8 @@ def MPI_Iprobe(generator, args, state, context):
     return True
 
 def MPI_Probe(generator, args, state, context):
-    source, tag, comm_id, status_ptr = \
-        convert_types(args, ("int", # source
-                             "int", # tag
-                             "int", # comm
-                             "ptr", # status_ptr
-                             ))
-
-    comm = check.check_and_get_comm(state, comm_id, 3)
+    source, tag, comm, status_ptr = args
     check.check_rank(comm, source, 1, True, True)
-    check.check_tag(tag, 2, True)
-
     e = event.CommEvent("Probe", state.pid, source, tag)
     generator.add_call_event(context, e)
 
@@ -161,7 +134,6 @@ def MPI_Probe(generator, args, state, context):
         state.set_probe(comm, source, tag, None, status_ptr)
         return True
     else:
-        generator.controller.write_int(flag_ptr, 1)
         if status_ptr:
             generator.write_status(status_ptr,
                                    consts.MPI_PROC_NULL,
@@ -170,10 +142,7 @@ def MPI_Probe(generator, args, state, context):
         return False
 
 def MPI_Wait(generator, args, state, context):
-    request_ptr, status_ptr = \
-        convert_types(args, ("ptr", # request_ptr
-                             "ptr", # status_ptr
-                             ))
+    request_ptr, status_ptr = args
 
     request_ids = [ generator.controller.read_int(request_ptr) ]
     if status_ptr != consts.MPI_STATUSES_IGNORE:
@@ -188,13 +157,7 @@ def MPI_Wait(generator, args, state, context):
     return True
 
 def MPI_Test(generator, args, state, context):
-    request_ptr, flag_ptr, status_ptr = \
-        convert_types(args, ("ptr", # request_ptr
-                             "ptr", # flag_ptr
-                             "ptr", # status_ptr
-                             ))
-
-
+    request_ptr, flag_ptr, status_ptr = args
     request_ids = [ generator.controller.read_int(request_ptr) ]
     check.check_request_ids(state, request_ids)
     state.set_test(request_ids, flag_ptr)
@@ -204,13 +167,7 @@ def MPI_Test(generator, args, state, context):
     return True
 
 def MPI_Waitall(generator, args, state, context):
-    count, requests_ptr, statuses_ptr = \
-        convert_types(args, ("int", # count
-                             "ptr", # request_ptr
-                             "ptr", # status_ptr
-                             ))
-
-    count = int(count)
+    count, requests_ptr, statuses_ptr = args
     request_ids = generator.controller.read_ints(requests_ptr, count)
     if statuses_ptr != consts.MPI_STATUSES_IGNORE:
         status_ptrs = [ statuses_ptr + i * STATUS_SIZE for i in xrange(count) ]
@@ -225,7 +182,6 @@ def MPI_Waitall(generator, args, state, context):
     return True
 
 def MPI_Barrier(generator, args, state, context):
-    args = convert_types(args, ("int",))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -234,17 +190,6 @@ def MPI_Barrier(generator, args, state, context):
                                      args)
 
 def MPI_Gather(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "int", # sendcount
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "int", # recvcount
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -253,18 +198,6 @@ def MPI_Gather(generator, args, state, context):
                                      args)
 
 def MPI_Gatherv(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "int", # sendcount
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "ptr", # recvcounts
-                       "ptr", # displs
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -273,17 +206,6 @@ def MPI_Gatherv(generator, args, state, context):
                                      args)
 
 def MPI_Scatter(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "int", # sendcount
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "int", # recvcount
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -292,18 +214,6 @@ def MPI_Scatter(generator, args, state, context):
                                      args)
 
 def MPI_Scatterv(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "ptr", # sendcounts
-                       "ptr", # displs
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "int", # recvcount
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -312,16 +222,6 @@ def MPI_Scatterv(generator, args, state, context):
                                      args)
 
 def MPI_Reduce(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "ptr", # recvbuf
-                       "int", # count
-                       "int", # datatype
-                       "int", # op
-                       "int", # root
-                       "int", # comm
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -330,15 +230,6 @@ def MPI_Reduce(generator, args, state, context):
                                      args)
 
 def MPI_Allreduce(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "ptr", # recvbuf
-                       "int", # count
-                       "int", # datatype
-                       "int", # op
-                       "int", # comm
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -347,13 +238,6 @@ def MPI_Allreduce(generator, args, state, context):
                                      args)
 
 def MPI_Bcast(generator, args, state, context):
-    args = convert_types(args,
-                         ("ptr", # buffer
-                          "int", # count
-                          "int", # datatype
-                          "int", # root
-                          "int", # comm
-                         ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -362,7 +246,6 @@ def MPI_Bcast(generator, args, state, context):
                                      args)
 
 def MPI_Ibarrier(generator, args, state, context):
-    args = convert_types(args, ("int", "ptr"))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -371,18 +254,6 @@ def MPI_Ibarrier(generator, args, state, context):
                                      args)
 
 def MPI_Igather(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "int", # sendcount
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "int", # recvcount
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                       "ptr", # request_ptr
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -391,19 +262,6 @@ def MPI_Igather(generator, args, state, context):
                                      args)
 
 def MPI_Igatherv(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "int", # sendcount
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "ptr", # recvcounts
-                       "ptr", # displs
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                       "ptr", # request_ptr
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -412,18 +270,6 @@ def MPI_Igatherv(generator, args, state, context):
                                      args)
 
 def MPI_Iscatter(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "int", # sendcount
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "int", # recvcount
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                       "ptr", # request_ptr
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -432,19 +278,6 @@ def MPI_Iscatter(generator, args, state, context):
                                      args)
 
 def MPI_Iscatterv(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "ptr", # sendcounts
-                       "ptr", # displs
-                       "int", # sendtype
-                       "ptr", # recvbuf
-                       "int", # recvcount
-                       "int", # recvtype
-                       "int", # root
-                       "int", # comm
-                       "ptr", # request_ptr
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -453,17 +286,6 @@ def MPI_Iscatterv(generator, args, state, context):
                                      args)
 
 def MPI_Ireduce(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "ptr", # recvbuf
-                       "int", # count
-                       "int", # datatype
-                       "int", # op
-                       "int", # root
-                       "int", # comm
-                       "ptr", # request
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -472,16 +294,6 @@ def MPI_Ireduce(generator, args, state, context):
                                      args)
 
 def MPI_Iallreduce(generator, args, state, context):
-    args = \
-        convert_types(args,
-                      ("ptr", # sendbuf
-                       "ptr", # recvbuf
-                       "int", # count
-                       "int", # datatype
-                       "int", # op
-                       "int", # comm
-                       "ptr", # request
-                      ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -490,14 +302,6 @@ def MPI_Iallreduce(generator, args, state, context):
                                      args)
 
 def MPI_Ibcast(generator, args, state, context):
-    args = convert_types(args,
-                         ("ptr", # buffer
-                          "int", # count
-                          "int", # datatype
-                          "int", # root
-                          "int", # comm
-                          "ptr", # request
-                         ))
     return call_collective_operation(generator,
                                      state,
                                      context,
@@ -508,36 +312,24 @@ def MPI_Ibcast(generator, args, state, context):
 
 
 def MPI_Comm_split(generator, args, state, context):
-    args = convert_types(args,
-                         ("int", # comm
-                          "int", # color
-                          "int", # key
-                          "ptr", # newcomm
-                         ))
-    comm_id = args[0]
+    comm = args[0]
     args = args[1:]
-    comm = check.check_and_get_comm(state, comm_id, 1)
     op = state.gstate.call_collective_operation(
                 generator, state, comm, collectives.CommSplit, True, args)
-    request_id = state.add_collective_request(comm_id, op.cc_id)
+    request_id = state.add_collective_request(comm.comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
 
 def MPI_Comm_dup(generator, args, state, context):
-    comm_id, new_comm_ptr = convert_types(args,
-                         ("int", # comm
-                          "ptr", # newcomm
-                         ))
-    comm = check.check_and_get_comm(state, comm_id, 1)
+    comm, new_comm_ptr = args
     op = state.gstate.call_collective_operation(
                 generator, state, comm, collectives.CommDup, True, new_comm_ptr)
-    request_id = state.add_collective_request(comm_id, op.cc_id)
+    request_id = state.add_collective_request(comm.comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
 
 def MPI_Comm_free(generator, args, state, context):
-    assert len(args) == 1
-    comm_ptr = convert_type(args[0], "ptr")
+    comm_ptr = args[0]
 
     comm_id = generator.controller.read_int(comm_ptr)
     if comm_id == consts.MPI_COMM_WORLD or comm_id == consts.MPI_COMM_SELF:
@@ -547,15 +339,13 @@ def MPI_Comm_free(generator, args, state, context):
         e.short_description = "{0} cannot be freed".format(name)
         e.description = "Communicator {0} cannot be freed".format(name)
         e.throw()
-    comm = check.check_and_get_comm(state, comm_id, 1)
+    comm = check.check_comm(state, comm_id, 1)
     state.remove_comm(comm)
     generator.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
     return False
 
 def MPI_Get_count(generator, args, state, context):
-    status_ptr, datatype_id, count_ptr = convert_types(args,
-                                                       ("ptr", "int", "ptr"))
-    datatype = check.check_datatype(state, datatype_id, 2)
+    status_ptr, datatype, count_ptr = args
     size = generator.controller.read_int(status_ptr + 2 * INT_SIZE)
     result = datatype.get_count(size)
     if result is None:
@@ -564,41 +354,28 @@ def MPI_Get_count(generator, args, state, context):
     return False
 
 def MPI_Type_contiguous(generator, args, state, context):
-    count, oldtype, newtype_ptr = convert_types(args, ("int", "int", "ptr"))
-    check.check_count(count, 1)
-    datatype = check.check_datatype(state, oldtype, 2, True)
+    count, datatype, newtype_ptr = args
     newtype = types.ContiguousType(datatype, count)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
 def MPI_Type_vector(generator, args, state, context):
-    count, blocksize, stride, oldtype, newtype_ptr = \
-            convert_types(args, ("int", "int", "int", "int", "ptr"))
-    check.check_count(count, 1)
-    check.check_size(blocksize, 2)
-    datatype = check.check_datatype(state, oldtype, 4, True)
+    count, blocksize, stride, datatype, newtype_ptr = args
     newtype = types.VectorType(datatype, count, blocksize, stride, False)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
 def MPI_Type_hvector(generator, args, state, context):
-    count, blocksize, stride, oldtype, newtype_ptr = \
-            convert_types(args, ("int", "int", "int", "int", "ptr"))
-    check.check_count(count, 1)
-    check.check_size(blocksize, 2)
-    datatype = check.check_datatype(state, oldtype, 4, True)
+    count, blocksize, stride, datatype, newtype_ptr = args
     newtype = types.VectorType(datatype, count, blocksize, stride, True)
     state.add_datatype(newtype)
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
 def MPI_Type_indexed(generator, args, state, context):
-    count, sizes_ptr, displs_ptr, oldtype, newtype_ptr = \
-            convert_types(args, ("int", "ptr", "ptr", "int", "ptr"))
-    check.check_count(count, 1)
-    datatype = check.check_datatype(state, oldtype, 4, True)
+    count, sizes_ptr, displs_ptr, datatype, newtype_ptr = args
     sizes = generator.controller.read_ints(sizes_ptr, count)
     check.check_sizes(sizes, 2)
     displs = generator.controller.read_ints(displs_ptr, count)
@@ -607,11 +384,8 @@ def MPI_Type_indexed(generator, args, state, context):
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_hindexed(generator, args, state, context):
-    count, sizes_ptr, displs_ptr, oldtype, newtype_ptr = \
-            convert_types(args, ("int", "ptr", "ptr", "int", "ptr"))
-    check.check_count(count, 1)
-    datatype = check.check_datatype(state, oldtype, 4, True)
+def MPI_Type_create_hindexed(generator, args, state, context):
+    count, sizes_ptr, displs_ptr, datatype, newtype_ptr = args
     sizes = generator.controller.read_ints(sizes_ptr, count)
     check.check_sizes(sizes, 2)
     displs = generator.controller.read_pointers(displs_ptr, count)
@@ -620,10 +394,11 @@ def MPI_Type_hindexed(generator, args, state, context):
     generator.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
+def MPI_Type_hindexed(generator, args, state, context):
+    return MPI_Type_create_hindexed(generator, args, state, context)
+
 def MPI_Type_struct(generator, args, state, context):
-    count, sizes_ptr, displs_ptr, types_ptr, newtype_ptr = \
-            convert_types(args, ("int", "ptr", "ptr", "ptr", "ptr"))
-    check.check_count(count, 1)
+    count, sizes_ptr, displs_ptr, types_ptr, newtype_ptr = args
     sizes = generator.controller.read_ints(sizes_ptr, count)
     check.check_sizes(sizes, 2)
     displs = generator.controller.read_pointers(displs_ptr, count)
@@ -637,14 +412,14 @@ def MPI_Type_struct(generator, args, state, context):
 
 
 def MPI_Type_commit(generator, args, state, context):
-    datatype_ptr = convert_types(args, ("ptr",))[0]
+    datatype_ptr = args[0]
     type_id = generator.controller.read_int(datatype_ptr)
     datatype = check.check_datatype(state, type_id, 1, True)
     state.commit_datatype(datatype)
     return False
 
 def MPI_Type_free(generator, args, state, context):
-    datatype_ptr = convert_types(args, ("ptr",))[0]
+    datatype_ptr = args[0]
     type_id = generator.controller.read_int(datatype_ptr)
     datatype = check.check_datatype(state, type_id, 1, True)
 
@@ -661,7 +436,7 @@ def MPI_Type_free(generator, args, state, context):
     return False
 
 def MPI_Dims_create(generator, args, state, context):
-    nnodes, ndims, dims_ptr = convert_types(args, ("int", "int", "ptr"))
+    nnodes, ndims, dims_ptr = args
 
     if ndims < 1:
         errormsg.InvalidArgument(ndims,
@@ -697,17 +472,16 @@ def call_collective_operation(generator,
                               blocking,
                               args):
     if blocking:
-        comm_id = args[-1]
+        comm = args[-1]
         args = args[:-1]
     else:
         request_ptr = args[-1]
-        comm_id = args[-2]
+        comm = args[-2]
         args = args[:-2]
 
-    comm = check.check_and_get_comm(state, comm_id, len(args) + 1)
     op = state.gstate.call_collective_operation(
                 generator, state, comm, op_class, blocking, args)
-    request_id = state.add_collective_request(comm_id, op.cc_id)
+    request_id = state.add_collective_request(comm.comm_id, op.cc_id)
     if blocking:
         state.set_wait((request_id,))
     else:
@@ -742,38 +516,18 @@ def make_send_request(generator, state, message):
 
 def call_send(generator, args, state, context, blocking, name):
     if blocking:
-        buf_ptr, count, datatype_id, target, tag, comm_id = \
-            convert_types(args,
-                          ("ptr", # buf_ptr
-                           "int", # count
-                           "int", # datatype
-                           "int", # target
-                           "int", # tag
-                           "int", # comm
-                          ))
+        buf_ptr, count, datatype, target, tag, comm = args
     else:
-        buf_ptr, count, datatype_id, target, tag, comm_id, request_ptr = \
-            convert_types(args,
-                          ("ptr", # buf_ptr
-                           "int", # count
-                           "int", # datatype
-                           "int", # target
-                           "int", # tag
-                           "int", # comm
-                           "ptr", # request_ptr
-                          ))
+        buf_ptr, count, datatype, target, tag, comm, request_ptr = args
 
-    comm = check.check_and_get_comm(state, comm_id, 6)
-    check.check_count(count, 2)
     check.check_rank(comm, target, 4, False, True)
-    check.check_tag(tag, 5, False)
-    datatype = check.check_datatype(state, datatype_id, 3)
 
     if target != consts.MPI_PROC_NULL:
         sz = count * datatype.size
         vg_buffer = generator.new_buffer_and_pack(datatype, count, buf_ptr)
         target_pid = comm.group.rank_to_pid(target)
-        message = Message(comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
+        message = Message(
+                comm.comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
         state.gstate.get_state(target_pid).add_message(message)
         request_id = make_send_request(generator, state, message)
 
@@ -793,34 +547,20 @@ def call_send(generator, args, state, context, blocking, name):
     return blocking
 
 def call_recv(generator, args, state, context, blocking, name):
-    buf_ptr, count, datatype_id, source, tag, comm_id, ptr = \
-        convert_types(args,
-                      ("ptr", # buf_ptr
-                       "int", # count
-                       "int", # datatype
-                       "int", # source
-                       "int", # tag
-                       "int", # comm
-                       "ptr", # status_ptr (blocking) | request_ptr (nonblock)
-                      ))
+    buf_ptr, count, datatype, source, tag, comm, ptr = args
+    check.check_rank(comm, source, 4, True, True)
+
     if blocking:
         status_ptr = ptr
     else:
         request_ptr = ptr
-
-    comm = check.check_and_get_comm(state, comm_id, 6)
-    check.check_count(count, 2)
-    check.check_rank(comm, source, 4, True, True)
-    check.check_tag(tag, 5, True)
-
-    datatype = check.check_datatype(state, datatype_id, 3)
 
     e = event.CommEvent(name, state.pid, source, tag)
     generator.add_call_event(context, e)
 
     if source != consts.MPI_PROC_NULL or not blocking:
         request_id = state.add_recv_request(
-                comm_id, source, tag, buf_ptr, datatype, count)
+                comm.comm_id, source, tag, buf_ptr, datatype, count)
     else:
         if status_ptr:
             generator.write_status(status_ptr,
@@ -842,52 +582,101 @@ def call_recv(generator, args, state, context, blocking, name):
     # then non block and continue
     return blocking
 
-calls = {
-        "MPI_Finalize" : MPI_Finalize,
-        "MPI_Finalized" : MPI_Finalized,
-        "MPI_Comm_rank" : MPI_Comm_rank,
-        "MPI_Comm_size" : MPI_Comm_size,
-        "MPI_Comm_split" : MPI_Comm_split,
-        "MPI_Comm_dup" : MPI_Comm_dup,
-        "MPI_Comm_free" : MPI_Comm_free,
-        "MPI_Comm_group" : MPI_Comm_group,
-        "MPI_Group_free" : MPI_Group_free,
-        "MPI_Group_size" : MPI_Group_size,
-        "MPI_Get_count" : MPI_Get_count,
-        "MPI_Send" : MPI_Send,
-        "MPI_Recv" : MPI_Recv,
-        "MPI_Isend" : MPI_ISend,
-        "MPI_Irecv" : MPI_IRecv,
-        "MPI_Iprobe" : MPI_Iprobe,
-        "MPI_Probe" : MPI_Probe,
-        "MPI_Wait" : MPI_Wait,
-        "MPI_Test" : MPI_Test,
-        "MPI_Waitall" : MPI_Waitall,
-        "MPI_Barrier" : MPI_Barrier,
-        "MPI_Gather" : MPI_Gather,
-        "MPI_Gatherv" : MPI_Gatherv,
-        "MPI_Scatter" : MPI_Scatter,
-        "MPI_Scatterv" : MPI_Scatterv,
-        "MPI_Reduce" : MPI_Reduce,
-        "MPI_Bcast" : MPI_Bcast,
-        "MPI_Allreduce" : MPI_Allreduce,
-        "MPI_Ibarrier" : MPI_Ibarrier,
-        "MPI_Igather" : MPI_Igather,
-        "MPI_Igatherv" : MPI_Igatherv,
-        "MPI_Iscatter" : MPI_Iscatter,
-        "MPI_Iscatterv" : MPI_Iscatterv,
-        "MPI_Ireduce" : MPI_Ireduce,
-        "MPI_Iallreduce" : MPI_Iallreduce,
-        "MPI_Ibcast" : MPI_Ibcast,
-        "MPI_Type_size" : MPI_Type_size,
-        "MPI_Type_contiguous" : MPI_Type_contiguous,
-        "MPI_Type_vector" : MPI_Type_vector,
-        "MPI_Type_hvector" : MPI_Type_hvector,
-        "MPI_Type_indexed" : MPI_Type_indexed,
-        "MPI_Type_hindexed" : MPI_Type_hindexed,
-        "MPI_Type_struct" : MPI_Type_struct,
-        "MPI_Type_create_hindexed" : MPI_Type_hindexed,
-        "MPI_Type_commit" : MPI_Type_commit,
-        "MPI_Type_free" : MPI_Type_free,
-        "MPI_Dims_create" : MPI_Dims_create,
-}
+
+class Call:
+
+    def __init__(self, fn, args):
+        self.fn = fn
+        self.args = args
+
+    @property
+    def name(self):
+        return self.fn.__name__
+
+    def run(self, generator, args, state, context):
+        assert len(args) == len(self.args)
+        args = [ self.args[i].make_conversion(args[i], i, state)
+                 for i in xrange(len(args)) ]
+        return self.fn(generator, args, state, context)
+
+
+calls = dict((c.name, c) for c in [
+     Call(MPI_Finalize, ()),
+     Call(MPI_Finalized, (at.Pointer,)),
+     Call(MPI_Comm_rank, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_size, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_dup, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_split, (at.Comm, at.Int, at.Int, at.Pointer)),
+     Call(MPI_Comm_free, (at.Pointer,)),
+     Call(MPI_Comm_group, (at.Comm, at.Pointer)),
+     Call(MPI_Group_free, (at.Pointer,)),
+     Call(MPI_Group_size, (at.Group, at.Pointer)),
+     Call(MPI_Send, (at.Pointer, at.Count, at.Datatype,
+                     at.Rank, at.Tag, at.Comm)),
+     Call(MPI_Isend, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Recv, (at.Pointer, at.Count, at.Datatype,
+                     at.Rank, at.TagAT, at.Comm, at.Pointer)),
+     Call(MPI_Irecv, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.TagAT, at.Comm, at.Pointer)),
+     Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
+     Call(MPI_Probe, (at.Int, at.TagAT, at.Comm, at.Pointer)),
+     Call(MPI_Wait, (at.Pointer, at.Pointer)),
+     Call(MPI_Waitall, (at.Count, at.Pointer, at.Pointer)),
+     Call(MPI_Test, (at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Barrier, (at.Comm,)),
+     Call(MPI_Gather, (at.Pointer, at.Count, at.Datatype,
+                       at.Pointer, at.Int, at.Int,
+                       at.Rank, at.Comm)),
+     Call(MPI_Gatherv, (at.Pointer, at.Count, at.Datatype,
+                         at.Pointer, at.Pointer, at.Pointer,
+                         at.Int, at.Rank, at.Comm)),
+     Call(MPI_Scatter, (at.Pointer, at.Int, at.Int,
+                         at.Pointer, at.Count, at.Datatype,
+                         at.Rank, at.Comm)),
+     Call(MPI_Ibarrier, (at.Comm, at.Pointer)),
+     Call(MPI_Ibcast, (at.Pointer, at.Count, at.Datatype,
+                       at.Int, at.Comm, at.Pointer)),
+     Call(MPI_Bcast, (at.Pointer, at.Count, at.Datatype,
+                       at.Int, at.Comm)),
+     Call(MPI_Reduce, (at.Pointer, at.Pointer, at.Count,
+                       at.Datatype, at.Op, at.Int,
+                       at.Comm)),
+     Call(MPI_Allreduce, (at.Pointer, at.Pointer, at.Count,
+                          at.Datatype, at.Op, at.Comm)),
+     Call(MPI_Igather, (at.Pointer, at.Count, at.Datatype,
+                        at.Pointer, at.Int, at.Int,
+                        at.Rank, at.Comm, at.Pointer)),
+     Call(MPI_Iscatter, (at.Pointer, at.Int, at.Int,
+                         at.Pointer, at.Count, at.Datatype,
+                         at.Rank, at.Comm, at.Pointer)),
+     Call(MPI_Iscatterv, (at.Pointer, at.Pointer, at.Pointer, at.Int,
+                          at.Pointer, at.Count, at.Datatype,
+                          at.Rank, at.Comm, at.Pointer)),
+     Call(MPI_Igatherv, (at.Pointer, at.Count, at.Datatype,
+                         at.Pointer, at.Pointer, at.Pointer,
+                         at.Int, at.Rank, at.Comm, at.Pointer)),
+     Call(MPI_Ireduce, (at.Pointer, at.Pointer, at.Count,
+                        at.Datatype, at.Op, at.Int,
+                        at.Comm, at.Pointer)),
+     Call(MPI_Iallreduce, (at.Pointer, at.Pointer, at.Count,
+                           at.Datatype, at.Op, at.Comm, at.Pointer)),
+     Call(MPI_Type_commit, (at.Pointer,)),
+     Call(MPI_Type_size, (at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_free, (at.Pointer,)),
+     Call(MPI_Type_contiguous, (at.Count, at.Datatype, at.Pointer)),
+     Call(MPI_Type_vector, (at.Count, at.Count, at.Int,
+                            at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_hvector, (at.Count, at.Count, at.Int,
+                            at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_indexed, (at.Count, at.Pointer, at.Pointer,
+                            at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_hindexed, (at.Count, at.Pointer, at.Pointer,
+                            at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_create_hindexed, (at.Count, at.Pointer, at.Pointer,
+                            at.DatatypeU, at.Pointer)),
+     Call(MPI_Type_struct, (at.Count, at.Pointer, at.Pointer,
+                            at.Pointer, at.Pointer)),
+     Call(MPI_Get_count, (at.Pointer, at.Datatype, at.Pointer)),
+     Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
+     ])

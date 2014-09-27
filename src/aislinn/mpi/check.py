@@ -22,9 +22,12 @@ import errormsg
 import consts
 
 def check_op(op,
-                arg_position):
+             arg_position):
     if not types.is_valid_op(op):
-        errormsg.InvalidArgument(op, arg_position).throw()
+        errormsg.InvalidArgument(op,
+                                 arg_position,
+                                 "Invalid operation").throw()
+    return op
 
 def check_rank(comm,
                rank,
@@ -44,6 +47,7 @@ def check_rank(comm,
                                      "MPI_ANY_SOURCE not allowed").throw()
     elif rank < 0 or rank >= comm.group.size:
         errormsg.InvalidArgument(rank, arg_position, "Invalid rank").throw()
+    return rank
 
 def check_tag(tag,
               arg_position,
@@ -57,12 +61,14 @@ def check_tag(tag,
                 tag,
                 arg_position,
                 "Tag has to be a non-negative number.").throw()
+    return tag
 
-def check_count(size, arg_position):
-    if size < 0:
-        errormsg.InvalidArgument(size,
+def check_count(count, arg_position):
+    if count < 0:
+        errormsg.InvalidArgument(count,
                                  arg_position,
                                  "Count has to be non-negative.").throw()
+    return count
 
 def check_size(size, arg_position):
     if size < 0:
@@ -103,7 +109,7 @@ def check_datatypes(state, type_ids, arg_position, allow_uncommited=False):
     return [ check_datatype(state, type_id, arg_position, allow_uncommited)
              for type_id in type_ids ]
 
-def check_and_get_comm(state, comm_id, arg_position):
+def check_comm(state, comm_id, arg_position):
     if comm_id == consts.MPI_COMM_NULL:
         errormsg.InvalidArgument("MPI_COMM_NULL",
                                  arg_position,

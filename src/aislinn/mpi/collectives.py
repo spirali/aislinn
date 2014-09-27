@@ -216,10 +216,8 @@ class Gatherv(OperationWithBuffers):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcounts, displs, recvtype, root = args
         check.check_rank(comm, root, 8)
-        check.check_count(sendcount, 2)
         rank = state.get_rank(comm)
         self.check_root(comm, root)
-        sendtype = check.check_datatype(state, sendtype, 3)
 
         assert self.buffers[rank] is None
         self.buffers[rank] = generator.new_buffer_and_pack(
@@ -275,9 +273,7 @@ class Gather(OperationWithBuffers):
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        check.check_rank(comm, root, 8)
-        check.check_count(sendcount, 2)
-        sendtype = check.check_datatype(state, sendtype, 3)
+        check.check_rank(comm, root, 7, False, False)
         self.check_root(comm, root)
 
         rank = state.get_rank(comm)
@@ -342,8 +338,6 @@ class Scatterv(OperationWithSingleBuffer):
         sendbuf, sendcounts, displs, sendtype, \
                recvbuf, recvcount, recvtype, root = args
         check.check_rank(comm, root, 8)
-        check.check_count(recvcount, 5)
-        recvtype = check.check_datatype(state, recvtype, 7)
         self.check_root(comm, root)
         rank = state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
@@ -408,9 +402,7 @@ class Scatter(OperationWithSingleBuffer):
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        check.check_count(recvcount, 5)
         check.check_rank(comm, root, 8)
-        recvtype = check.check_datatype(state, recvtype, 7)
         self.check_root(comm, root)
         rank = state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
@@ -468,10 +460,8 @@ class Bcast(OperationWithSingleBuffer):
                    comm,
                    args):
         buffer, count, datatype, root = args
-        check.check_count(count, 2)
         check.check_rank(comm, root, 8)
         self.check_root(comm, root)
-        datatype = check.check_datatype(state, datatype, 3)
         rank = state.get_rank(comm)
         if self.root == rank:
             self.count = count
@@ -519,10 +509,7 @@ class Reduce(OperationWithBuffers):
                    args):
 
         sendbuf, recvbuf, count, datatype, op, root = args
-        check.check_count(count, 3)
         check.check_rank(comm, root, 6)
-        check.check_op(op, 5)
-        datatype = check.check_datatype(state, datatype, 4)
 
         if self.op is None:
             self.op = op
@@ -593,9 +580,6 @@ class AllReduce(OperationWithBuffers):
                    args):
 
         sendbuf, recvbuf, count, datatype, op = args
-        check.check_count(count, 3)
-        check.check_op(op, 5)
-        datatype = check.check_datatype(state, datatype, 4)
 
         if self.op is None:
             self.op = op
