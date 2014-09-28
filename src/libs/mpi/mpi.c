@@ -166,6 +166,18 @@ int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
 	return MPI_SUCCESS;
 }
 
+int MPI_Testall(int count, MPI_Request array_of_requests[], int *flag,
+               MPI_Status array_of_statuses[])
+{
+	aislinn_call_4(
+		"MPI_Testall",
+		(AislinnArgType) count,
+		(AislinnArgType) array_of_requests,
+		(AislinnArgType) flag,
+		(AislinnArgType) array_of_statuses);
+	return MPI_SUCCESS;
+}
+
 int MPI_Barrier(MPI_Comm comm)
 {
 	aislinn_call_1(

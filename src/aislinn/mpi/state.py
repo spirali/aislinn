@@ -252,6 +252,10 @@ class State:
             self.requests[request_id] = None
         self.active_request_ids = None
 
+    def reinit_active_requests(self):
+        for request_id in self.active_request_ids:
+            self.requests[request_id].status_ptr = None
+
     def reset_state(self):
         self.status = None
         self.active_request_ids = None
@@ -281,10 +285,16 @@ class State:
         self.reset_state()
         self.status = self.StatusFinished
 
-    def set_test(self, request_ids, flag_ptr):
+    def set_test(self, request_ids, flag_ptr, status_ptrs):
         self.status = self.StatusTest
         self.active_request_ids = request_ids
         self.flag_ptr = flag_ptr
+
+        if status_ptrs is not None:
+            for i, ptr in zip(request_ids, status_ptrs):
+                request = self.requests[i]
+                assert request.status_ptr is None
+                request.status_ptr = ptr
 
     def set_request_as_completed(self, request):
         assert not request.is_completed()

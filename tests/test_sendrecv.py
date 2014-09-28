@@ -24,6 +24,12 @@ class SendRecvTests(TestCase):
         self.execute(2, ("0",))
         self.single_error("deadlock")
 
+    def test_testall_recv(self):
+        self.program("testall_recv")
+
+        self.execute(2, stdout=set(["101 202 10 10"]))
+        self.no_errors()
+
     def test_test_recv(self):
         self.program("test_recv")
 

@@ -150,8 +150,12 @@ def MPI_Wait(generator, args, state, context):
 def MPI_Test(generator, args, state, context):
     request_ptr, flag_ptr, status_ptr = args
     request_ids = [ generator.controller.read_int(request_ptr) ]
+    if status_ptr != consts.MPI_STATUSES_IGNORE:
+        status_ptrs = [ status_ptr ]
+    else:
+        status_ptrs = None
     check.check_request_ids(state, request_ids)
-    state.set_test(request_ids, flag_ptr)
+    state.set_test(request_ids, flag_ptr, status_ptrs)
     return True
 
 def MPI_Waitall(generator, args, state, context):
@@ -164,6 +168,17 @@ def MPI_Waitall(generator, args, state, context):
 
     check.check_request_ids(state, request_ids)
     state.set_wait(request_ids, status_ptrs)
+    return True
+
+def MPI_Testall(generator, args, state, context):
+    count, requests_ptr, flag_ptr, statuses_ptr = args
+    request_ids = generator.controller.read_ints(requests_ptr, count)
+    if statuses_ptr != consts.MPI_STATUSES_IGNORE:
+        status_ptrs = [ statuses_ptr + i * STATUS_SIZE for i in xrange(count) ]
+    else:
+        status_ptrs = None
+    check.check_request_ids(state, request_ids)
+    state.set_test(request_ids, flag_ptr, status_ptrs)
     return True
 
 def MPI_Barrier(generator, args, state, context):
@@ -608,6 +623,7 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Wait, (at.Pointer, at.Pointer)),
      Call(MPI_Waitall, (at.Count, at.Pointer, at.Pointer)),
      Call(MPI_Test, (at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Testall, (at.Count, at.Pointer, at.Pointer, at.Pointer)),
      Call(MPI_Barrier, (at.Comm,)),
      Call(MPI_Gather, (at.Pointer, at.Count, at.Datatype,
                        at.Pointer, at.Int, at.Int,

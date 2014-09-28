@@ -75,6 +75,9 @@ static const MPI_Op MPI_BXOR = 0xDD0010B;
 static const MPI_Op MPI_MINLOC = 0xDD0010C;
 static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
+#define MPI_ERRORS_ARE_FATAL ((MPI_Errhandler)0x0EE00100)
+#define MPI_ERRORS_RETURN    ((MPI_Errhandler)0x0EE00101)
+
 #define MPI_COMM_NULL ((MPI_Comm) 0x0000CC00)
 #define MPI_COMM_SELF ((MPI_Comm) 0x0000CC01)
 #define MPI_COMM_WORLD ((MPI_Comm) 0x0000CC02)
@@ -117,6 +120,9 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_Type_f2c(datatype) (MPI_Datatype)(datatype)
 #define MPI_Group_c2f(group) (MPI_Fint)(group)
 #define MPI_Group_f2c(group) (MPI_Group)(group)
+
+#define MPI_COMBINER_DUP 0x09000100
+#define MPI_COMBINER_CONTIGUOUS 0x09000101
 
 typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
 
@@ -171,6 +177,9 @@ int MPI_Waitall(int count, MPI_Request array_of_requests[],
                MPI_Status array_of_statuses[]);
 
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status);
+
+int MPI_Testall(int count, MPI_Request array_of_requests[], int *flag,
+               MPI_Status array_of_statuses[]);
 
 int MPI_Barrier(MPI_Comm comm);
 
