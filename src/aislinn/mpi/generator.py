@@ -422,6 +422,7 @@ class Generator:
         if flag_ptr is not None and not already_probed: # It is Iprobe
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
+            new_state.reinit_active_requests()
             self.controller.restore_state(new_state.vg_state.id)
             self.controller.write_int(flag_ptr, 0)
             self.execute_state_and_add_node(node, new_state)

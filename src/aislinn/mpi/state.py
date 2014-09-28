@@ -253,8 +253,9 @@ class State:
         self.active_request_ids = None
 
     def reinit_active_requests(self):
-        for request_id in self.active_request_ids:
-            self.requests[request_id].status_ptr = None
+        if self.active_request_ids:
+            for request_id in self.active_request_ids:
+                self.requests[request_id].status_ptr = None
 
     def reset_state(self):
         self.status = None
