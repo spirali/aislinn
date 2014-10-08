@@ -99,10 +99,15 @@ class InvalidArgument(CallError):
 
     @property
     def description(self):
-        return "Function '{0.function_name}' was called with an invalid " \
-                "value ({0.arg_value}) " \
-               "in {2}. argument. {1}" \
-               .format(self, self.extra_message, self.arg_position + 1)
+        if self.arg_position is None:
+            return "Function '{0.function_name}' was called with an invalid " \
+                    "value ({0.arg_value}). {1}" \
+                   .format(self, self.extra_message)
+        else:
+            return "Function '{0.function_name}' was called with an invalid " \
+                    "value ({0.arg_value}) " \
+                   "in {2}. argument. {1}" \
+                   .format(self, self.extra_message, self.arg_position + 1)
 
 
 class RuntimeErr(ErrorMessage):

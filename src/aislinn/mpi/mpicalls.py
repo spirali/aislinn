@@ -17,7 +17,6 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from message import Message
 import collectives
 import event
 import consts
@@ -26,6 +25,7 @@ import errormsg
 import types
 import misc
 import atypes as at
+from request import SendRequest
 from comm import comm_id_name, comm_compare
 
 # TODO: Universal architecture detection
@@ -120,6 +120,28 @@ def MPI_Ibsend(generator, args, state, context):
 def MPI_Irecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
 
+def MPI_Recv_init(generator, args, state, context):
+    return call_recv(generator, args, state,
+                     context, False, "MPI_Recv_init", True)
+
+def MPI_Send_init(generator, args, state, context):
+    return call_send(
+            generator, args, state, context, False, "Send", "Isend", True)
+
+def MPI_Start(generator, args, state, context):
+    request_id = generator.controller.read_int(args[0])
+    request = check.check_persistent_request(state, request_id, True)
+    state.start_persistent_request(generator, state, request)
+    return False
+
+def MPI_Request_free(generator, args, state, context):
+    request_ptr = args[0]
+    request_id = generator.controller.read_int(request_ptr)
+    request = check.check_persistent_request(state, request_id, False)
+    state.remove_persistent_request(request)
+    generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL);
+    return False
+
 def MPI_Iprobe(generator, args, state, context):
     source, tag, comm, flag_ptr, status_ptr = args
     check.check_rank(comm, source, 1, True, True)
@@ -157,14 +179,15 @@ def MPI_Probe(generator, args, state, context):
 def MPI_Wait(generator, args, state, context):
     request_ptr, status_ptr = args
 
-    request_ids = [ generator.controller.read_int(request_ptr) ]
+    request_id = generator.controller.read_int(request_ptr)
+    check.check_request_id(state, request_id)
     if status_ptr != consts.MPI_STATUSES_IGNORE:
         status_ptrs = [ status_ptr ]
     else:
         status_ptrs = None
-    check.check_request_ids(state, request_ids)
-    generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
-    state.set_wait(request_ids, status_ptrs)
+    if state.get_persistent_request(request_id) is None:
+        generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
+    state.set_wait([ request_id ], status_ptrs)
     return True
 
 def MPI_Test(generator, args, state, context):
@@ -187,8 +210,13 @@ def MPI_Waitall(generator, args, state, context):
         status_ptrs = None
 
     check.check_request_ids(state, request_ids)
-    generator.controller.write_ints(requests_ptr,
-                                    [consts.MPI_REQUEST_NULL] * count)
+    values = []
+    for request_id in request_ids:
+        if state.get_persistent_request(request_id) is None:
+            values.append(consts.MPI_REQUEST_NULL)
+        else:
+            values.append(request_id)
+    generator.controller.write_ints(requests_ptr, values)
     state.set_wait(request_ids, status_ptrs)
     return True
 
@@ -519,53 +547,58 @@ def call_collective_operation(generator,
         generator.controller.write_int(request_ptr, request_id)
     return blocking
 
-def make_send_request(generator, state, message, mode):
+def get_send_type(generator, state, mode, datatype, count):
     if mode == "Ssend" \
        or (mode == "Send" and generator.send_protocol == "randezvous"):
-        return state.add_synchronous_send_request(message)
+        return SendRequest.Synchronous
     elif mode == "Bsend" \
        or (mode == "Send" and generator.send_protocol == "eager"):
-        return state.add_completed_request()
+        return SendRequest.Buffered
     elif generator.send_protocol == "dynamic":
+        size = datatype.size * count
         eager_threshold, randezvous_threshold = \
                 state.gstate.send_protocol_thresholds
-        if message.size < eager_threshold:
-            return state.add_completed_request()
-        elif message.size >= randezvous_threshold:
-            return state.add_synchronous_send_request(message)
+        if size < eager_threshold:
+            return SendRequest.Buffered
+        elif size >= randezvous_threshold:
+            return SendRequest.Synchronous
         else:
-            return state.add_standard_send_request(message)
+            return SendRequest.Standard
     elif generator.send_protocol == "threshold":
-        if message.size < generator.send_protocol_eager_threshold:
-            return state.add_completed_request()
-        elif message.size >= generator.send_protocol_randezvous_threshold:
-            return state.add_synchronous_send_request(message)
+        size = datatype.size * count
+        if size < generator.send_protocol_eager_threshold:
+            return SendRequest.Buffered
+        elif size >= generator.send_protocol_randezvous_threshold:
+            return SendRequest.Synchronous
         else:
-            return state.add_standard_send_request(message)
+            return SendRequest.Standard
     else:
         assert generator.send_protocol == "full"
-        return state.add_standard_send_request(message)
+        return SendRequest.Standard
 
-def call_send(generator, args, state, context, blocking, mode, name):
+def call_send(generator, args, state, context,
+              blocking, mode, name, persistent=False):
     if blocking:
-        buf_ptr, count, datatype, target, tag, comm = args
+        data_ptr, count, datatype, target, tag, comm = args
     else:
-        buf_ptr, count, datatype, target, tag, comm, request_ptr = args
+        data_ptr, count, datatype, target, tag, comm, request_ptr = args
 
     check.check_rank(comm, target, 4, False, True)
 
-    if target != consts.MPI_PROC_NULL:
-        sz = count * datatype.size
-        vg_buffer = generator.new_buffer_and_pack(datatype, count, buf_ptr)
-        target_pid = comm.group.rank_to_pid(target)
-        message = Message(
-                comm.comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
-        state.gstate.get_state(target_pid).add_message(message)
-        request_id = make_send_request(generator, state, message, mode)
-
-        generator.message_sizes.add(datatype.size * count)
-    else:
+    send_type = get_send_type(generator, state, mode, datatype, count)
+    if not persistent and target == consts.MPI_PROC_NULL:
         request_id = state.add_completed_request()
+    else:
+        request_id = state.add_send_request(comm.comm_id, target,
+                         tag, data_ptr, datatype, count, send_type)
+        if not persistent:
+            request = state.get_request(request_id)
+            request.create_message(generator, state)
+            if send_type == SendRequest.Buffered:
+                state.set_request_as_completed(request)
+        else:
+            assert not blocking
+            state.make_request_persistent(request_id)
 
     if blocking:
         state.set_wait((request_id,))
@@ -575,7 +608,8 @@ def call_send(generator, args, state, context, blocking, mode, name):
     # TODO: Optimization : If message use eager protocol then nonblock
     return blocking
 
-def call_recv(generator, args, state, context, blocking, name):
+def call_recv(generator, args, state,
+              context, blocking, name, persistent=False):
     buf_ptr, count, datatype, source, tag, comm, ptr = args
     check.check_rank(comm, source, 4, True, True)
 
@@ -584,16 +618,20 @@ def call_recv(generator, args, state, context, blocking, name):
     else:
         request_ptr = ptr
 
-    if source != consts.MPI_PROC_NULL or not blocking:
-        request_id = state.add_recv_request(
-                comm.comm_id, source, tag, buf_ptr, datatype, count)
-    else:
+    if blocking and source == consts.MPI_PROC_NULL:
         if status_ptr:
             generator.write_status(status_ptr,
                                    consts.MPI_PROC_NULL,
                                    consts.MPI_ANY_TAG,
                                    0)
         return False
+
+    request_id = state.add_recv_request(
+            comm.comm_id, source, tag, buf_ptr, datatype, count)
+
+    if persistent:
+       assert not blocking
+       state.make_request_persistent(request_id)
 
     if blocking:
         if status_ptr:
@@ -659,6 +697,13 @@ calls = dict((c.name, c) for c in [
                      at.Rank, at.TagAT, at.Comm, at.Pointer)),
      Call(MPI_Irecv, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.TagAT, at.Comm, at.Pointer)),
+     Call(MPI_Recv_init, (at.Pointer, at.Count, at.Datatype,
+                          at.Rank, at.TagAT, at.Comm, at.Pointer)),
+     Call(MPI_Send_init, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Start, (at.Pointer,)),
+     Call(MPI_Request_free, (at.Pointer,)),
+     Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Probe, (at.Int, at.TagAT, at.Comm, at.Pointer)),
      Call(MPI_Wait, (at.Pointer, at.Pointer)),

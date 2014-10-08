@@ -103,7 +103,7 @@ int MPI_Bsend(const void *buf, int count, MPI_Datatype datatype, int dest,
 	return MPI_SUCCESS;
 }
 
-int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
+int MPI_Isend(const void *buf, int count, MPI_Datatype datatype, int dest,
     int tag, MPI_Comm comm, MPI_Request *request)
 {
 	AislinnArgType args[7];
@@ -175,6 +175,50 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	args[5] = (AislinnArgType) comm;
 	args[6] = (AislinnArgType) request;
 	aislinn_call_args("MPI_Irecv", args, 7);
+	return MPI_SUCCESS;
+}
+
+int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source, 
+                 int tag, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) source;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Recv_init", args, 7);
+	return MPI_SUCCESS;
+}
+
+int MPI_Send_init(const void *buf, int count, MPI_Datatype datatype, int dest,
+                 int tag, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Send_init", args, 7);
+	return MPI_SUCCESS;
+}
+
+int MPI_Start(MPI_Request *request)
+{
+	aislinn_call_1("MPI_Start",
+		       (AislinnArgType) request);
+	return MPI_SUCCESS;
+}
+
+int MPI_Request_free(MPI_Request *request)
+{
+	aislinn_call_1("MPI_Request_free",
+		       (AislinnArgType) request);
 	return MPI_SUCCESS;
 }
 

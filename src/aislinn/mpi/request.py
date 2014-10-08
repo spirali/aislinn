@@ -21,12 +21,15 @@
 from base.utils import EqMixin
 import consts
 import copy
-
+from message import Message
 
 class Request(EqMixin):
 
     pointer = None
     status_ptr = None
+
+    def __init__(self, request_id):
+        self.id = request_id
 
     def is_send(self):
         return False
@@ -44,9 +47,10 @@ class Request(EqMixin):
         return True
 
     def compute_hash(self, hashthread):
-        if self.pointer is not None or self.status_ptr is not None:
-            hashthread.update(
-                    "R {0} {1} ".format(self.pointer, self.status_ptr))
+        hashthread.update(
+                "R {0} {1} {2} ".format(self.id,
+                                        self.pointer,
+                                        self.status_ptr))
 
     def reinit(self):
         if self.pointer is None and self.status_ptr is None:
@@ -61,11 +65,34 @@ class SendRequest(Request):
 
     Standard = 0
     Synchronous = 1
+    Buffered = 2
 
-    def __init__(self, message, send_type):
-        assert send_type == self.Standard or send_type == self.Synchronous
-        self.message = message
+    def __init__(self, request_id, send_type,
+                 comm_id, target, tag, data_ptr, datatype, count):
+        assert send_type >= 0 and send_type <= 2
+        Request.__init__(self, request_id)
         self.send_type = send_type
+        self.comm_id = comm_id
+        self.target = target
+        self.tag = tag
+        self.data_ptr = data_ptr
+        self.datatype = datatype
+        self.count = count
+        self.message = None
+
+    def create_message(self, generator, state):
+        assert self.message is None
+        sz = self.count * self.datatype.size
+        vg_buffer = generator.new_buffer_and_pack(self.datatype,
+                                                  self.count,
+                                                  self.data_ptr)
+        comm = state.get_comm(self.comm_id)
+        target_pid = comm.group.rank_to_pid(self.target)
+        message = Message(comm.comm_id, state.get_rank(comm),
+                          self.target, self.tag, vg_buffer, sz)
+        state.gstate.get_state(target_pid).add_message(message)
+        generator.message_sizes.add(sz)
+        self.message = message
 
     def is_standard_send(self):
         return self.send_type == SendRequest.Standard
@@ -76,7 +103,8 @@ class SendRequest(Request):
     def compute_hash(self, hashthread):
         Request.compute_hash(self, hashthread)
         hashthread.update("SR {0}".format(self.send_type))
-        self.message.compute_hash(hashthread)
+        if self.message:
+            self.message.compute_hash(hashthread)
 
     def __repr__(self):
         return "<SendRequest {0}>".format(self.send_type)
@@ -84,7 +112,8 @@ class SendRequest(Request):
 
 class ReceiveRequest(Request):
 
-    def __init__(self, comm_id, source, tag, data_ptr, datatype, count):
+    def __init__(self, request_id, comm_id, source, tag, data_ptr, datatype, count):
+        Request.__init__(self, request_id)
         self.comm_id = comm_id
         self.source = source
         self.tag = tag
@@ -111,7 +140,8 @@ class ReceiveRequest(Request):
 
 class CompletedRequest(Request):
 
-    def __init__(self, original_request):
+    def __init__(self, request_id, original_request):
+        Request.__init__(self, request_id)
         self.original_request = original_request
 
     def compute_hash(self, hashthread):
@@ -124,7 +154,8 @@ class CompletedRequest(Request):
 
 class CollectiveRequest(Request):
 
-    def __init__(self, comm_id, cc_id):
+    def __init__(self, request_id, comm_id, cc_id):
+        Request.__init__(self, request_id)
         self.cc_id = cc_id
         self.comm_id = comm_id
 

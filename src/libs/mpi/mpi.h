@@ -153,6 +153,10 @@ int MPI_Init(int *argc, char ***argv);
 
 int MPI_Initialized(int *flag);
 
+int MPI_Start(MPI_Request *request);
+
+int MPI_Request_free(MPI_Request *request);
+
 int MPI_Finalize();
 
 int MPI_Finalized(int *flag);
@@ -173,7 +177,7 @@ int MPI_Bsend(const void *buf, int count, MPI_Datatype datatype, int dest,
 int MPI_Ssend(const void *buf,int count, MPI_Datatype datatype, int dest,
 	int tag, MPI_Comm comm);
 
-int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
+int MPI_Isend(const void *buf, int count, MPI_Datatype datatype, int dest,
     int tag, MPI_Comm comm, MPI_Request *request);
 
 int MPI_Issend(const void *buf, int count, MPI_Datatype datatype, int dest,
@@ -187,6 +191,12 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
 
 int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
         int source, int tag, MPI_Comm comm, MPI_Request *request);
+
+int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source, 
+                 int tag, MPI_Comm comm, MPI_Request *request);
+
+int MPI_Send_init(const void *buf, int count, MPI_Datatype datatype, int dest,
+                 int tag, MPI_Comm comm, MPI_Request *request);
 
 int MPI_Probe(int source, int tag, MPI_Comm comm, MPI_Status *status);
 

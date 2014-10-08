@@ -129,8 +129,32 @@ def check_and_get_group(state, group_id, arg_position):
                                  "Invalid group").throw()
     return group
 
+def check_request_id(state, request_id):
+    if request_id == consts.MPI_REQUEST_NULL:
+        errormsg.InvalidArgument("MPI_REQUEST_NULL",
+                                 None,
+                                 "Invalid request").throw()
+    request = state.get_request(request_id)
+
+    if request is None:
+        errormsg.InvalidArgument(request_id, None, "Invalid request").throw()
+
+def check_persistent_request(state, request_id, inactive):
+    if request_id == consts.MPI_REQUEST_NULL:
+        errormsg.InvalidArgument("MPI_REQUEST_NULL",
+                                 None,
+                                 "Invalid request").throw()
+    request = state.get_persistent_request(request_id)
+
+    if request is None:
+        errormsg.InvalidArgument(
+                request_id, None, "Invalid persistent request").throw()
+
+    if inactive and state.get_request(request_id) is not None:
+        errormsg.InvalidArgument(
+                request_id, None, "Persistent request is active").throw()
+    return request
+
 def check_request_ids(state, request_ids):
     for request_id in request_ids:
-        if not state.is_request_id_valid(request_id):
-            raise Exception("Invalid request id {0}, pid {1} ({2})"
-                    .format(request_id, state.pid, state.requests))
+        check_request_id(state, request_id)
