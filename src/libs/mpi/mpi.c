@@ -111,6 +111,36 @@ int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
 	return MPI_SUCCESS;
 }
 
+int MPI_Issend(const void *buf, int count, MPI_Datatype datatype, int dest,
+	int tag, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Issend", args, 7);
+	return MPI_SUCCESS;
+}
+
+int MPI_Ibsend(const void *buf, int count, MPI_Datatype datatype, int dest, int tag,
+               MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Ibsend", args, 7);
+	return MPI_SUCCESS;
+}
+
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
         int source, int tag, MPI_Comm comm, MPI_Status *status)
 {

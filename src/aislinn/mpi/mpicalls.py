@@ -104,6 +104,12 @@ def MPI_Recv(generator, args, state, context):
 def MPI_Isend(generator, args, state, context):
     return call_send(generator, args, state, context, False, "Send", "Isend")
 
+def MPI_Issend(generator, args, state, context):
+    return call_send(generator, args, state, context, False, "Ssend", "Issend")
+
+def MPI_Ibsend(generator, args, state, context):
+    return call_send(generator, args, state, context, False, "Bsend", "Ibsend")
+
 def MPI_Irecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
 
@@ -625,6 +631,10 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Ssend, (at.Pointer, at.Count, at.Datatype,
                      at.Rank, at.Tag, at.Comm)),
      Call(MPI_Isend, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Issend, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Ibsend, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.Tag, at.Comm, at.Pointer)),
      Call(MPI_Recv, (at.Pointer, at.Count, at.Datatype,
                      at.Rank, at.TagAT, at.Comm, at.Pointer)),

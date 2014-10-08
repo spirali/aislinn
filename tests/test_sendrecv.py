@@ -26,10 +26,19 @@ class SendRecvTests(TestCase):
     def test_isend_irecv(self):
         self.program("isir")
 
-        self.execute(2, ("1",))
+        self.execute(2, "1 send")
         self.no_errors()
 
-        self.execute(2, ("0",))
+        self.execute(2, "0 send")
+        self.single_error("deadlock")
+
+        self.execute(2, "1 ssend", stdout="Receive\nSend\n")
+        self.no_errors()
+
+        self.execute(2, "1 bsend", stdout="Send\nReceive\n")
+        self.no_errors()
+
+        self.execute(2, "0 bsend")
         self.single_error("deadlock")
 
     def test_testall_recv(self):
