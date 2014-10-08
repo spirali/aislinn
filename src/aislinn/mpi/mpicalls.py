@@ -90,13 +90,19 @@ def MPI_Type_size(generator, args, state, context):
     return False
 
 def MPI_Send(generator, args, state, context):
-    return call_send(generator, args, state, context, True, "Send")
+    return call_send(generator, args, state, context, True, "Send", "Send")
+
+def MPI_Ssend(generator, args, state, context):
+    return call_send(generator, args, state, context, True, "Ssend", "Ssend")
+
+def MPI_Bsend(generator, args, state, context):
+    return call_send(generator, args, state, context, True, "Bsend", "Bsend")
 
 def MPI_Recv(generator, args, state, context):
     return call_recv(generator, args, state, context, True, "Recv")
 
 def MPI_Isend(generator, args, state, context):
-    return call_send(generator, args, state, context, False, "Isend")
+    return call_send(generator, args, state, context, False, "Send", "Isend")
 
 def MPI_Irecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
@@ -490,10 +496,12 @@ def call_collective_operation(generator,
         generator.controller.write_int(request_ptr, request_id)
     return blocking
 
-def make_send_request(generator, state, message):
-    if generator.send_protocol == "randezvous":
+def make_send_request(generator, state, message, mode):
+    if mode == "Ssend" \
+       or (mode == "Send" and generator.send_protocol == "randezvous"):
         return state.add_synchronous_send_request(message)
-    elif generator.send_protocol == "eager":
+    elif mode == "Bsend" \
+       or (mode == "Send" and generator.send_protocol == "eager"):
         return state.add_completed_request()
     elif generator.send_protocol == "dynamic":
         eager_threshold, randezvous_threshold = \
@@ -515,7 +523,7 @@ def make_send_request(generator, state, message):
         assert generator.send_protocol == "full"
         return state.add_standard_send_request(message)
 
-def call_send(generator, args, state, context, blocking, name):
+def call_send(generator, args, state, context, blocking, mode, name):
     if blocking:
         buf_ptr, count, datatype, target, tag, comm = args
     else:
@@ -530,7 +538,7 @@ def call_send(generator, args, state, context, blocking, name):
         message = Message(
                 comm.comm_id, state.get_rank(comm), target, tag, vg_buffer, sz)
         state.gstate.get_state(target_pid).add_message(message)
-        request_id = make_send_request(generator, state, message)
+        request_id = make_send_request(generator, state, message, mode)
 
         generator.message_sizes.add(datatype.size * count)
     else:
@@ -611,6 +619,10 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Group_free, (at.Pointer,)),
      Call(MPI_Group_size, (at.Group, at.Pointer)),
      Call(MPI_Send, (at.Pointer, at.Count, at.Datatype,
+                     at.Rank, at.Tag, at.Comm)),
+     Call(MPI_Bsend, (at.Pointer, at.Count, at.Datatype,
+                     at.Rank, at.Tag, at.Comm)),
+     Call(MPI_Ssend, (at.Pointer, at.Count, at.Datatype,
                      at.Rank, at.Tag, at.Comm)),
      Call(MPI_Isend, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.Tag, at.Comm, at.Pointer)),

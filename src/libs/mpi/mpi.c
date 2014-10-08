@@ -54,7 +54,7 @@ int MPI_Get_count(
 
 }
 
-int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,
+int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
     int tag, MPI_Comm comm)
 {
 	AislinnArgType args[6];
@@ -65,6 +65,34 @@ int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,
 	args[4] = (AislinnArgType) tag;
 	args[5] = (AislinnArgType) comm;
 	aislinn_call_args("MPI_Send", args, 6);
+	return MPI_SUCCESS;
+}
+
+int MPI_Ssend(const void *buf,int count, MPI_Datatype datatype, int dest,
+	int tag, MPI_Comm comm)
+{
+	AislinnArgType args[6];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Ssend", args, 6);
+	return MPI_SUCCESS;
+}
+
+int MPI_Bsend(const void *buf, int count, MPI_Datatype datatype, int dest,
+	int tag, MPI_Comm comm)
+{
+	AislinnArgType args[6];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	aislinn_call_args("MPI_Bsend", args, 6);
 	return MPI_SUCCESS;
 }
 

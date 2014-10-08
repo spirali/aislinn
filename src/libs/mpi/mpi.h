@@ -154,8 +154,14 @@ int MPI_Comm_size(MPI_Comm comm, int *size);
 int MPI_Get_count(
 	const MPI_Status *status, MPI_Datatype datatype, int *count);
 
-int MPI_Send(void *buf, int count, MPI_Datatype datatype, int dest,
-    int tag, MPI_Comm comm);
+int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest,
+	int tag, MPI_Comm comm);
+
+int MPI_Bsend(const void *buf, int count, MPI_Datatype datatype, int dest,
+	int tag, MPI_Comm comm);
+
+int MPI_Ssend(const void *buf,int count, MPI_Datatype datatype, int dest,
+	int tag, MPI_Comm comm);
 
 int MPI_Isend(void *buf, int count, MPI_Datatype datatype, int dest,
     int tag, MPI_Comm comm, MPI_Request *request);
