@@ -964,6 +964,18 @@ int MPI_Keyval_create(
 	return MPI_SUCCESS;
 }
 
+int MPI_Attr_get(
+	MPI_Comm comm, int comm_keyval, void *attribute_val, int *flag)
+{
+	aislinn_call_4(
+		"MPI_Attr_get",
+		(AislinnArgType) comm,
+		(AislinnArgType) comm_keyval,
+		(AislinnArgType) attribute_val,
+		(AislinnArgType) flag);
+	return MPI_SUCCESS;
+}
+
 int MPI_Attr_put(
   MPI_Comm comm,
   int comm_keyval,
