@@ -874,6 +874,43 @@ int MPI_Comm_create_errhandler(
 	return MPI_SUCCESS;
 }
 
+int MPI_Errhandler_create(
+	MPI_Handler_function *function, MPI_Errhandler *errhandler)
+{
+	aislinn_call_2(
+		"MPI_Errhandler_create",
+		(AislinnArgType) function,
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+
+}
+
+int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler)
+{
+	aislinn_call_2(
+		"MPI_Errhandler_set",
+		(AislinnArgType) comm,
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+}
+
+int MPI_Errhandler_get(MPI_Comm comm, MPI_Errhandler *errhandler)
+{
+	aislinn_call_2(
+		"MPI_Errhandler_get",
+		(AislinnArgType) comm,
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+}
+
+int MPI_Errhandler_free(MPI_Errhandler *errhandler)
+{
+	aislinn_call_1(
+		"MPI_Errhandler_free",
+		(AislinnArgType) errhandler);
+	return MPI_SUCCESS;
+}
+
 int MPI_Group_free(MPI_Group *group)
 {
 	aislinn_call_1(
@@ -953,16 +990,6 @@ int MPI_Keyval_free(int *comm_keyval)
 		(AislinnArgType) comm_keyval);
 	return MPI_SUCCESS;
 }
-
-int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler)
-{
-	aislinn_call_2(
-		"MPI_Errhandler_set",
-		(AislinnArgType) comm,
-		(AislinnArgType) errhandler);
-	return MPI_SUCCESS;
-}
-
 
 int MPI_Type_hindexed(int count,
                     const int *array_of_blocklengths,

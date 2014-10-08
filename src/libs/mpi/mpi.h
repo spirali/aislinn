@@ -125,9 +125,10 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMBINER_DUP 0x09000100
 #define MPI_COMBINER_CONTIGUOUS 0x09000101
 
-typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
-
 /* Functions prototypes */
+typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
+typedef void (MPI_Handler_function) ( MPI_Comm *, int *, ... );
+
 typedef int MPI_Comm_copy_attr_function(
 	MPI_Comm oldcomm,
 	int comm_keyval,
@@ -411,6 +412,12 @@ int MPI_Comm_create_errhandler(
   MPI_Comm_errhandler_function *function,
   MPI_Errhandler *errhandler
 );
+
+int MPI_Errhandler_create(
+	MPI_Handler_function *function, MPI_Errhandler *errhandler);
+int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler);
+int MPI_Errhandler_get(MPI_Comm comm, MPI_Errhandler *errhandler);
+int MPI_Errhandler_free(MPI_Errhandler *errhandler);
 
 /* ----------------------------------------------------------------------------
 /  DUMMY FUNCTIONS
