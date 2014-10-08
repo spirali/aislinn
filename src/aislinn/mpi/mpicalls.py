@@ -32,6 +32,7 @@ from comm import comm_id_name
 POINTER_SIZE = 8
 INT_SIZE = 4
 STATUS_SIZE = 3 * INT_SIZE
+REQUEST_SIZE = INT_SIZE
 
 def MPI_Finalize(generator, args, state, context):
     if state.finalized:
@@ -156,6 +157,7 @@ def MPI_Wait(generator, args, state, context):
     else:
         status_ptrs = None
     check.check_request_ids(state, request_ids)
+    generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
     state.set_wait(request_ids, status_ptrs)
     return True
 
@@ -167,7 +169,7 @@ def MPI_Test(generator, args, state, context):
     else:
         status_ptrs = None
     check.check_request_ids(state, request_ids)
-    state.set_test(request_ids, flag_ptr, status_ptrs)
+    state.set_test(request_ids, flag_ptr, status_ptrs, [request_ptr])
     return True
 
 def MPI_Waitall(generator, args, state, context):
@@ -179,6 +181,8 @@ def MPI_Waitall(generator, args, state, context):
         status_ptrs = None
 
     check.check_request_ids(state, request_ids)
+    generator.controller.write_ints(requests_ptr,
+                                    [consts.MPI_REQUEST_NULL] * count)
     state.set_wait(request_ids, status_ptrs)
     return True
 
@@ -189,8 +193,9 @@ def MPI_Testall(generator, args, state, context):
         status_ptrs = [ statuses_ptr + i * STATUS_SIZE for i in xrange(count) ]
     else:
         status_ptrs = None
+    requests_ptrs = [ requests_ptr + i * REQUEST_SIZE for i in xrange(count) ]
     check.check_request_ids(state, request_ids)
-    state.set_test(request_ids, flag_ptr, status_ptrs)
+    state.set_test(request_ids, flag_ptr, status_ptrs, requests_ptrs)
     return True
 
 def MPI_Barrier(generator, args, state, context):

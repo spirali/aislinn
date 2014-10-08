@@ -26,6 +26,9 @@ int main(int argc, char **argv)
 		int flag;
 		MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
 		if (flag) {
+			if (r != MPI_REQUEST_NULL) {
+				return 17;
+			}
 			return return_1;
 		}
 		MPI_Wait(&r, MPI_STATUS_IGNORE);

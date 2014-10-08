@@ -23,6 +23,10 @@ int main(int argc, char **argv) {
 		MPI_Isend(&buffer1, 2, MPI_INT, 1, 5, MPI_COMM_WORLD, &r[0]);
 		MPI_Isend(&buffer2, 2, MPI_INT, 1, 5, MPI_COMM_WORLD, &r[1]);
 		MPI_Waitall(2, r, MPI_STATUS_IGNORE);
+
+		if (r[0] != MPI_REQUEST_NULL || r[1] != MPI_REQUEST_NULL) {
+			return 1;
+		}
 	}
 
 	if (rank == 1) {
@@ -43,7 +47,11 @@ int main(int argc, char **argv) {
 			MPI_Waitall(2, r + 2, MPI_STATUSES_IGNORE);
 			MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
 		}
-        fprintf(stdout, "%i %i %i %i\n", b1[0], b2[0], b3[0], b4[0]);
+		fprintf(stdout, "%i %i %i %i\n", b1[0], b2[0], b3[0], b4[0]);
+		if (r[0] != MPI_REQUEST_NULL || r[1] != MPI_REQUEST_NULL ||
+				r[2] != MPI_REQUEST_NULL || r[3] != MPI_REQUEST_NULL) {
+			return 1;
+		}
 	}
 	MPI_Finalize();
 	return 0;

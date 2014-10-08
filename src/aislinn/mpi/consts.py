@@ -18,10 +18,13 @@
 #
 
 # ---- Basic consts ---------------------------------------
-MPI_UNDEFINED  = -0x0BEFBEEF
-MPI_ANY_SOURCE = -0x0000AA00
-MPI_ANY_TAG    = -0x0000BB00
-MPI_PROC_NULL  = -0x0000CC00
+MPI_UNDEFINED    = -0x0BEFBEEF
+MPI_ANY_SOURCE   = -0x0000AA00
+MPI_ANY_TAG      = -0x0000BB00
+MPI_PROC_NULL    = -0x0000CC00
+MPI_REQUEST_NULL = -0x0000DD00
+MPI_GROUP_NULL   = -0x0000EE00
+
 
 MPI_STATUS_IGNORE = 0
 MPI_STATUSES_IGNORE = 0
@@ -30,10 +33,7 @@ MPI_STATUSES_IGNORE = 0
 MPI_COMM_NULL = 0x0000CC00
 MPI_COMM_SELF = 0x0000CC01
 MPI_COMM_WORLD = 0x0000CC02
-MPI_COMM_USERDEF = 0x0000CC03
-
-# ---- Groups --------------------------------------
-MPI_GROUP_NULL = 0x0000DD00
+MPI_COMM_USERDEF = 0x0000CC03 # First user defined communicator
 
 # ---- Data types -----------------------------------------
 MPI_DATATYPE_NULL = 0xFF00100

@@ -20,10 +20,12 @@
 
 from base.utils import EqMixin
 import consts
+import copy
 
 
 class Request(EqMixin):
 
+    pointer = None
     status_ptr = None
 
     def is_send(self):
@@ -40,6 +42,19 @@ class Request(EqMixin):
 
     def is_deterministic(self):
         return True
+
+    def compute_hash(self, hashthread):
+        if self.pointer is not None or self.status_ptr is not None:
+            hashthread.update(
+                    "R {0} {1} ".format(self.pointer, self.status_ptr))
+
+    def reinit(self):
+        if self.pointer is None and self.status_ptr is None:
+            return self
+        request = copy.copy(self)
+        request.pointer = None
+        request.status_ptr = None
+        return request
 
 
 class SendRequest(Request):
@@ -59,6 +74,7 @@ class SendRequest(Request):
         return True
 
     def compute_hash(self, hashthread):
+        Request.compute_hash(self, hashthread)
         hashthread.update("SR {0}".format(self.send_type))
         self.message.compute_hash(hashthread)
 
@@ -80,6 +96,7 @@ class ReceiveRequest(Request):
         return True
 
     def compute_hash(self, hashthread):
+        Request.compute_hash(self, hashthread)
         hashthread.update(
                 "RR {0.comm_id} {0.source} {0.tag} "
                 "{0.data_ptr} {0.datatype.type_id} {0.count}".format(self))
@@ -88,7 +105,8 @@ class ReceiveRequest(Request):
         return self.source != consts.MPI_ANY_SOURCE
 
     def __repr__(self):
-        return "RECV(source={0.source}, tag={0.tag})".format(self)
+        return "<RecvRequst {1:x} source={0.source}, tag={0.tag}>" \
+                .format(self, id(self))
 
 
 class CompletedRequest(Request):
@@ -97,6 +115,7 @@ class CompletedRequest(Request):
         self.original_request = original_request
 
     def compute_hash(self, hashthread):
+        Request.compute_hash(self, hashthread)
         hashthread.update("CR ")
 
     def is_completed(self):
@@ -113,6 +132,7 @@ class CollectiveRequest(Request):
         return True
 
     def compute_hash(self, hashthread):
+        Request.compute_hash(self, hashthread)
         hashthread.update("CR {0} {0}".format(self.comm_id, self.cc_id))
 
     def __repr__(self):

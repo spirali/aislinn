@@ -82,7 +82,6 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMM_SELF ((MPI_Comm) 0x0000CC01)
 #define MPI_COMM_WORLD ((MPI_Comm) 0x0000CC02)
 
-#define MPI_GROUP_NULL ((MPI_Group) 0x0000DD00)
 
 #define MPI_BOTTOM         ((void*) 0)
 
@@ -108,6 +107,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_ANY_SOURCE -0x0000AA00
 #define MPI_ANY_TAG -0x0000BB00
 #define MPI_PROC_NULL -0x0000CC00
+#define MPI_REQUEST_NULL ((MPI_Request) -0x0000DD00)
+#define MPI_GROUP_NULL ((MPI_Group) -0x0000EE00)
 
 #define MPI_KEYVAL_INVALID 0x24000000
 

@@ -220,6 +220,9 @@ class Generator:
                    message is not None or \
                    request.source == consts.MPI_PROC_NULL
             state.set_request_as_completed(request)
+            if request.pointer is not None:
+                self.controller.write_int(request.pointer,
+                                          consts.MPI_REQUEST_NULL)
             if request.is_receive() \
                and request.source == consts.MPI_PROC_NULL \
                and request.status_ptr:
@@ -234,10 +237,9 @@ class Generator:
                                       message.tag,
                                       message.size)
                 count = request.datatype.get_count(message.size)
-                if count == None:
-                    # TODO
-                    # This should never happen after
-                    # type signature check will be implemeted
+                if count is None:
+                    # This should never happen because
+                    # datatype check should be already performed
                     raise Exception("Internal error")
                 if count > request.count:
                     e = errormsg.ErrorMessage()

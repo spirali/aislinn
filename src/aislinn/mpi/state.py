@@ -255,7 +255,7 @@ class State:
     def reinit_active_requests(self):
         if self.active_request_ids:
             for request_id in self.active_request_ids:
-                self.requests[request_id].status_ptr = None
+                self.requests[request_id] = self.requests[request_id].reinit()
 
     def reset_state(self):
         self.status = None
@@ -278,7 +278,8 @@ class State:
         self.active_request_ids = request_ids
         if status_ptrs is not None:
             for i, ptr in zip(request_ids, status_ptrs):
-                request = self.requests[i]
+                request = copy.copy(self.requests[i])
+                self.requests[i] = request
                 assert request.status_ptr is None
                 request.status_ptr = ptr
 
@@ -286,14 +287,23 @@ class State:
         self.reset_state()
         self.status = self.StatusFinished
 
-    def set_test(self, request_ids, flag_ptr, status_ptrs):
+    def set_test(self, request_ids, flag_ptr, status_ptrs, requests_ptrs):
         self.status = self.StatusTest
         self.active_request_ids = request_ids
         self.flag_ptr = flag_ptr
+        self.requests_ptrs = requests_ptrs
+
+        if requests_ptrs is not None:
+            for i, ptr in zip(request_ids, requests_ptrs):
+                request = copy.copy(self.requests[i])
+                self.requests[i] = request
+                assert request.pointer is None
+                request.pointer = ptr
 
         if status_ptrs is not None:
             for i, ptr in zip(request_ids, status_ptrs):
-                request = self.requests[i]
+                request = copy.copy(self.requests[i])
+                self.requests[i] = request
                 assert request.status_ptr is None
                 request.status_ptr = ptr
 

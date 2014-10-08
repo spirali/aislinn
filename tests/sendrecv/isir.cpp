@@ -31,6 +31,9 @@ int main(int argc, char **argv)
 			MPI_Issend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r);
 		}
 		MPI_Wait(&r, MPI_STATUS_IGNORE);
+		if (r != MPI_REQUEST_NULL) {
+			return 1;
+		}
 		printf("Send\n");
 	}
 	if (rank == 1) {
