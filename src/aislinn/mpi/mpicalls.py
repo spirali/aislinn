@@ -26,7 +26,7 @@ import errormsg
 import types
 import misc
 import atypes as at
-from comm import comm_id_name
+from comm import comm_id_name, comm_compare
 
 # TODO: Universal architecture detection
 POINTER_SIZE = 8
@@ -351,6 +351,12 @@ def MPI_Comm_dup(generator, args, state, context):
     state.set_wait((request_id,))
     return True
 
+def MPI_Comm_compare(generator, args, state, context):
+    comm1, comm2, result_ptr = args
+    generator.controller.write_int(result_ptr,
+                                   comm_compare(comm1, comm2))
+    return False
+
 def MPI_Comm_free(generator, args, state, context):
     comm_ptr = args[0]
 
@@ -633,6 +639,7 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Comm_dup, (at.Comm, at.Pointer)),
      Call(MPI_Comm_split, (at.Comm, at.Int, at.Int, at.Pointer)),
      Call(MPI_Comm_free, (at.Pointer,)),
+     Call(MPI_Comm_compare, (at.Comm, at.Comm, at.Pointer)),
      Call(MPI_Comm_group, (at.Comm, at.Pointer)),
      Call(MPI_Group_free, (at.Pointer,)),
      Call(MPI_Group_size, (at.Group, at.Pointer)),

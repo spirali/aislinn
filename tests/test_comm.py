@@ -62,6 +62,11 @@ class CommTests(TestCase):
         self.execute(2, stdout="")
         self.single_error("permanentcommfree")
 
+    def test_compare(self):
+        self.program("compare")
+        self.execute(5, stdout="")
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

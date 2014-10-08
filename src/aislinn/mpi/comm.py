@@ -54,6 +54,14 @@ class Group:
     def pids(self):
         return self.table
 
+def comm_compare(comm1, comm2):
+    if comm1 is comm2:
+        return consts.MPI_IDENT
+    if comm1.group.table == comm2.group.table:
+        return consts.MPI_CONGRUENT
+    if set(comm1.group.table) == set(comm2.group.table):
+        return consts.MPI_SIMILAR
+    return consts.MPI_UNEQUAL
 
 def make_comm_world(process_count):
     table = range(process_count)

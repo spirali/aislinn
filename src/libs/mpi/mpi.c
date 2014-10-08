@@ -661,6 +661,16 @@ int MPI_Comm_free(MPI_Comm *comm)
 	return MPI_SUCCESS;
 }
 
+int MPI_Comm_compare(MPI_Comm comm1, MPI_Comm comm2, int *result)
+{
+	aislinn_call_3(
+		"MPI_Comm_compare",
+		(AislinnArgType) comm1,
+		(AislinnArgType) comm2,
+		(AislinnArgType) result);
+	return MPI_SUCCESS;
+}
+
 int MPI_Type_size(MPI_Datatype datatype, int *size)
 {
 	aislinn_call_2(

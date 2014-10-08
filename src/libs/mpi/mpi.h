@@ -125,6 +125,12 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMBINER_DUP 0x09000100
 #define MPI_COMBINER_CONTIGUOUS 0x09000101
 
+/* Constants for MPI_Comm_compare */
+#define MPI_UNEQUAL   0
+#define MPI_SIMILAR   1
+#define MPI_CONGRUENT 2
+#define MPI_IDENT     3
+
 /* Functions prototypes */
 typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
 typedef void (MPI_Handler_function) ( MPI_Comm *, int *, ... );
@@ -335,6 +341,8 @@ int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm);
 int MPI_Comm_dup(MPI_Comm comm, MPI_Comm *newcomm);
 
 int MPI_Comm_free(MPI_Comm *comm);
+
+int MPI_Comm_compare(MPI_Comm comm1, MPI_Comm comm2, int *result);
 
 int MPI_Type_size(MPI_Datatype datatype, int *size);
 

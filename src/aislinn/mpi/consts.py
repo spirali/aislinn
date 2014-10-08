@@ -76,3 +76,9 @@ MPI_LXOR = 0xDD0010A
 MPI_BXOR = 0xDD0010B
 MPI_MINLOC = 0xDD0010C
 MPI_MAXLOC = 0xDD0010D
+
+# ---- Compare results -----------------------------------------
+MPI_UNEQUAL   = 0
+MPI_SIMILAR   = 1
+MPI_CONGRUENT = 2
+MPI_IDENT     = 3
