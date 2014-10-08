@@ -143,7 +143,9 @@ typedef int MPI_Comm_delete_attr_function(
 		void *attribute_val,
 		void *extra_state);
 
-void MPI_Init(int *argc, char ***argv);
+int MPI_Init(int *argc, char ***argv);
+
+int MPI_Initialized(int *flag);
 
 int MPI_Finalize();
 

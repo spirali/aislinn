@@ -34,6 +34,12 @@ INT_SIZE = 4
 STATUS_SIZE = 3 * INT_SIZE
 REQUEST_SIZE = INT_SIZE
 
+def MPI_Initialized(generator, args, state, context):
+    # This is called only when MPI is already initialized, uninitialized MPI is
+    # hanled in generator
+    generator.controller.write_int(args[0], 1)
+    return False
+
 def MPI_Finalize(generator, args, state, context):
     if state.finalized:
         e = errormsg.CallError()
@@ -619,6 +625,7 @@ class Call:
 
 
 calls = dict((c.name, c) for c in [
+     Call(MPI_Initialized, (at.Pointer,)),
      Call(MPI_Finalize, ()),
      Call(MPI_Finalized, (at.Pointer,)),
      Call(MPI_Comm_rank, (at.Comm, at.Pointer)),

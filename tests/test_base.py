@@ -169,6 +169,11 @@ class BaseTests(TestCase):
         self.execute(1)
         self.no_errors()
 
+    def test_initialized(self):
+        self.program("initialized")
+        self.execute(1)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

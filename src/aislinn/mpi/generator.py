@@ -122,6 +122,52 @@ class Generator:
         for error_message in error_messages:
             self.add_error_message(error_message)
 
+    def initial_execution(self, result):
+        while True:
+            result = result.split()
+            if result[0] == "EXIT":
+                e = errormsg.ErrorMessage()
+                e.name = "nompicall"
+                e.short_description = "No MPI routine"
+                e.description = "Program terminated without calling MPI_Init"
+                self.add_error_message(e)
+                return True
+            elif result[0] == "REPORT":
+                e = self.make_error_message_from_report(result)
+                self.add_error_message(e)
+                return True
+            elif result[1] == "MPI_Initialized":
+                assert len(result) == 3
+                ptr = convert_type(result[2], "ptr")
+                self.controller.write_int(ptr, 0)
+                result = self.controller.run_process()
+                continue
+            elif result[1] != "MPI_Init":
+                e = errormsg.ErrorMessage()
+                e.name = "nompiinit"
+                e.short_description = "MPI is not initialized"
+                e.description = "{0} was called without MPI_Init".format(result[1])
+                self.add_error_message(e)
+                return True
+            break
+
+        vg_state = self.save_state(True)
+
+        if self.send_protocol == "dynamic":
+            send_protocol_thresholds = (0, sys.maxint)
+        else:
+            send_protocol_thresholds = None
+
+        gstate = GlobalState(vg_state,
+                             self.process_count,
+                             send_protocol_thresholds)
+        vg_state.dec_ref()
+        assert vg_state.ref_count == self.process_count
+
+        self.initial_node = self.add_node(None, gstate, True)
+        self.statespace.initial_node = self.initial_node
+        return False
+
     def run(self, process_count):
         self.init_time = datetime.datetime.now()
         self.process_count = process_count
@@ -129,40 +175,10 @@ class Generator:
         if result is None:
             return False
         try:
-            result = result.split()
-            if result[0] == "EXIT":
-                e = errormsg.ErrorMessage()
-                e.name = "nompicall"
-                e.short_description = "No MPI routine"
-                e.description = "Program terminated without calling MPI routine"
-                self.add_error_message(e)
+            if self.initial_execution(result):
                 return True
-            elif result[0] == "REPORT":
-                e = self.make_error_message_from_report(result)
-                self.add_error_message(e)
-                return True
-            elif result[1] != "MPI_Init":
-                raise Exception("MPI_Init is not called")
-
-            vg_state = self.save_state(True)
-
-            if self.send_protocol == "dynamic":
-                send_protocol_thresholds = (0, sys.maxint)
-            else:
-                send_protocol_thresholds = None
-
-            gstate = GlobalState(vg_state,
-                                 process_count,
-                                 send_protocol_thresholds)
-            vg_state.dec_ref()
-            assert vg_state.ref_count == process_count
-
-            self.initial_node = self.add_node(None, gstate, True)
-            self.statespace.initial_node = self.initial_node
-
             tick = self.statistics_tick
             tick_counter = tick
-
             while self.working_queue:
                 if self.search == "dfs":
                     node, gstate = self.working_queue.pop()
@@ -183,20 +199,22 @@ class Generator:
                     logging.info("Maximal number of states reached")
                     return True
 
-            # Check there is no memory leak
-            assert self.vg_states.resource_count == 0
-            assert self.vg_buffers.resource_count == 0
-            assert len(self.vg_state_cache) == 0
-            stats = self.controller.get_stats()
-            # All pages are active, i.e. we have freed everyhing else
-            assert stats["pages"] == stats["active-pages"]
-            assert stats["buffers-size"] == 0
+            self.final_check()
             self.is_full_statespace = True
-
         finally:
             self.controller.kill()
             self.end_time = datetime.datetime.now()
         return True
+
+    def final_check(self):
+        # Check there is no memory leak
+        assert self.vg_states.resource_count == 0
+        assert self.vg_buffers.resource_count == 0
+        assert len(self.vg_state_cache) == 0
+        stats = self.controller.get_stats()
+        # All pages are active, i.e. we have freed everyhing else
+        assert stats["pages"] == stats["active-pages"]
+        assert stats["buffers-size"] == 0
 
     def cleanup(self):
         if self.vg_states.not_used_resources:

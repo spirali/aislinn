@@ -1,9 +1,16 @@
 
 #include "mpi.h"
 
-void MPI_Init(int *argc, char ***argv)
+int MPI_Init(int *argc, char ***argv)
 {
 	aislinn_call_0("MPI_Init");
+	return MPI_SUCCESS;
+}
+
+int MPI_Initialized(int *flag)
+{
+	aislinn_call_1("MPI_Initialized", (AislinnArgType) flag);
+	return MPI_SUCCESS;
 }
 
 int MPI_Finalize()
