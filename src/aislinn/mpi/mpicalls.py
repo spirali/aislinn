@@ -28,11 +28,6 @@ import atypes as at
 from request import SendRequest
 from comm import comm_id_name, comm_compare
 
-# TODO: Universal architecture detection
-POINTER_SIZE = 8
-INT_SIZE = 4
-STATUS_SIZE = 3 * INT_SIZE
-REQUEST_SIZE = INT_SIZE
 
 def MPI_Initialized(generator, args, state, context):
     # This is called only when MPI is already initialized, uninitialized MPI is
@@ -181,34 +176,21 @@ def MPI_Wait(generator, args, state, context):
 
     request_id = generator.controller.read_int(request_ptr)
     check.check_request_id(state, request_id)
-    if status_ptr != consts.MPI_STATUSES_IGNORE:
-        status_ptrs = [ status_ptr ]
-    else:
-        status_ptrs = None
     if state.get_persistent_request(request_id) is None:
         generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
-    state.set_wait([ request_id ], status_ptrs)
+    state.set_wait([ request_id ], None, status_ptr)
     return True
 
 def MPI_Test(generator, args, state, context):
     request_ptr, flag_ptr, status_ptr = args
-    request_ids = [ generator.controller.read_int(request_ptr) ]
-    if status_ptr != consts.MPI_STATUSES_IGNORE:
-        status_ptrs = [ status_ptr ]
-    else:
-        status_ptrs = None
-    check.check_request_ids(state, request_ids)
-    state.set_test(request_ids, flag_ptr, status_ptrs, [request_ptr])
+    request_id = generator.controller.read_int(request_ptr)
+    check.check_request_id(state, request_id)
+    state.set_test([ request_id ], flag_ptr, request_ptr, status_ptr)
     return True
 
 def MPI_Waitall(generator, args, state, context):
-    count, requests_ptr, statuses_ptr = args
+    count, requests_ptr, status_ptr = args
     request_ids = generator.controller.read_ints(requests_ptr, count)
-    if statuses_ptr != consts.MPI_STATUSES_IGNORE:
-        status_ptrs = [ statuses_ptr + i * STATUS_SIZE for i in xrange(count) ]
-    else:
-        status_ptrs = None
-
     check.check_request_ids(state, request_ids)
     values = []
     for request_id in request_ids:
@@ -217,19 +199,22 @@ def MPI_Waitall(generator, args, state, context):
         else:
             values.append(request_id)
     generator.controller.write_ints(requests_ptr, values)
-    state.set_wait(request_ids, status_ptrs)
+    state.set_wait(request_ids, None, status_ptr)
+    return True
+
+def MPI_Waitany(generator, args, state, context):
+    count, requests_ptr, index_ptr, status_ptr = args
+    request_ids = generator.controller.read_ints(requests_ptr, count)
+    check.check_request_ids(state, request_ids)
+    state.set_wait(request_ids, requests_ptr, status_ptr,
+                   wait_any=True, index_ptr=index_ptr)
     return True
 
 def MPI_Testall(generator, args, state, context):
-    count, requests_ptr, flag_ptr, statuses_ptr = args
+    count, requests_ptr, flag_ptr, status_ptr = args
     request_ids = generator.controller.read_ints(requests_ptr, count)
-    if statuses_ptr != consts.MPI_STATUSES_IGNORE:
-        status_ptrs = [ statuses_ptr + i * STATUS_SIZE for i in xrange(count) ]
-    else:
-        status_ptrs = None
-    requests_ptrs = [ requests_ptr + i * REQUEST_SIZE for i in xrange(count) ]
     check.check_request_ids(state, request_ids)
-    state.set_test(request_ids, flag_ptr, status_ptrs, requests_ptrs)
+    state.set_test(request_ids, flag_ptr, requests_ptr, status_ptr)
     return True
 
 def MPI_Barrier(generator, args, state, context):
@@ -403,7 +388,7 @@ def MPI_Comm_free(generator, args, state, context):
 
 def MPI_Get_count(generator, args, state, context):
     status_ptr, datatype, count_ptr = args
-    size = generator.controller.read_int(status_ptr + 2 * INT_SIZE)
+    size = generator.controller.read_int(status_ptr + 2 * generator.INT_SIZE)
     result = datatype.get_count(size)
     if result is None:
         result = consts.MPI_UNDEFINED
@@ -634,13 +619,9 @@ def call_recv(generator, args, state,
        state.make_request_persistent(request_id)
 
     if blocking:
-        if status_ptr:
-            status_ptrs = [ status_ptr ]
-        else:
-            status_ptrs = None
-        state.set_wait((request_id,), status_ptrs)
+        state.set_wait((request_id,), None, status_ptr)
     else:
-         generator.controller.write_int(request_ptr, request_id)
+        generator.controller.write_int(request_ptr, request_id)
 
     # TODO: Optimization : If message is already here,
     # then non block and continue
@@ -694,7 +675,7 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Ibsend, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.Tag, at.Comm, at.Pointer)),
      Call(MPI_Recv, (at.Pointer, at.Count, at.Datatype,
-                     at.Rank, at.TagAT, at.Comm, at.Pointer)),
+                     at.Rank, at.TagAT, at.Comm, at.StatusPtr)),
      Call(MPI_Irecv, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.TagAT, at.Comm, at.Pointer)),
      Call(MPI_Recv_init, (at.Pointer, at.Count, at.Datatype,
@@ -706,10 +687,11 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Probe, (at.Int, at.TagAT, at.Comm, at.Pointer)),
-     Call(MPI_Wait, (at.Pointer, at.Pointer)),
-     Call(MPI_Waitall, (at.Count, at.Pointer, at.Pointer)),
-     Call(MPI_Test, (at.Pointer, at.Pointer, at.Pointer)),
-     Call(MPI_Testall, (at.Count, at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Wait, (at.Pointer, at.StatusPtr)),
+     Call(MPI_Waitall, (at.Count, at.Pointer, at.StatusesPtr)),
+     Call(MPI_Waitany, (at.Count, at.Pointer, at.Pointer, at.StatusPtr)),
+     Call(MPI_Test, (at.Pointer, at.Pointer, at.StatusPtr)),
+     Call(MPI_Testall, (at.Count, at.Pointer, at.Pointer, at.StatusesPtr)),
      Call(MPI_Barrier, (at.Comm,)),
      Call(MPI_Gather, (at.Pointer, at.Count, at.Datatype,
                        at.Pointer, at.Int, at.Int,

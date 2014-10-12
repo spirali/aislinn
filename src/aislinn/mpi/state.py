@@ -33,9 +33,10 @@ class State:
 
     StatusReady = 0
     StatusFinished = 1
-    StatusWait = 2
-    StatusTest = 3
-    StatusProbe = 4
+    StatusWaitAll = 2
+    StatusWaitAny = 3
+    StatusTest = 4
+    StatusProbe = 5
 
     def __init__(self, gstate, pid, vg_state):
         assert vg_state is not None
@@ -49,8 +50,11 @@ class State:
         self.groups = {} # <-- Copy on write!
         self.requests = [] # <-- Copy on write!
         self.persistent_requests = [] # <-- Copy on write!
-        self.active_request_ids = None
+        self.active_request_ids = None # <-- Copy on write!
+        self.active_request_pointer = None
+        self.active_request_status_ptr = None
         self.flag_ptr = None
+        self.index_ptr = None # Used for Waitany
         self.user_defined_types = [] # <-- Copy on write!
         self.cc_id_counters = None
         self.probe_data = None
@@ -189,8 +193,18 @@ class State:
 
         if self.active_request_ids is not None:
             hashthread.update(str(self.active_request_ids))
+
+        if self.active_request_pointer is not None:
+            hashthread.update(str(self.active_request_pointer))
+
+        if self.active_request_status_ptr is not None:
+            hashthread.update(str(self.active_request_status_ptr))
+
         if self.flag_ptr is not None:
             hashthread.update(str(self.flag_ptr))
+
+        if self.index_ptr is not None:
+            hashthread.update(str(self.index_ptr))
 
         # Normalize messages
         self.messages.sort(message_cmp)
@@ -293,25 +307,55 @@ class State:
     def find_request(self, request_id):
         return self.requests[request_id]
 
-    def remove_active_requests(self):
+    def _finish_request(self, generator, request,
+                        index_pointer, index_status):
+        assert request.is_completed()
+        message = request.message
+        request = request.original_request
+        if request is None:
+            return
+        if self.active_request_pointer is not None:
+            generator.controller.write_int(
+                    self.active_request_pointer + \
+                    generator.REQUEST_SIZE * index_pointer,
+                    consts.MPI_REQUEST_NULL)
+        if self.active_request_status_ptr is not None and request.is_receive():
+            status_ptr = self.active_request_status_ptr + \
+                         generator.STATUS_SIZE * index_status
+            if request.source == consts.MPI_PROC_NULL:
+                generator.write_status(status_ptr,
+                                  consts.MPI_PROC_NULL,
+                                  consts.MPI_ANY_TAG,
+                                  0)
+            else:
+                generator.write_status(status_ptr,
+                          message.source,
+                          message.tag,
+                          message.size)
+
+    def finish_active_requests(self, generator):
         self.requests = copy.copy(self.requests)
-        for request_id in self.active_request_ids:
+        for index, request_id in enumerate(self.active_request_ids):
             request = self.get_request(request_id)
-            assert request.is_completed()
+            self._finish_request(generator, request, index, index)
             self.requests.remove(request)
         self.active_request_ids = None
 
-    def reinit_active_requests(self):
-        if self.active_request_ids:
-            self.requests = copy.copy(self.requests)
-            for request_id in self.active_request_ids:
-                index = self.get_request_index(request_id)
-                self.requests[index] = self.requests[index].reinit()
+    def finish_active_request(self, generator, request):
+        index = self.active_request_ids.index(request.id)
+        self._finish_request(generator, request, index, 0)
+        self.requests = copy.copy(self.requests)
+        self.requests.remove(request)
+        self.active_request_ids = copy.copy(self.active_request_ids)
+        del self.active_request_ids[index]
 
     def reset_state(self):
         self.status = None
         self.active_request_ids = None
+        self.active_request_pointer = None
+        self.active_request_status_ptr = None
         self.flag_ptr = None
+        self.index_ptr = None
         self.probe_data = None
 
     def set_ready(self):
@@ -323,57 +367,38 @@ class State:
         self.status = self.StatusProbe
         self.probe_data = (comm.comm_id, source, tag, flag_ptr, status_ptr)
 
-    def set_wait(self, request_ids, status_ptrs=None):
+    def set_wait(self,
+                 request_ids,
+                 request_ptr=None,
+                 status_ptr=None,
+                 wait_any=False,
+                 index_ptr=None):
         self.reset_state()
-        self.status = self.StatusWait
+        if wait_any:
+            self.status = self.StatusWaitAny
+            self.index_ptr = index_ptr
+        else:
+            self.status = self.StatusWaitAll
         self.active_request_ids = request_ids
-        if status_ptrs is not None:
-            self.requests = copy.copy(self.requests)
-            for id, ptr in zip(request_ids, status_ptrs):
-                index = self.get_request_index(id)
-                request = copy.copy(self.requests[index])
-                self.requests[index] = request
-                assert request.status_ptr is None
-                request.status_ptr = ptr
+        self.active_request_pointer = request_ptr
+        self.active_request_status_ptr = status_ptr
 
     def set_finished(self):
         self.reset_state()
         self.status = self.StatusFinished
 
-    def set_test(self, request_ids, flag_ptr, status_ptrs, requests_ptrs):
+    def set_test(self, request_ids, flag_ptr, request_ptr, status_ptr):
         self.status = self.StatusTest
         self.active_request_ids = request_ids
         self.flag_ptr = flag_ptr
-        self.requests_ptrs = requests_ptrs
+        self.active_request_pointer = request_ptr
+        self.active_request_status_ptr = status_ptr
 
-        if status_ptrs is not None or requests_ptrs is not None:
-            self.requests = copy.copy(self.requests)
-
-        if requests_ptrs is not None:
-            for id, ptr in zip(request_ids, requests_ptrs):
-                index = self.get_request_index(id)
-                if self.requests[index] in self.persistent_requests:
-                    # Do not set pointer to persistent requests, because
-                    # we do not need them to override by MPI_REQUEST_NULL
-                    continue
-                request = copy.copy(self.requests[index])
-                self.requests[index] = request
-                assert request.pointer is None
-                request.pointer = ptr
-
-        if status_ptrs is not None:
-            for id, ptr in zip(request_ids, status_ptrs):
-                index = self.get_request_index(id)
-                request = copy.copy(self.requests[index])
-                self.requests[index] = request
-                assert request.status_ptr is None
-                request.status_ptr = ptr
-
-    def set_request_as_completed(self, request):
+    def set_request_as_completed(self, request, message=None):
         assert not request.is_completed()
         self.requests = copy.copy(self.requests)
         i = self.requests.index(request)
-        self.requests[i] = CompletedRequest(request.id, request)
+        self.requests[i] = CompletedRequest(request.id, request, message)
 
     def set_request_as_synchronous(self, request):
         assert request.is_standard_send()
@@ -383,7 +408,7 @@ class State:
         request.send_type = SendRequest.Synchronous
         self.requests[i] = request
 
-    def is_matching_covers_active_requests(self, matching):
+    def is_matching_covering_active_requests(self, matching):
         for request_id in self.active_request_ids:
             request = self.get_request(request_id)
             if request.is_completed():
@@ -394,6 +419,18 @@ class State:
             else:
                 return False
         return True
+
+    def active_requests_covered_by_matching(self, matching):
+        result = []
+        for i, request_id in enumerate(self.active_request_ids):
+            request = self.get_request(request_id)
+            if request.is_completed():
+                result.append((i, request))
+                continue
+            for r, message in matching:
+                if r is request:
+                    result.append((i, request))
+        return result
 
     def check_requests(self, upto_active=False):
         if upto_active:

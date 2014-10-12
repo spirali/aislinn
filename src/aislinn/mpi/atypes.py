@@ -18,6 +18,7 @@
 #
 
 import check
+import consts
 from base.utils import convert_type
 
 class Arg:
@@ -95,3 +96,22 @@ class TagAT(Int): # Allow MPI_ANY_TAG
     @classmethod
     def convert(cls, value, arg_position, state):
         return check.check_tag(value, arg_position, True)
+
+
+class StatusPtr(Pointer):
+
+    @classmethod
+    def convert(cls, value, arg_position, state):
+        if value == consts.MPI_STATUS_IGNORE:
+            return None
+        else:
+            return value
+
+class StatusesPtr(Pointer):
+
+    @classmethod
+    def convert(cls, value, arg_position, state):
+        if value == consts.MPI_STATUSES_IGNORE:
+            return None
+        else:
+            return value

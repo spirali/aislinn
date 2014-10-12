@@ -265,6 +265,18 @@ int MPI_Waitall(int count, MPI_Request array_of_requests[],
 	return MPI_SUCCESS;
 }
 
+int MPI_Waitany(int count, MPI_Request array_of_requests[], int *index,
+	MPI_Status *status)
+{
+	aislinn_call_4(
+		"MPI_Waitany",
+		(AislinnArgType) count,
+		(AislinnArgType) array_of_requests,
+		(AislinnArgType) index,
+		(AislinnArgType) status);
+	return MPI_SUCCESS;
+}
+
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status)
 {
 	aislinn_call_3(

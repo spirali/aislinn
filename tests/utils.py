@@ -18,7 +18,7 @@ sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.controller
 
 def make_set(lines):
-    return set(lines.rstrip().split("\n"))
+    return set(lines.splitlines())
 
 class TestCase(unittest.TestCase):
 
@@ -133,12 +133,16 @@ def run_and_check(args,
                 raise_exception("Got unexpected stdout.\n"
                                 "Expected stdout:\n{0}".format(stdout))
         elif isinstance(stdout, set) or isinstance(stdout, frozenset):
-            r_stdout_set = set(r_stdout.rstrip().split("\n"))
+            r_stdout_set = set(r_stdout.splitlines())
             if stdout != r_stdout_set:
                 if stdout == "":
                     stdout = ">>> empty <<<"
                 raise_exception("Got unexpected stdout.\n"
-                                "Expected stdout:\n{0}".format(stdout))
+                                "Expected stdout:\n{0}" \
+                                "\nDifferences (extra, missing):\n {1}\n {2}\n" \
+                                        .format(stdout,
+                                                r_stdout_set - stdout,
+                                                stdout - r_stdout_set))
         else:
             r = stdout(r_stdout)
             if r is not None:

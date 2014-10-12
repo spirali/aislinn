@@ -25,9 +25,6 @@ from message import Message
 
 class Request(EqMixin):
 
-    pointer = None
-    status_ptr = None
-
     def __init__(self, request_id):
         self.id = request_id
 
@@ -47,18 +44,7 @@ class Request(EqMixin):
         return True
 
     def compute_hash(self, hashthread):
-        hashthread.update(
-                "R {0} {1} {2} ".format(self.id,
-                                        self.pointer,
-                                        self.status_ptr))
-
-    def reinit(self):
-        if self.pointer is None and self.status_ptr is None:
-            return self
-        request = copy.copy(self)
-        request.pointer = None
-        request.status_ptr = None
-        return request
+        hashthread.update(str(self.id))
 
 
 class SendRequest(Request):
@@ -107,7 +93,8 @@ class SendRequest(Request):
             self.message.compute_hash(hashthread)
 
     def __repr__(self):
-        return "<SendRequest {0}>".format(self.send_type)
+        return "<SendRqst type={0} target={1} tag={2}>" \
+                .format(self.send_type, self.target, self.tag)
 
 
 class ReceiveRequest(Request):
@@ -134,15 +121,16 @@ class ReceiveRequest(Request):
         return self.source != consts.MPI_ANY_SOURCE
 
     def __repr__(self):
-        return "<RecvRequst {1:x} source={0.source}, tag={0.tag}>" \
+        return "<RecvRqst {1:x} source={0.source}, tag={0.tag}>" \
                 .format(self, id(self))
 
 
 class CompletedRequest(Request):
 
-    def __init__(self, request_id, original_request):
+    def __init__(self, request_id, original_request, message=None):
         Request.__init__(self, request_id)
         self.original_request = original_request
+        self.message = message
 
     def compute_hash(self, hashthread):
         Request.compute_hash(self, hashthread)
@@ -150,6 +138,10 @@ class CompletedRequest(Request):
 
     def is_completed(self):
         return True
+
+    def __repr__(self):
+        return "<CompleteRqst {0:x} {1}>" \
+                .format(id(self), repr(self.original_request))
 
 
 class CollectiveRequest(Request):
@@ -167,4 +159,4 @@ class CollectiveRequest(Request):
         hashthread.update("CR {0} {0}".format(self.comm_id, self.cc_id))
 
     def __repr__(self):
-        return "CCOP(comm_id={0.comm_id} cc_id={0.cc_id})".format(self)
+        return "<CCRqst comm_id={0.comm_id} cc_id={0.cc_id}>".format(self)

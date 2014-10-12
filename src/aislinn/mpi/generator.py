@@ -53,6 +53,12 @@ class ExecutionContext:
 
 class Generator:
 
+    # TODO: Universal architecture detection
+    POINTER_SIZE = 8
+    INT_SIZE = 4
+    STATUS_SIZE = 3 * INT_SIZE
+    REQUEST_SIZE = INT_SIZE
+
     def __init__(self, args, valgrind_args, aislinn_args):
         self.args = args
         self.controller = base.controller.Controller(args)
@@ -237,7 +243,8 @@ class Generator:
             assert not request.is_receive() or \
                    message is not None or \
                    request.source == consts.MPI_PROC_NULL
-            state.set_request_as_completed(request)
+            state.set_request_as_completed(request, message)
+            """
             if request.pointer is not None:
                 self.controller.write_int(request.pointer,
                                           consts.MPI_REQUEST_NULL)
@@ -248,12 +255,15 @@ class Generator:
                                   consts.MPI_PROC_NULL,
                                   consts.MPI_ANY_TAG,
                                   0)
+            """
             if message:
+                """
                 if request.status_ptr:
                     self.write_status(request.status_ptr,
                                       message.source,
                                       message.tag,
                                       message.size)
+                """
                 count = request.datatype.get_count(message.size)
                 if count is None:
                     # This should never happen because
@@ -284,7 +294,8 @@ class Generator:
 
     def fast_partial_expand(self, node, gstate):
         for state in gstate.states:
-            if state.status == State.StatusWait:
+            if state.status == State.StatusWaitAll or \
+                    state.status == State.StatusWaitAny:
                 if not state.are_requests_deterministic():
                     continue
                 matches = state.check_requests(upto_active=True)
@@ -310,21 +321,31 @@ class Generator:
     def fast_expand_node(self, node, gstate):
         partial_found = False
         for state in gstate.states:
-            if state.status == State.StatusWait:
+            if state.status == State.StatusWaitAll or \
+                    state.status == State.StatusWaitAny:
                 if not state.are_requests_deterministic():
                     continue
                 matches = state.check_requests(upto_active=True)
                 len(matches) == 1 # Active request are deterministic here
 
-                if not state.is_matching_covers_active_requests(matches[0]):
+                if not state.is_matching_covering_active_requests(matches[0]):
                    partial_found = True
                    continue
+
+                if state.status == State.StatusWaitAny:
+                    if len(state.active_request_ids) > 1:
+                        # We cannot continue because we need branch, 
+                        # so the best we can hope
+                        # for is "partial_found"
+                        continue
+                    assert len(state.active_request_ids) == 1
+                    self.controller.write_int(state.index_ptr, 1)
 
                 logging.debug("Fast expand status=wait pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
                 if not self.apply_matching(node, state, matches[0]):
                     return False
-                state.remove_active_requests()
+                state.finish_active_requests(self)
                 self.execute_state_and_add_node(node, state)
                 return True
 
@@ -340,8 +361,9 @@ class Generator:
     def fork_standard_sends(self, node, gstate):
         new_state_created = False
         for state in gstate.states:
-            if state.status == State.StatusWait or \
-                    state.status == State.StatusTest:
+            if state.status == State.StatusWaitAll or \
+                    state.status == State.StatusTest or \
+                    state.status == State.StatusWaitAny:
                 requests = state.fork_standard_sends()
                 if requests is None:
                     continue
@@ -399,10 +421,12 @@ class Generator:
             return
 
         for state in gstate.states:
-            if state.status == State.StatusWait:
-                self.process_wait_or_test(node, state, False)
+            if state.status == State.StatusWaitAll:
+                self.process_wait_or_test_all(node, state, False)
+            elif state.status == State.StatusWaitAny:
+                self.process_wait_or_test_any(node, state, False)
             elif state.status == State.StatusTest:
-                self.process_wait_or_test(node, state, True)
+                self.process_wait_or_test_all(node, state, True)
             elif state.status == State.StatusProbe:
                 self.process_probe(node, state)
             elif state.status == State.StatusFinished:
@@ -442,7 +466,6 @@ class Generator:
         if flag_ptr is not None and not already_probed: # It is Iprobe
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
-            new_state.reinit_active_requests()
             self.controller.restore_state(new_state.vg_state.id)
             self.controller.write_int(flag_ptr, 0)
             self.execute_state_and_add_node(node, new_state)
@@ -464,20 +487,19 @@ class Generator:
             new_state.add_probed_message(comm_id, source, tag, message)
             self.execute_state_and_add_node(node, new_state)
 
-    def process_wait_or_test(self, node, state, test):
+    def process_wait_or_test_all(self, node, state, test):
         if test:
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
-            new_state.reinit_active_requests()
             self.controller.restore_state(new_state.vg_state.id)
             self.controller.write_int(state.flag_ptr, 0)
             self.execute_state_and_add_node(node, new_state)
 
         matches = state.check_requests()
-        logging.debug("Wait or test len(matches)=%s pid=%s",
+        logging.debug("Wait or test all: len(matches)=%s pid=%s",
                 len(matches), state.pid)
         for matching in matches:
-            covered = state.is_matching_covers_active_requests(matching)
+            covered = state.is_matching_covering_active_requests(matching)
             if not covered and not any(r.is_receive() for r, m in matching):
                 # Not all request is completed and no new receive request
                 # matched so there is no reason to create new state
@@ -495,10 +517,42 @@ class Generator:
                 new_node = self.add_node(node, new_gstate)
                 node.add_arc(Arc(new_node, ()))
                 return
-            new_state.remove_active_requests()
+            new_state.finish_active_requests(self)
             if test:
                 self.controller.write_int(state.flag_ptr, 1)
             self.execute_state_and_add_node(node, new_state)
+
+    def process_wait_or_test_any(self, node, state, test):
+        #if test:
+        #    new_gstate = state.gstate.copy()
+        #    new_state = new_gstate.get_state(state.pid)
+        #    new_state.reinit_active_requests()
+        #    self.controller.restore_state(new_state.vg_state.id)
+        #    self.controller.write_int(state.flag_ptr, 0)
+        #    self.execute_state_and_add_node(node, new_state)
+
+        matches = state.check_requests()
+        logging.debug("Wait or test any: len(matches)=%s pid=%s",
+                len(matches), state.pid)
+        for matching in matches:
+            for i, request in \
+                state.active_requests_covered_by_matching(matching):
+
+                new_gstate = state.gstate.copy()
+                new_state = new_gstate.get_state(state.pid)
+                self.controller.restore_state(new_state.vg_state.id)
+
+                if not self.apply_matching(node, new_state, matching):
+                    return
+                self.controller.write_int(state.index_ptr, i)
+
+                # We need to refresh request, from new state
+                request = new_state.get_request(request.id)
+                new_state.finish_active_request(self, request)
+                #if test:
+                #    self.controller.write_int(state.flag_ptr, 1)
+                self.execute_state_and_add_node(node, new_state)
+
 
     def execute_state_and_add_node(self, node, state):
         context = self.execute_state(state)

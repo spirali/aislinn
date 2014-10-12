@@ -79,29 +79,56 @@ class SendRecvTests(TestCase):
         self.no_errors()
 
     def test_waitall(self):
-        result = [
+        result = set([
             "101 201 103 203",
             "101 103 201 203",
             "101 103 203 201",
             "103 101 201 203",
             "103 101 203 201",
             "103 203 101 201"
-        ]
-        result.sort()
-
-        def check_output(stdout):
-            lines = stdout.rstrip().split("\n")
-            lines.sort()
-            self.assertEquals(result, lines)
+        ])
 
         self.program("waitall")
-        self.execute(3, ("a",), stdout=check_output, send_protocol="randezvous")
+        self.execute(3, ("a",), stdout=result, send_protocol="randezvous")
         self.no_errors()
 
-        self.execute(3, ("b",), stdout=check_output, send_protocol="randezvous")
+        self.execute(3, ("b",), stdout=result, send_protocol="randezvous")
         self.no_errors()
 
-        self.execute(3, ("c",), stdout=check_output, send_protocol="randezvous")
+        self.execute(3, ("c",), stdout=result, send_protocol="randezvous")
+        self.no_errors()
+
+    def test_waitany(self):
+        result = set([
+            "101 201 103 203",
+            "101 103 201 203",
+            "101 103 203 201",
+            "103 101 201 203",
+            "103 101 203 201",
+            "103 203 101 201",
+            "STATUS 0 5",
+            "STATUS 2 5",
+        ])
+
+        self.program("waitany")
+        self.execute(3, ("a",), stdout=result, send_protocol="randezvous")
+        self.no_errors()
+
+        self.execute(3, ("b",), stdout=result, send_protocol="randezvous")
+        self.no_errors()
+
+    def test_waitany2(self):
+        result = set([
+            "101 201 103 203",
+            "STATUS 0 5",
+            "STATUS 2 5",
+        ])
+
+        self.program("waitany2")
+        self.execute(3, ("a",), stdout=result, send_protocol="randezvous")
+        self.no_errors()
+
+        self.execute(3, ("b",), stdout=result, send_protocol="randezvous")
         self.no_errors()
 
     def test_send_protocol(self):
