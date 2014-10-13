@@ -155,6 +155,8 @@ int MPI_Initialized(int *flag);
 
 int MPI_Start(MPI_Request *request);
 
+int MPI_Startall(int count, MPI_Request array_of_requests[]);
+
 int MPI_Request_free(MPI_Request *request);
 
 int MPI_Finalize();

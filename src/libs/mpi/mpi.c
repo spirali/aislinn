@@ -289,6 +289,14 @@ int MPI_Start(MPI_Request *request)
 	return MPI_SUCCESS;
 }
 
+int MPI_Startall(int count, MPI_Request array_of_requests[])
+{
+	aislinn_call_2("MPI_Startall",
+			(AislinnArgType) count,
+			(AislinnArgType) array_of_requests);
+	return MPI_SUCCESS;
+}
+
 int MPI_Request_free(MPI_Request *request)
 {
 	aislinn_call_1("MPI_Request_free",

@@ -150,6 +150,15 @@ def MPI_Start(generator, args, state, context):
     state.start_persistent_request(generator, state, request)
     return False
 
+def MPI_Startall(generator, args, state, context):
+    count, requests_ptr = args
+    request_ids = generator.controller.read_ints(requests_ptr, count)
+    requests = [ check.check_persistent_request(state, request_id, True)
+                 for request_id in request_ids ]
+    for request in requests:
+        state.start_persistent_request(generator, state, request)
+    return False
+
 def MPI_Request_free(generator, args, state, context):
     request_ptr = args[0]
     request_id = generator.controller.read_int(request_ptr)
@@ -714,6 +723,7 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Rsend_init, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.Tag, at.Comm, at.Pointer)),
      Call(MPI_Start, (at.Pointer,)),
+     Call(MPI_Startall, (at.Count, at.Pointer,)),
      Call(MPI_Request_free, (at.Pointer,)),
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),

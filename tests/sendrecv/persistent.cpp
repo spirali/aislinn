@@ -59,8 +59,7 @@ int main(int argc, char **argv)
 
 			MPI_Ssend_init(&d[0], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[0]);
 			MPI_Ssend_init(&d[1], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[1]);
-			MPI_Start(&r[0]);
-			MPI_Start(&r[1]);
+			MPI_Startall(2, r);
 			MPI_Waitall(2, r, MPI_STATUS_IGNORE);
 			d[0] = d[3];
 			d[1] = d[2];
@@ -82,8 +81,7 @@ int main(int argc, char **argv)
 
 			MPI_Rsend_init(&d[0], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[0]);
 			MPI_Rsend_init(&d[1], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[1]);
-			MPI_Start(&r[0]);
-			MPI_Start(&r[1]);
+			MPI_Startall(2, r);
 			MPI_Barrier(MPI_COMM_WORLD);
 			MPI_Waitall(2, r, MPI_STATUS_IGNORE);
 			d[0] = d[3];
