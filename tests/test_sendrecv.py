@@ -58,10 +58,16 @@ class SendRecvTests(TestCase):
     def test_persistent(self):
         self.program("persistent")
 
-        self.execute(2, "1 psend", stdout="101 202\n404 303\n")
+        self.execute(2, "1 send1", stdout="101 202\n404 303\n")
         self.no_errors()
 
-        self.execute(2, "1 send", stdout="101 202\n404 303\n")
+        self.execute(2, "1 send2", stdout="101 202\n404 303\n")
+        self.no_errors()
+
+        self.execute(2, "1 send3", stdout="101 202\n404 303\n")
+        self.no_errors()
+
+        self.execute(2, "1 send4", stdout="101 202\n404 303\n")
         self.no_errors()
 
     def test_testall_recv(self):

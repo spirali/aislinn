@@ -20,14 +20,14 @@ int main(int argc, char **argv)
 	if (rank == 0) {
 		int d[4] = { 101, 202, 303, 404 };
 
-		if (!strcmp(mode, "send")) {
+		if (!strcmp(mode, "send1")) {
 			MPI_Send(&d[0], 1, MPI_INT, target, 10, MPI_COMM_WORLD);
 			MPI_Send(&d[1], 1, MPI_INT, target, 10, MPI_COMM_WORLD);
 			MPI_Send(&d[2], 1, MPI_INT, target, 10, MPI_COMM_WORLD);
 			MPI_Send(&d[3], 1, MPI_INT, target, 10, MPI_COMM_WORLD);
 		}
 
-		if (!strcmp(mode, "psend")) {
+		if (!strcmp(mode, "send2")) {
 			MPI_Send_init(&d[0], 1, MPI_INT, MPI_PROC_NULL, 10, MPI_COMM_WORLD, &r[0]);
 			MPI_Start(&r[0]);
 			MPI_Wait(&r[0], MPI_STATUS_IGNORE);
@@ -48,6 +48,55 @@ int main(int argc, char **argv)
 			MPI_Request_free(&r[0]);
 			MPI_Request_free(&r[1]);
 		}
+
+		if (!strcmp(mode, "send3")) {
+			MPI_Bsend_init(&d[0], 1, MPI_INT, MPI_PROC_NULL, 10, MPI_COMM_WORLD, &r[0]);
+			MPI_Start(&r[0]);
+			MPI_Wait(&r[0], MPI_STATUS_IGNORE);
+			MPI_Start(&r[0]);
+			MPI_Wait(&r[0], MPI_STATUS_IGNORE);
+			MPI_Request_free(&r[0]);
+
+			MPI_Ssend_init(&d[0], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[0]);
+			MPI_Ssend_init(&d[1], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[1]);
+			MPI_Start(&r[0]);
+			MPI_Start(&r[1]);
+			MPI_Waitall(2, r, MPI_STATUS_IGNORE);
+			d[0] = d[3];
+			d[1] = d[2];
+			MPI_Start(&r[1]);
+			MPI_Start(&r[0]);
+			MPI_Waitall(2, r, MPI_STATUS_IGNORE);
+			MPI_Request_free(&r[0]);
+			MPI_Request_free(&r[1]);
+		}
+
+		if (!strcmp(mode, "send4")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Rsend_init(&d[0], 1, MPI_INT, MPI_PROC_NULL, 10, MPI_COMM_WORLD, &r[0]);
+			MPI_Start(&r[0]);
+			MPI_Wait(&r[0], MPI_STATUS_IGNORE);
+			MPI_Start(&r[0]);
+			MPI_Wait(&r[0], MPI_STATUS_IGNORE);
+			MPI_Request_free(&r[0]);
+
+			MPI_Rsend_init(&d[0], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[0]);
+			MPI_Rsend_init(&d[1], 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r[1]);
+			MPI_Start(&r[0]);
+			MPI_Start(&r[1]);
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Waitall(2, r, MPI_STATUS_IGNORE);
+			d[0] = d[3];
+			d[1] = d[2];
+			MPI_Start(&r[1]);
+			MPI_Start(&r[0]);
+			MPI_Waitall(2, r, MPI_STATUS_IGNORE);
+			MPI_Request_free(&r[0]);
+			MPI_Request_free(&r[1]);
+		}
+
+
+
 	}
 	if (rank == 1) {
 		int d[2];
@@ -55,10 +104,16 @@ int main(int argc, char **argv)
 		MPI_Recv_init(&d[1], 1, MPI_INT, 0, 10, MPI_COMM_WORLD, &r[1]);
 		MPI_Start(&r[0]);
 		MPI_Start(&r[1]);
+		if (!strcmp(mode, "send4")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+		}
 		MPI_Waitall(2, r, MPI_STATUS_IGNORE);
 		printf("%i %i\n", d[0], d[1]);
 		MPI_Start(&r[1]);
 		MPI_Start(&r[0]);
+		if (!strcmp(mode, "send4")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+		}
 		MPI_Waitall(2, r, MPI_STATUS_IGNORE);
 		printf("%i %i\n", d[0], d[1]);
 		MPI_Request_free(&r[1]);

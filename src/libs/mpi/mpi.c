@@ -237,6 +237,51 @@ int MPI_Send_init(const void *buf, int count, MPI_Datatype datatype, int dest,
 	return MPI_SUCCESS;
 }
 
+int MPI_Ssend_init(const void *buf, int count, MPI_Datatype datatype, int dest,
+                 int tag, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Ssend_init", args, 7);
+	return MPI_SUCCESS;
+}
+
+int MPI_Bsend_init(const void *buf, int count, MPI_Datatype datatype, int dest,
+                 int tag, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Bsend_init", args, 7);
+	return MPI_SUCCESS;
+}
+
+int MPI_Rsend_init(const void *buf, int count, MPI_Datatype datatype, int dest,
+                 int tag, MPI_Comm comm, MPI_Request *request)
+{
+	AislinnArgType args[7];
+	args[0] = (AislinnArgType) buf;
+	args[1] = (AislinnArgType) count;
+	args[2] = (AislinnArgType) datatype;
+	args[3] = (AislinnArgType) dest;
+	args[4] = (AislinnArgType) tag;
+	args[5] = (AislinnArgType) comm;
+	args[6] = (AislinnArgType) request;
+	aislinn_call_args("MPI_Rsend_init", args, 7);
+	return MPI_SUCCESS;
+}
+
 int MPI_Start(MPI_Request *request)
 {
 	aislinn_call_1("MPI_Start",

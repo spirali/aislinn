@@ -98,7 +98,7 @@ def MPI_Ssend(generator, args, state, context):
     return call_send(generator, args, state, context, True, "Ssend", "Ssend")
 
 def MPI_Rsend(generator, args, state, context):
-    # TODO: Handle Rsend properly, not it is handled like a Ssend
+    # TODO: Handle Rsend properly, now it is handled like a Ssend
     return call_send(generator, args, state, context, True, "Ssend", "Rsend")
 
 def MPI_Bsend(generator, args, state, context):
@@ -114,7 +114,7 @@ def MPI_Issend(generator, args, state, context):
     return call_send(generator, args, state, context, False, "Ssend", "Issend")
 
 def MPI_Irsend(generator, args, state, context):
-    # TODO: Handle Rsend properly, not it is handled like a Ssend
+    # TODO: Handle Rsend properly, now it is handled like a Ssend
     return call_send(generator, args, state, context, False, "Ssend", "Irsend")
 
 def MPI_Ibsend(generator, args, state, context):
@@ -129,7 +129,20 @@ def MPI_Recv_init(generator, args, state, context):
 
 def MPI_Send_init(generator, args, state, context):
     return call_send(
-            generator, args, state, context, False, "Send", "Isend", True)
+            generator, args, state, context, False, "Send", "Send_init", True)
+
+def MPI_Bsend_init(generator, args, state, context):
+    return call_send(
+            generator, args, state, context, False, "Bsend", "Bsend_init", True)
+
+def MPI_Ssend_init(generator, args, state, context):
+    return call_send(
+            generator, args, state, context, False, "Ssend", "Ssend_init", True)
+
+def MPI_Rsend_init(generator, args, state, context):
+    # TODO: Handle Rsend properly, now it is handled like a Ssend
+    return call_send(
+            generator, args, state, context, False, "Ssend", "Rsend_init", True)
 
 def MPI_Start(generator, args, state, context):
     request_id = generator.controller.read_int(args[0])
@@ -693,6 +706,12 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Recv_init, (at.Pointer, at.Count, at.Datatype,
                           at.Rank, at.TagAT, at.Comm, at.Pointer)),
      Call(MPI_Send_init, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Bsend_init, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Ssend_init, (at.Pointer, at.Count, at.Datatype,
+                      at.Rank, at.Tag, at.Comm, at.Pointer)),
+     Call(MPI_Rsend_init, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.Tag, at.Comm, at.Pointer)),
      Call(MPI_Start, (at.Pointer,)),
      Call(MPI_Request_free, (at.Pointer,)),
