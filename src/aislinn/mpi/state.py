@@ -81,7 +81,7 @@ class State:
         if self.probed_messages is not None:
             state.probed_messages = copy.copy(self.probed_messages)
         #state.requests = copy.copy(self.requests)
-        #state.active_request_ids = copy.copy(self.active_request_ids)
+        state.active_request_ids = copy.copy(self.active_request_ids)
         state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
 

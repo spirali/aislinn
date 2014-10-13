@@ -177,6 +177,9 @@ int MPI_Bsend(const void *buf, int count, MPI_Datatype datatype, int dest,
 int MPI_Ssend(const void *buf,int count, MPI_Datatype datatype, int dest,
 	int tag, MPI_Comm comm);
 
+int MPI_Rsend(const void *buf, int count, MPI_Datatype datatype, int dest, int tag,
+              MPI_Comm comm);
+
 int MPI_Isend(const void *buf, int count, MPI_Datatype datatype, int dest,
     int tag, MPI_Comm comm, MPI_Request *request);
 
@@ -185,6 +188,9 @@ int MPI_Issend(const void *buf, int count, MPI_Datatype datatype, int dest,
 
 int MPI_Ibsend(const void *buf, int count, MPI_Datatype datatype, int dest,
 	int tag, MPI_Comm comm, MPI_Request *request);
+
+int MPI_Irsend(const void *buf, int count, MPI_Datatype datatype, int dest, int tag,
+               MPI_Comm comm, MPI_Request *request);
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
         int source, int tag, MPI_Comm comm, MPI_Status *status);

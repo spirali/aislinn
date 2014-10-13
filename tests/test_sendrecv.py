@@ -23,6 +23,13 @@ class SendRecvTests(TestCase):
         self.execute(2, "0 bsend")
         self.single_error("deadlock")
 
+        self.execute(2, "1 rsend")
+        self.no_errors()
+
+        # When Rsend is fully implemented, this should cause an error
+        # self.execute(2, "1 rsend-err")
+
+
     def test_isend_irecv(self):
         self.program("isir")
 
@@ -40,6 +47,13 @@ class SendRecvTests(TestCase):
 
         self.execute(2, "0 bsend")
         self.single_error("deadlock")
+
+        self.execute(2, "1 rsend")
+        self.no_errors()
+
+        # When Rsend is fully implemented, this should cause an error
+        # self.execute(2, "1 rsend-err")
+
 
     def test_persistent(self):
         self.program("persistent")

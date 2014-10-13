@@ -28,10 +28,23 @@ int main(int argc, char **argv)
 		if (!strcmp(mode, "bsend")) {
 			MPI_Bsend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD);
 		}
+		if (!strcmp(mode, "rsend")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Rsend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD);
+		}
+		if (!strcmp(mode, "rsend-err")) {
+			MPI_Rsend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD);
+		}
 		printf("Send\n");
 	}
 	if (rank == 1) {
-		MPI_Recv(&d, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		if (!strcmp(mode, "rsend")) {
+			MPI_Irecv(&d, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, &r);
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Wait(&r, MPI_STATUS_IGNORE);
+		} else {
+			MPI_Recv(&d, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
 		printf("Receive\n");
 	}
 	MPI_Finalize();

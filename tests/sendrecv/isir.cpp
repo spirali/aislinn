@@ -30,6 +30,18 @@ int main(int argc, char **argv)
 		if (!strcmp(mode, "ssend")) {
 			MPI_Issend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r);
 		}
+
+		if (!strcmp(mode, "rsend")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Irsend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r);
+		}
+
+		if (!strcmp(mode, "rsend-err")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			MPI_Irsend(&d, 1, MPI_INT, target, 10, MPI_COMM_WORLD, &r);
+		}
+
+
 		MPI_Wait(&r, MPI_STATUS_IGNORE);
 		if (r != MPI_REQUEST_NULL) {
 			return 1;
@@ -38,6 +50,9 @@ int main(int argc, char **argv)
 	}
 	if (rank == 1) {
 		MPI_Irecv(&d, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, &r);
+		if (!strcmp(mode, "rsend")) {
+			MPI_Barrier(MPI_COMM_WORLD);
+		}
 		MPI_Wait(&r, MPI_STATUS_IGNORE);
 		printf("Receive\n");
 	}
