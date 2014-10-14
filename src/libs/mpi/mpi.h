@@ -200,7 +200,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
 int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	int source, int tag, MPI_Comm comm, MPI_Request *request);
 
-int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source, 
+int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source,
 	int tag, MPI_Comm comm, MPI_Request *request);
 
 int MPI_Send_init(const void *buf, int count, MPI_Datatype datatype, int dest,
@@ -447,6 +447,12 @@ int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm);
 int MPI_Group_free(MPI_Group *group);
 
 int MPI_Group_size(MPI_Group group, int *size);
+
+int MPI_Group_incl(MPI_Group group, int n,
+	const int ranks[], MPI_Group *newgroup);
+
+int MPI_Group_compare(MPI_Group group1, MPI_Group group2,
+	int *result);
 
 int MPI_Comm_create_errhandler(
   MPI_Comm_errhandler_function *function,

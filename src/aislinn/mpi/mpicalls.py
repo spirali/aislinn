@@ -26,7 +26,7 @@ import types
 import misc
 import atypes as at
 from request import SendRequest
-from comm import comm_id_name, comm_compare
+from comm import comm_id_name, comm_compare, group_compare, Group
 
 
 def MPI_Initialized(generator, args, state, context):
@@ -84,6 +84,21 @@ def MPI_Group_free(generator, args, state, context):
 def MPI_Group_size(generator, args, state, context):
     group, ptr = args
     generator.controller.write_int(ptr, group.size)
+    return False
+
+def MPI_Group_incl(generator, args, state, context):
+    group, count, ranks_ptr, group_ptr = args
+    ranks = generator.controller.read_ints(ranks_ptr, count)
+    for rank in ranks:
+        check.check_rank_in_group(group, rank, 3)
+    table = [ group.rank_to_pid(rank) for rank in ranks ]
+    group_id = state.add_group(Group(table))
+    generator.controller.write_int(group_ptr, group_id)
+    return False
+
+def MPI_Group_compare(generator, args, state, context):
+    group1, group2, ptr = args
+    generator.controller.write_int(ptr, group_compare(group1, group2))
     return False
 
 def MPI_Type_size(generator, args, state, context):
@@ -692,6 +707,8 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Comm_group, (at.Comm, at.Pointer)),
      Call(MPI_Group_free, (at.Pointer,)),
      Call(MPI_Group_size, (at.Group, at.Pointer)),
+     Call(MPI_Group_incl, (at.Group, at.Count, at.Pointer, at.Pointer)),
+     Call(MPI_Group_compare, (at.Group, at.Group, at.Pointer)),
      Call(MPI_Send, (at.Pointer, at.Count, at.Datatype,
                      at.Rank, at.Tag, at.Comm)),
      Call(MPI_Bsend, (at.Pointer, at.Count, at.Datatype,

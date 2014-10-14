@@ -164,6 +164,11 @@ class BaseTests(TestCase):
         self.execute(3, stdout="")
         self.no_errors()
 
+    def test_group2(self):
+        self.program("group2")
+        self.execute(4, stdout="")
+        self.no_errors()
+
     def test_finalized(self):
         self.program("finalized")
         self.execute(1)

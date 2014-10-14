@@ -63,6 +63,13 @@ def comm_compare(comm1, comm2):
         return consts.MPI_SIMILAR
     return consts.MPI_UNEQUAL
 
+def group_compare(group1, group2):
+    if group1.table == group2.table:
+        return consts.MPI_IDENT
+    if set(group1.table) == set(group2.table):
+        return consts.MPI_SIMILAR
+    return consts.MPI_UNEQUAL
+
 def make_comm_world(process_count):
     table = range(process_count)
     group = Group(table)
@@ -78,4 +85,3 @@ def comm_id_name(comm_id):
     if comm_id == consts.MPI_COMM_SELF:
         return "MPI_COMM_SELF"
     return str(comm_id)
-

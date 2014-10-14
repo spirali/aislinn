@@ -207,7 +207,7 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	return MPI_SUCCESS;
 }
 
-int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source, 
+int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source,
                  int tag, MPI_Comm comm, MPI_Request *request)
 {
 	AislinnArgType args[7];
@@ -1070,6 +1070,29 @@ int MPI_Group_free(MPI_Group *group)
 {
 	aislinn_call_1(
 		"MPI_Group_free", (AislinnArgType) group);
+	return MPI_SUCCESS;
+}
+
+int MPI_Group_incl(MPI_Group group, int n,
+	const int ranks[], MPI_Group *newgroup)
+{
+	aislinn_call_4(
+		"MPI_Group_incl",
+		(AislinnArgType) group,
+		(AislinnArgType) n,
+		(AislinnArgType) ranks,
+		(AislinnArgType) newgroup);
+	return MPI_SUCCESS;
+}
+
+int MPI_Group_compare(MPI_Group group1, MPI_Group group2,
+	int *result)
+{
+	aislinn_call_3(
+		"MPI_Group_compare",
+		(AislinnArgType) group1,
+		(AislinnArgType) group2,
+		(AislinnArgType) result);
 	return MPI_SUCCESS;
 }
 

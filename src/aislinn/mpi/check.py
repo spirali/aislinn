@@ -34,6 +34,19 @@ def check_rank(comm,
                arg_position,
                any_source_allowed=False,
                proc_null_allowed=False):
+    return check_rank_in_group(comm.group,
+                               rank,
+                               arg_position,
+                               any_source_allowed,
+                               proc_null_allowed)
+
+
+
+def check_rank_in_group(group,
+               rank,
+               arg_position,
+               any_source_allowed=False,
+               proc_null_allowed=False):
 
     if rank == consts.MPI_PROC_NULL:
         if not proc_null_allowed:
@@ -45,7 +58,7 @@ def check_rank(comm,
             errormsg.InvalidArgument("MPI_ANY_SOURCE",
                                      arg_position,
                                      "MPI_ANY_SOURCE not allowed").throw()
-    elif rank < 0 or rank >= comm.group.size:
+    elif rank < 0 or rank >= group.size:
         errormsg.InvalidArgument(rank, arg_position, "Invalid rank").throw()
     return rank
 
