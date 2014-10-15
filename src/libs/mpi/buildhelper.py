@@ -45,7 +45,7 @@ def compose_c_source(functions):
             ",\n".join("\t\t (AislinnArgType) {0}".format(n)
                        for n, t, ts in args)
             ))
-        lines.append("\taislinn_call_args(\"{0}\", args, {1});".format(
+        lines.append("\taislinn_call(\"{0}\", args, {1});".format(
             name, len(args)));
         lines.append("\treturn MPI_SUCCESS;\n}\n")
     return "\n".join(lines)

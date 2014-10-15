@@ -153,7 +153,8 @@ typedef int MPI_Comm_delete_attr_function(
 inline int MPI_Get_address(const void *location, MPI_Aint *address) {
 	*address = (MPI_Aint) location;
 	return MPI_SUCCESS;
-}; // this semicolon is necessary for buildhelper.py
+	// the at the end semicolon is necessary for buildhelper.py
+}; 
 
 int MPI_Init(int *argc, char ***argv);
 

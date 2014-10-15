@@ -1395,6 +1395,8 @@ static
 Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
 {
    Vg_AislinnCallAnswer *answer = NULL;
+   CommandsEnterType cet;
+
    tl_assert(tid == 1); // No multithreading supported yet
    *ret = 0;
 
@@ -1405,30 +1407,7 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
    char message[MAX_MESSAGE_BUFFER_LENGTH + 1];
    tl_assert(arg[1]);
    switch(arg[0]) {
-      case VG_USERREQ__AISLINN_CALL_0:
-         VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
-                       "CALL %s\n", (char*) arg[1]);
-         break;
-      case VG_USERREQ__AISLINN_CALL_1:
-         VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
-                       "CALL %s %lu\n", (char*) arg[1], arg[2]);
-         break;
-      case VG_USERREQ__AISLINN_CALL_2:
-         VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
-                       "CALL %s %lu %lu\n",
-                       (char*) arg[1], arg[2], arg[3]);
-         break;
-      case VG_USERREQ__AISLINN_CALL_3:
-         VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
-                       "CALL %s %lu %lu %lu\n",
-                       (char*) arg[1], arg[2], arg[3], arg[4]);
-         break;
-      case VG_USERREQ__AISLINN_CALL_4:
-         VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
-                       "CALL %s %lu %lu %lu %lu\n",
-                       (char*) arg[1], arg[2], arg[3], arg[4], arg[5]);
-         break;
-      case VG_USERREQ__AISLINN_CALL_ARGS: {         
+      case VG_USERREQ__AISLINN_CALL: {
          Int l = MAX_MESSAGE_BUFFER_LENGTH - 1; // reserve 1 char for \n
          UWord i;
          char *m = message;
@@ -1437,24 +1416,26 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
          l -= p;
          UWord *a = (UWord*) arg[2];
          UWord a_count = arg[3];
-         answer = (Vg_AislinnCallAnswer*) arg[4];
          for (i = 0; i < a_count; i++) {
             p = VG_(snprintf)(m, l, " %lu", a[i]);
             m += p;
             l -= p;
          }         
-         VG_(strcpy)(m, "\n");         
+         VG_(strcpy)(m, "\n");
+         answer = (Vg_AislinnCallAnswer*) arg[4];
+         cet = CET_CALL;
        } break;
        case VG_USERREQ__AISLINN_FUNCTION_RETURN: {
           answer = (Vg_AislinnCallAnswer*) arg[1];
-          VG_(strcpy)(message, "FUNCTION_FINISH\n");
+          VG_(strcpy)(message, "FUNCTION_FINISH\n");          
+          cet = CET_CALL;
         } break;
       default:
          tl_assert(0);
    }
 
    write_message(message);
-   process_commands(CET_CALL, answer);
+   process_commands(cet, answer);
    return True;
 }
 
