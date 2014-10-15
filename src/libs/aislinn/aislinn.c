@@ -54,11 +54,31 @@ void aislinn_call_4(const char *name,
 	}
 }
 
+static void aislinn_function_call(Vg_AislinnCallAnswer *answer)
+{
+	switch(answer->function_type) {
+		case VG_AISLINN_FN_INT: {
+			Vg_AislinnFnInt *fn = (Vg_AislinnFnInt*) answer->function;
+			fn(answer->args[0]);
+			return;
+		}
+		default:
+			fprintf(stderr, "Invalid function type\n");
+			exit(1);
+	}
+}
+
 void aislinn_call_args(const char *name,
 			AislinnArgType *args,
 			AislinnArgType args_count) {
+	Vg_AislinnCallAnswer answer;
 	if (VALGRIND_DO_CLIENT_REQUEST_EXPR( \
-		1, VG_USERREQ__AISLINN_CALL_ARGS, name, args, args_count, 0, 0)) {
+		1, VG_USERREQ__AISLINN_CALL_ARGS, name, args, args_count, &answer, 0)) {
 		report_invalid_usage();
+	}
+	while (answer.function) {
+		aislinn_function_call(&answer);	
+		VALGRIND_DO_CLIENT_REQUEST_STMT(
+				VG_USERREQ__AISLINN_FUNCTION_RETURN, &answer, 0, 0, 0, 0);
 	}
 }

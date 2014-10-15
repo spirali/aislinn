@@ -98,6 +98,20 @@ class VgToolTests(TestCase):
         self.assertNotEquals(h2, h3)
         self.assertNotEquals(h2, h3)
 
+    def test_function_call(self):
+        self.program("function")
+        c = self.controller()
+        call, name, fn_a, fn_b = c.start().split()
+        self.assertEquals(call, "CALL")
+        self.assertEquals(name, "INIT")
+        self.assertEquals(c.run_process(), "CALL RUN")
+        self.assertEquals(c.run_function(fn_a, 0, 10), "CALL A 10")
+        self.assertEquals(c.run_function(fn_a, 0, 20), "CALL A 20")
+        self.assertEquals(c.run_process(), "FUNCTION_FINISH")
+        self.assertEquals(c.run_process(), "FUNCTION_FINISH")
+        self.assertEquals(c.run_function(fn_b, 0, 30), "CALL B 30")
+        self.assertEquals(c.run_process(), "FUNCTION_FINISH")
+        self.assertEquals(c.run_process(), "EXIT 0")
 
 if __name__ == "__main__":
     unittest.main()

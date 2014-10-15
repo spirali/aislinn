@@ -133,7 +133,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
 /* Functions prototypes */
 typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
-typedef void (MPI_Handler_function) ( MPI_Comm *, int *, ... );
+typedef void (MPI_Handler_function) (MPI_Comm *, int *, ... );
+typedef void (MPI_User_function) (void *, void *, int *, MPI_Datatype * ); 
 
 typedef int MPI_Comm_copy_attr_function(
 	MPI_Comm oldcomm,
@@ -453,6 +454,10 @@ int MPI_Group_incl(MPI_Group group, int n,
 
 int MPI_Group_compare(MPI_Group group1, MPI_Group group2,
 	int *result);
+
+int MPI_Op_create(MPI_User_function *user_fn, int commute, MPI_Op *op);
+
+int MPI_Op_free(MPI_Op *op);
 
 int MPI_Comm_create_errhandler(
   MPI_Comm_errhandler_function *function,

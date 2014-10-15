@@ -66,6 +66,11 @@ class Controller:
     def run_process(self):
         return self.send_and_receive("RUN\n")
 
+    def run_function(self, fn_pointer, fn_type, *args):
+        command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(
+                fn_pointer, fn_type, len(args), " ".join(map(str, args)))
+        return self.send_and_receive(command)
+
     def restore_state(self, state_id):
         assert state_id is not None
         return self.send_and_receive_ok("RESTORE {0}\n".format(state_id))

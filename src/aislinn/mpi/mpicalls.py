@@ -87,6 +87,7 @@ def MPI_Group_size(generator, args, state, context):
     return False
 
 def MPI_Group_incl(generator, args, state, context):
+    # FIXME: If count == 0 then return MPI_GROUP_NULL
     group, count, ranks_ptr, group_ptr = args
     ranks = generator.controller.read_ints(ranks_ptr, count)
     for rank in ranks:

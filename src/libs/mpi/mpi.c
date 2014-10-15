@@ -1017,6 +1017,24 @@ int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm)
 	return MPI_SUCCESS;
 }
 
+int MPI_Op_create(MPI_User_function *user_fn, int commute, MPI_Op *op)
+{
+	aislinn_call_3(
+		"MPI_Op_create",
+		(AislinnArgType) user_fn,
+		(AislinnArgType) commute,
+		(AislinnArgType) op);
+	return MPI_SUCCESS;
+}
+
+int MPI_Op_free(MPI_Op *op)
+{
+	aislinn_call_1(
+		"MPI_Op_free",
+		(AislinnArgType) op);
+	return MPI_SUCCESS;
+}
+
 int MPI_Comm_create_errhandler(
   MPI_Comm_errhandler_function *function,
   MPI_Errhandler *errhandler

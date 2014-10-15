@@ -11,14 +11,29 @@ extern "C" {
 typedef unsigned long AislinnArgType; // Has to be the same type as UWord
 
 typedef
-   enum {
-      VG_USERREQ__AISLINN_CALL_0 = VG_USERREQ_TOOL_BASE('A','N'),
-      VG_USERREQ__AISLINN_CALL_1,
-      VG_USERREQ__AISLINN_CALL_2,
-      VG_USERREQ__AISLINN_CALL_3,
-      VG_USERREQ__AISLINN_CALL_4,
-      VG_USERREQ__AISLINN_CALL_ARGS,
-   } Vg_AislinnClientRequest;
+	enum {
+		VG_USERREQ__AISLINN_CALL_0 = VG_USERREQ_TOOL_BASE('A','N'),
+		VG_USERREQ__AISLINN_CALL_1,
+		VG_USERREQ__AISLINN_CALL_2,
+		VG_USERREQ__AISLINN_CALL_3,
+		VG_USERREQ__AISLINN_CALL_4,
+		VG_USERREQ__AISLINN_CALL_ARGS,
+		VG_USERREQ__AISLINN_FUNCTION_RETURN,
+	} Vg_AislinnClientRequest;
+
+typedef
+	enum {
+		VG_AISLINN_FN_INT,
+	} Vg_AislinnFnType;
+
+typedef void (Vg_AislinnFnInt) (int); 
+
+typedef 
+	struct {
+		void *function;
+		Vg_AislinnFnType function_type;
+		AislinnArgType args[4];
+	} Vg_AislinnCallAnswer;
 
 
 void aislinn_call_0(const char *name);

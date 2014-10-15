@@ -148,11 +148,12 @@ typedef
    enum {
       CET_FINISH,
       CET_CALL,
+      CET_FUNCTION,
       CET_REPORT,
    } CommandsEnterType;
 
 static void write_message(const char *str);
-static void process_commands(CommandsEnterType cet);
+static void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer);
 
 /* --------------------------------------------------------
  *  Helpers
@@ -184,7 +185,7 @@ static NOINLINE void report_error(const char *code)
    char message[MAX_MESSAGE_BUFFER_LENGTH];
    VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH, "REPORT %s\n", code);
    write_message(message);
-   process_commands(CET_REPORT);
+   process_commands(CET_REPORT, NULL);
    tl_assert(0); // no return from process_commands
 }
 
@@ -1123,10 +1124,14 @@ void run_reduce(Addr addr,
 }
 
 static
-void process_commands(CommandsEnterType cet)
+void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 {
    process_commands_init(cet);
    char command[MAX_MESSAGE_BUFFER_LENGTH + 1];
+
+   if (answer) {
+        answer->function = NULL;
+   }
 
    for (;;) {
       if (!read_command(command)) {
@@ -1253,6 +1258,28 @@ void process_commands(CommandsEnterType cet)
          return;
       }
 
+      if (!VG_(strcmp(cmd, "RUN_FUNCTION"))) {
+         if (UNLIKELY(answer == NULL)) {
+            VG_(printf)("Function cannot be called from this context\n");
+            VG_(exit)(1);
+         }
+         tl_assert(cet == CET_CALL || cet == CET_FUNCTION);
+         ThreadState *tst = VG_(get_ThreadState)(1);
+         tl_assert(tst);
+         tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
+         tl_assert(!tst->sched_jmpbuf_valid || cet == CET_REPORT);
+
+         answer->function = (void*) next_token_uword();
+         answer->function_type = next_token_uword();
+         UWord count = next_token_uword();
+         tl_assert(count <= 4);
+         UWord i;
+         for (i = 0; i < count; i++) {
+             answer->args[i] = next_token_uword();
+         }
+         return;
+      }
+
       if (!VG_(strcmp(cmd, "WRITE_BUFFER"))) {
          Addr buffer = (Addr) next_token_uword();
          UWord index = (UWord) next_token_uword();
@@ -1367,6 +1394,7 @@ void process_commands(CommandsEnterType cet)
 static
 Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
 {
+   Vg_AislinnCallAnswer *answer = NULL;
    tl_assert(tid == 1); // No multithreading supported yet
    *ret = 0;
 
@@ -1400,7 +1428,7 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
                        "CALL %s %lu %lu %lu %lu\n",
                        (char*) arg[1], arg[2], arg[3], arg[4], arg[5]);
          break;
-      case VG_USERREQ__AISLINN_CALL_ARGS: {
+      case VG_USERREQ__AISLINN_CALL_ARGS: {         
          Int l = MAX_MESSAGE_BUFFER_LENGTH - 1; // reserve 1 char for \n
          UWord i;
          char *m = message;
@@ -1409,19 +1437,24 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
          l -= p;
          UWord *a = (UWord*) arg[2];
          UWord a_count = arg[3];
+         answer = (Vg_AislinnCallAnswer*) arg[4];
          for (i = 0; i < a_count; i++) {
             p = VG_(snprintf)(m, l, " %lu", a[i]);
             m += p;
             l -= p;
-         }
-         VG_(strcpy)(m, "\n");
+         }         
+         VG_(strcpy)(m, "\n");         
        } break;
+       case VG_USERREQ__AISLINN_FUNCTION_RETURN: {
+          answer = (Vg_AislinnCallAnswer*) arg[1];
+          VG_(strcpy)(message, "FUNCTION_FINISH\n");
+        } break;
       default:
          tl_assert(0);
    }
 
    write_message(message);
-   process_commands(CET_CALL);
+   process_commands(CET_CALL, answer);
    return True;
 }
 
@@ -1520,7 +1553,7 @@ Bool restore_thread(ThreadId tid)
    char str[100];
    VG_(snprintf)(str, 100, "EXIT %lu\n", tst->os_state.exitcode);
    write_message(str);
-   process_commands(CET_FINISH);
+   process_commands(CET_FINISH, NULL);
    return True;
 }
 
