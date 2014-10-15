@@ -3,6 +3,7 @@ source_files =  (
 )
 
 def build(ctx):
+    ctx(rule="${PYTHON} ${SRC} ${TGT}", source='buildhelper.py mpi.h', target='mpi.c')
     ctx.stlib(source=source_files,
               includes=['#/valgrind/include', '#/include'],
               target="aislinn_mpi",

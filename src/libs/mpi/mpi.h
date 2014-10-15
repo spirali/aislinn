@@ -134,7 +134,7 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 /* Functions prototypes */
 typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
 typedef void (MPI_Handler_function) (MPI_Comm *, int *, ... );
-typedef void (MPI_User_function) (void *, void *, int *, MPI_Datatype * ); 
+typedef void (MPI_User_function) (void *, void *, int *, MPI_Datatype * );
 
 typedef int MPI_Comm_copy_attr_function(
 	MPI_Comm oldcomm,
@@ -149,6 +149,11 @@ typedef int MPI_Comm_delete_attr_function(
 		int comm_keyval,
 		void *attribute_val,
 		void *extra_state);
+
+inline int MPI_Get_address(const void *location, MPI_Aint *address) {
+	*address = (MPI_Aint) location;
+	return MPI_SUCCESS;
+}; // this semicolon is necessary for buildhelper.py
 
 int MPI_Init(int *argc, char ***argv);
 
@@ -437,8 +442,6 @@ int MPI_Abort(MPI_Comm comm, int errorcode);
 
 int MPI_Dims_create(int nnodes, int ndims, int dims[]);
 
-int MPI_Get_address(const void *location, MPI_Aint *address);
-
 int MPI_Comm_set_errhandler(MPI_Comm comm, MPI_Errhandler errhandler);
 
 int MPI_Comm_group(MPI_Comm comm, MPI_Group *group);
@@ -503,15 +506,16 @@ int MPI_Attr_delete(MPI_Comm comm, int keyval);
 
 int MPI_Keyval_free(int *comm_keyval);
 
-int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler);
+inline int MPI_Address(const void *location, MPI_Aint *address) {
+	return MPI_Get_address(location, address);
+};
 
-int MPI_Address(const void *location, MPI_Aint *address);
-
-int MPI_Type_hindexed(int count,
-                    const int *array_of_blocklengths,
-                    const MPI_Aint *array_of_displacements,
-                    MPI_Datatype oldtype,
-                    MPI_Datatype *newtype);
+int MPI_Type_hindexed(
+	int count,
+	const int *array_of_blocklengths,
+	const MPI_Aint *array_of_displacements,
+	MPI_Datatype oldtype,
+	MPI_Datatype *newtype);
 
 int MPI_Type_struct(int count,
 	const int *array_of_blocklengths,
