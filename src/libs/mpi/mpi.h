@@ -37,31 +37,32 @@ static const int MPI_UNDEFINED = -0x0BEFBEEF;
 static const int MPI_KEYVAL_INVALID = -0x0BEEFBEF;
 static const int MPI_TAG_UB = 0x64400001;
 
-static const MPI_Datatype MPI_DATATYPE_NULL = 0xFF00100;
-static const MPI_Datatype MPI_PACKED = 0xFF00101;
-static const MPI_Datatype MPI_BYTE = 0xFF00102;
-static const MPI_Datatype MPI_CHAR = 0xFF00103;
-static const MPI_Datatype MPI_UNSIGNED_CHAR = 0xFF00104;
-static const MPI_Datatype MPI_SIGNED_CHAR = 0xFF00105;
-static const MPI_Datatype MPI_WCHAR = 0xFF00106;
-static const MPI_Datatype MPI_SHORT = 0xFF00107;
-static const MPI_Datatype MPI_UNSIGNED_SHORT = 0xFF00108;
-static const MPI_Datatype MPI_INT = 0xFF00109;
-static const MPI_Datatype MPI_UNSIGNED = 0xFF0010A;
-static const MPI_Datatype MPI_LONG = 0xFF0010B;
-static const MPI_Datatype MPI_UNSIGNED_LONG = 0xFF0010C;
-static const MPI_Datatype MPI_LONG_LONG_INT = 0xFF0010D;
-static const MPI_Datatype MPI_UNSIGNED_LONG_LONG = 0xFF0010E;
-static const MPI_Datatype MPI_FLOAT = 0xFF0010F;
-static const MPI_Datatype MPI_DOUBLE = 0xFF00110;
-static const MPI_Datatype MPI_LONG_DOUBLE = 0xFF00111;
-static const MPI_Datatype MPI_FLOAT_INT = 0xFF00112;
-static const MPI_Datatype MPI_DOUBLE_INT = 0xFF00113;
-static const MPI_Datatype MPI_LONG_INT = 0xFF00114;
-static const MPI_Datatype MPI_2INT = 0xFF00115;
-static const MPI_Datatype MPI_SHORT_INT = 0xFF00116;
-static const MPI_Datatype MPI_LONG_DOUBLE_INT = 0xFF00117;
+#define MPI_DATATYPE_NULL (MPI_Datatype) 0xFF00100
+#define MPI_PACKED (MPI_Datatype) 0xFF00101
+#define MPI_BYTE (MPI_Datatype) 0xFF00102
+#define MPI_CHAR (MPI_Datatype) 0xFF00103
+#define MPI_UNSIGNED_CHAR (MPI_Datatype) 0xFF00104
+#define MPI_SIGNED_CHAR (MPI_Datatype) 0xFF00105
+#define MPI_WCHAR (MPI_Datatype) 0xFF00106
+#define MPI_SHORT (MPI_Datatype) 0xFF00107
+#define MPI_UNSIGNED_SHORT (MPI_Datatype) 0xFF00108
+#define MPI_INT (MPI_Datatype) 0xFF00109
+#define MPI_UNSIGNED (MPI_Datatype) 0xFF0010A
+#define MPI_LONG (MPI_Datatype) 0xFF0010B
+#define MPI_UNSIGNED_LONG (MPI_Datatype) 0xFF0010C
+#define MPI_LONG_LONG_INT (MPI_Datatype) 0xFF0010D
+#define MPI_UNSIGNED_LONG_LONG (MPI_Datatype) 0xFF0010E
+#define MPI_FLOAT (MPI_Datatype) 0xFF0010F
+#define MPI_DOUBLE (MPI_Datatype) 0xFF00110
+#define MPI_LONG_DOUBLE (MPI_Datatype) 0xFF00111
+#define MPI_FLOAT_INT (MPI_Datatype) 0xFF00112
+#define MPI_DOUBLE_INT (MPI_Datatype) 0xFF00113
+#define MPI_LONG_INT (MPI_Datatype) 0xFF00114
+#define MPI_2INT (MPI_Datatype) 0xFF00115
+#define MPI_SHORT_INT (MPI_Datatype) 0xFF00116
+#define MPI_LONG_DOUBLE_INT (MPI_Datatype) 0xFF00117
 
+static const MPI_Op MPI_OP_NULL = 0xDD00100;
 static const MPI_Op MPI_MAX = 0xDD00101;
 static const MPI_Op MPI_MIN = 0xDD00102;
 static const MPI_Op MPI_SUM = 0xDD00103;
@@ -150,7 +151,7 @@ typedef int MPI_Comm_delete_attr_function(
 		void *attribute_val,
 		void *extra_state);
 
-inline int MPI_Get_address(const void *location, MPI_Aint *address) {
+static inline int MPI_Get_address(const void *location, MPI_Aint *address) {
 	*address = (MPI_Aint) location;
 	return MPI_SUCCESS;
 	// the at the end semicolon is necessary for buildhelper.py
@@ -507,7 +508,7 @@ int MPI_Attr_delete(MPI_Comm comm, int keyval);
 
 int MPI_Keyval_free(int *comm_keyval);
 
-inline int MPI_Address(const void *location, MPI_Aint *address) {
+static inline int MPI_Address(const void *location, MPI_Aint *address) {
 	return MPI_Get_address(location, address);
 };
 

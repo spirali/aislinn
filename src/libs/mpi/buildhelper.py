@@ -3,6 +3,8 @@ import re
 
 # This program generates mpi.c from mpi.h
 
+ignored_functions = set([ "MPI_Init" ])
+
 def get_functions(header):
     results = []
     fstrings = (s.lstrip().replace("\n", " ").replace("\t", " ")
@@ -31,7 +33,8 @@ def get_functions(header):
                 else:
                     tsuffix = ""
                 args.append((n.strip(), t.strip(), tsuffix))
-        results.append((name, args))
+        if name not in ignored_functions:
+            results.append((name, args))
     return results
 
 def compose_c_source(functions):

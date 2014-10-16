@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Request r[2];
-	const int mysize = 4; 
+	const int mysize = 4;
 
 	int d[mysize];
        	double dd[mysize];

@@ -104,6 +104,7 @@ class VgToolTests(TestCase):
         call, name, fn_a, fn_b = c.start().split()
         self.assertEquals(call, "CALL")
         self.assertEquals(name, "INIT")
+        s = c.save_state()
         self.assertEquals(c.run_process(), "CALL RUN")
         self.assertEquals(c.run_function(fn_a, 0, 10), "CALL A 10")
         self.assertEquals(c.run_function(fn_a, 0, 20), "CALL A 20")
@@ -112,6 +113,9 @@ class VgToolTests(TestCase):
         self.assertEquals(c.run_function(fn_b, 0, 30), "CALL B 30")
         self.assertEquals(c.run_process(), "FUNCTION_FINISH")
         self.assertEquals(c.run_process(), "EXIT 0")
+        c.restore_state(s)
+        self.assertEquals(c.run_function(fn_b, 0, 40), "CALL B 40")
+        self.assertEquals(c.run_process(), "FUNCTION_FINISH")
 
 if __name__ == "__main__":
     unittest.main()

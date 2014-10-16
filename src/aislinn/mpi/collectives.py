@@ -17,7 +17,6 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import types
 import copy
 import logging
 import errormsg
@@ -486,6 +485,28 @@ class Bcast(OperationWithSingleBuffer):
         hashthread.update(str([t.type_id if t else None
                                for t in self.datatypes]))
 
+def execute_reduce_op(generator, state, comm, rank, ccop,
+                      recvbuf, buffers):
+    controller = generator.controller
+    tmp = controller.client_malloc(generator.INT_SIZE * 2)
+    len_ptr = tmp
+    datatype_ptr = tmp + generator.INT_SIZE
+    controller.write_int(len_ptr, ccop.count)
+    controller.write_int(datatype_ptr, ccop.datatype.type_id)
+
+    generator.controller.write_buffer(recvbuf, buffers[0].id)
+
+    for r in xrange(1, ccop.process_count):
+        buffer_mem = controller.client_malloc_from_buffer(buffers[r].id)
+        result = controller.run_function(
+                ccop.op.fn_ptr,
+                controller.FUNCTION_4_POINTER,
+                buffer_mem, recvbuf, len_ptr, datatype_ptr)
+        if result != "FUNCTION_FINISH":
+            raise Exception("Calling MPI in user operations "
+                            "is yet not supported")
+        controller.client_free(buffer_mem)
+    controller.client_free(tmp)
 
 class Reduce(OperationWithBuffers):
 
@@ -512,21 +533,18 @@ class Reduce(OperationWithBuffers):
             self.count = count
             self.datatype = datatype
         else:
-            assert (self.op == op and
+            assert (self.op.fn_ptr == op.fn_ptr and
                     self.count == count and
                     self.datatype == datatype)
 
         self.check_root(comm, root)
 
         rank = state.get_rank(comm)
-        if self.root == rank:
-            generator.controller.memcpy(recvbuf, sendbuf, datatype.size * count)
-        else:
-            self.recvbuf = recvbuf
-            assert self.buffers[rank] is None
-            self.buffers[rank] = generator.new_buffer_and_pack(datatype,
-                                                               count,
-                                                               sendbuf)
+        self.recvbuf = recvbuf
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer_and_pack(datatype,
+                                                           count,
+                                                           sendbuf)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
@@ -534,17 +552,9 @@ class Reduce(OperationWithBuffers):
 
     def complete_main(self, generator, state, comm):
         if state.pid == self.root_pid:
-            vg_datatype, vg_op = types.translate_reduction_op(self.datatype,
-                                                              self.op)
             rank = state.get_rank(comm)
-            for r in xrange(self.process_count):
-                if r == rank:
-                    continue
-                generator.controller.reduce(self.recvbuf,
-                                            vg_datatype,
-                                            self.count,
-                                            vg_op,
-                                            self.buffers[r].id)
+            execute_reduce_op(generator, state, comm, rank,
+                              self, self.recvbuf, self.buffers)
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
@@ -582,7 +592,7 @@ class AllReduce(OperationWithBuffers):
             self.count = count
             self.datatype = datatype
         else:
-            assert (self.op == op and
+            assert (self.op.fn_ptr == self.op.fn_ptr and
                     self.count == count and
                     self.datatype == datatype)
 
@@ -597,18 +607,11 @@ class AllReduce(OperationWithBuffers):
         return self.remaining_processes_enter == 0
 
     def complete_main(self, generator, state, comm):
-        vg_datatype, vg_op = types.translate_reduction_op(self.datatype,
-                                                          self.op)
         rank = state.get_rank(comm)
-        recvbuf = self.recvbufs[rank]
-        for r in xrange(self.process_count):
-            if rank == r:
-                continue
-            generator.controller.reduce(recvbuf,
-                                        vg_datatype,
-                                        self.count,
-                                        vg_op,
-                                        self.buffers[r].id)
+        execute_reduce_op(generator, state, comm, rank,
+                          self, self.recvbufs[rank], self.buffers)
+
+
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)

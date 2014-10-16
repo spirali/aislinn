@@ -178,6 +178,12 @@ class CollectiveTests(TestCase):
         self.execute(3, "2", stdout=output)
         self.no_errors()
 
+    def test_userop(self):
+        result = set(["103 9", "NC: 20 10", "NC: 30 10", "NC: 40 10"])
+        self.program("userop")
+        self.execute(4, stdout=result)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()

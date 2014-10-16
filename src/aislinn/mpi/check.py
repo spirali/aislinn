@@ -21,14 +21,6 @@ import types
 import errormsg
 import consts
 
-def check_op(op,
-             arg_position):
-    if not types.is_valid_op(op):
-        errormsg.InvalidArgument(op,
-                                 arg_position,
-                                 "Invalid operation").throw()
-    return op
-
 def check_rank(comm,
                rank,
                arg_position,
@@ -103,6 +95,18 @@ def check_color(color, arg_position):
         errormsg.InvalidArgument(color,
                                  arg_position,
                                  "Color has to be non-negative.").throw()
+
+def check_op(state, op_id, arg_position):
+    if op_id == consts.MPI_OP_NULL:
+        errormsg.InvalidArgument("MPI_OP_NULL",
+                                 arg_position,
+                                 "Invalid operation").throw()
+    op = state.get_op(op_id)
+    if op is None:
+        errormsg.InvalidArgument(op_id,
+                                 arg_position,
+                                 "Invalid operation").throw()
+    return op
 
 def check_datatype(state, type_id, arg_position, allow_uncommited=False):
     datatype = state.get_datatype(type_id)

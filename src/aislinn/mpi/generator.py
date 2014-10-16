@@ -30,6 +30,7 @@ from base.utils import convert_type
 import consts
 import mpicalls
 import event
+import ops
 import base.resource
 
 import logging
@@ -156,6 +157,19 @@ class Generator:
                 self.add_error_message(e)
                 return True
             break
+
+        function_ptrs = result[4:] # skip CALL MPI_Init argc argv
+
+        # The order of the ops is important!
+        operations = [ consts.MPI_SUM,
+                    consts.MPI_PROD,
+                    consts.MPI_MINLOC,
+                    consts.MPI_MAXLOC ]
+        assert len(function_ptrs) == \
+               len(ops.buildin_operations) == len(operations)
+
+        for ptr, op_id in zip(function_ptrs, operations):
+            ops.buildin_operations[op_id].fn_ptr = ptr
 
         vg_state = self.save_state(True)
 
@@ -334,7 +348,7 @@ class Generator:
 
                 if state.status == State.StatusWaitAny:
                     if len(state.active_request_ids) > 1:
-                        # We cannot continue because we need branch, 
+                        # We cannot continue because we need branch,
                         # so the best we can hope
                         # for is "partial_found"
                         continue

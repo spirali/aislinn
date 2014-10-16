@@ -23,6 +23,7 @@ import consts
 import check
 import errormsg
 import types
+import ops
 import misc
 import atypes as at
 from request import SendRequest
@@ -392,6 +393,20 @@ def MPI_Ibcast(generator, args, state, context):
                                      args)
 
 
+def MPI_Op_create(generator, args, state, context):
+    fn_ptr, commute, op_ptr = args
+    op = ops.UserDefinedOperation(bool(commute), fn_ptr)
+    state.add_op(op)
+    generator.controller.write_int(op_ptr, op.op_id)
+    return False
+
+def MPI_Op_free(generator, args, state, context):
+    op_ptr = args[0]
+    op_id = generator.controller.read_int(op_ptr)
+    op = check.check_op(state, op_id, 1)
+    state.remove_op(op)
+    generator.controller.write_int(op_ptr, consts.MPI_OP_NULL)
+    return False
 
 def MPI_Comm_split(generator, args, state, context):
     comm = args[0]
@@ -788,6 +803,8 @@ calls = dict((c.name, c) for c in [
                         at.Comm, at.Pointer)),
      Call(MPI_Iallreduce, (at.Pointer, at.Pointer, at.Count,
                            at.Datatype, at.Op, at.Comm, at.Pointer)),
+     Call(MPI_Op_create, (at.Pointer, at.Int, at.Pointer)),
+     Call(MPI_Op_free, (at.Pointer,)),
      Call(MPI_Type_commit, (at.Pointer,)),
      Call(MPI_Type_size, (at.DatatypeU, at.Pointer)),
      Call(MPI_Type_free, (at.Pointer,)),

@@ -25,6 +25,9 @@ import time
 
 class Controller:
 
+    FUNCTION_INT = 0
+    FUNCTION_4_POINTER = 1
+
     debug_under_valgrind = False
     profile_under_valgrind = False
 
@@ -81,6 +84,16 @@ class Controller:
     def free_buffer(self, buffer_id):
         self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
 
+    def client_malloc(self, size):
+        return self.send_and_receive_int("CLIENT_MALLOC {0}\n".format(size))
+
+    def client_free(self, mem):
+        self.send_and_receive_ok("CLIENT_FREE {0}\n".format(mem))
+
+    def client_malloc_from_buffer(self, buffer_id):
+        return self.send_and_receive_int(
+                "CLIENT_MALLOC_FROM_BUFFER {0}\n".format(buffer_id))
+
     def memcpy(self, addr, source, size):
         self.send_and_receive_ok("WRITE {0} addr {1} {2}\n" \
                 .format(addr, source, size))
@@ -106,10 +119,6 @@ class Controller:
     def write_ints(self, addr, values):
         self.send_and_receive_ok("WRITE {0} ints {1} {2}\n" \
                 .format(addr, len(values), " ".join(map(str, values))))
-
-    def reduce(self, addr, datatype, count, op, buffer_id):
-        self.send_and_receive_ok("REDUCE {0} {1} {2} {3} {4}\n" \
-                .format(addr, datatype, count, op, buffer_id))
 
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))

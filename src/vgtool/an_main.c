@@ -107,6 +107,7 @@ typedef
       OSet* auxmap;
       Addr heap_space;
       XArray *allocation_blocks;
+      Vg_AislinnCallAnswer *answer;
    } MemorySpace;
 
 typedef
@@ -114,6 +115,7 @@ typedef
       Page **pages;
       UWord pages_count;
       XArray *allocation_blocks;
+      Vg_AislinnCallAnswer *answer;
    } MemoryImage;
 
 typedef
@@ -154,6 +156,8 @@ typedef
 
 static void write_message(const char *str);
 static void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer);
+static void* client_malloc (ThreadId tid, SizeT n);
+static void client_free (ThreadId tid, void *a);
 
 /* --------------------------------------------------------
  *  Helpers
@@ -219,6 +223,7 @@ static void memspace_init(void)
    VPRINT(2, "memspace_init: heap %lx-%lx\n", heap_space, heap_space + heap_max_size);
 
    MemorySpace *ms = VG_(malloc)("an.memspace", sizeof(MemorySpace));
+   ms->answer = NULL;
    ms->auxmap = VG_(OSetGen_Create)(/*keyOff*/  offsetof(AuxMapEnt,base),
                                     /*fastCmp*/ NULL,
                                     VG_(malloc), "an.auxmap", VG_(free));
@@ -675,6 +680,7 @@ static void memimage_save(MemoryImage *memimage)
    }
    memimage->allocation_blocks = VG_(cloneXA)("an.memimage",
                                               current_memspace->allocation_blocks);
+   memimage->answer = current_memspace->answer;
 }
 
 static void memimage_free(MemoryImage *memimage)
@@ -723,6 +729,7 @@ static void memimage_restore(MemoryImage *memimage)
     VG_(deleteXA)(current_memspace->allocation_blocks);
     current_memspace->allocation_blocks = VG_(cloneXA)("an.allocations",
                                                        memimage->allocation_blocks);
+    current_memspace->answer = memimage->answer;
 }
 
 static void memspace_hash(AN_(MD5_CTX) *ctx)
@@ -782,7 +789,6 @@ static State* state_save_current(void)
 
    /* Save memory state */
    memimage_save(&state->memimage);
-
    return state;
 }
 
@@ -1015,7 +1021,8 @@ static int next_token_int(void) {
 }
 
 
-static void process_commands_init(CommandsEnterType cet) {
+static void process_commands_init(CommandsEnterType cet,
+                                  Vg_AislinnCallAnswer *answer) {
    ThreadState *tst = VG_(get_ThreadState)(1);
    tl_assert(tst);
    tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
@@ -1023,110 +1030,13 @@ static void process_commands_init(CommandsEnterType cet) {
    // Reset invalid jmpbuf to make be able generate reasonable hash of state
    // If cet == CET_REPORT then we do not return to program so we dont care about hash
    tst->arch.vex.guest_RDX = 0; // Result of client request
-}
-
-typedef struct { int x; int y; } Type_int_int;
-typedef struct { double x; int y; } Type_double_int;
-
-static
-void run_reduce(Addr addr,
-                const char *datatype,
-                UWord count,
-                const char *op,
-                Addr input)
-{
-   UWord i;
-   if (!VG_(strcmp)(datatype, "int")) {
-      if (!VG_(strcmp)(op, "+")) {
-         int *result = (int *) addr, *data = (int *) input;
-         for (i = 0; i < count; i++) {
-            result[i] += data[i];
-         }
-         return;
-      }
-      if (!VG_(strcmp)(op, "*")) {
-         int *result = (int *) addr, *data = (int *) input;
-         for (i = 0; i < count; i++) {
-            result[i] *= data[i];
-         }
-         return;
-      }
-   }
-   if (!VG_(strcmp)(datatype, "double")) {
-      if (!VG_(strcmp)(op, "+")) {
-         double *result = (double *) addr, *data = (double *) input;
-         for (i = 0; i < count; i++) {
-            result[i] += data[i];
-         }
-         return;
-      }
-      if (!VG_(strcmp)(op, "*")) {
-         double *result = (double *) addr, *data = (double *) input;
-         for (i = 0; i < count; i++) {
-            result[i] *= data[i];
-         }
-         return;
-      }
-   }
-
-   if (!VG_(strcmp)(datatype, "int_int")) {
-      if (!VG_(strcmp)(op, "minloc")) {
-         Type_int_int *result = (Type_int_int *) addr;
-         Type_int_int *data = (Type_int_int *) input;
-         for (i = 0; i < count; i++) {
-            if (result[i].x > data[i].x ||
-                (result[i].x == data[i].x && result[i].y > data[i].y)) {
-               result[i] = data[i];
-            }
-         }
-         return;
-      }
-      if (!VG_(strcmp)(op, "maxloc")) {
-         Type_int_int *result = (Type_int_int *) addr;
-         Type_int_int *data = (Type_int_int *) input;
-         for (i = 0; i < count; i++) {
-            if (result[i].x < data[i].x ||
-                (result[i].x == data[i].x && result[i].y > data[i].y)) {
-               result[i] = data[i];
-            }
-         }
-         return;
-      }
-   }
-
-   if (!VG_(strcmp)(datatype, "double_int")) {
-      if (!VG_(strcmp)(op, "minloc")) {
-         Type_double_int *result = (Type_double_int *) addr;
-         Type_double_int *data = (Type_double_int *) input;
-         for (i = 0; i < count; i++) {
-            if (result[i].x > data[i].x ||
-                (result[i].x == data[i].x && result[i].y > data[i].y)) {
-               result[i] = data[i];
-            }
-         }
-         return;
-      }
-      if (!VG_(strcmp)(op, "maxloc")) {
-         Type_double_int *result = (Type_double_int *) addr;
-         Type_double_int *data = (Type_double_int *) input;
-         for (i = 0; i < count; i++) {
-            if (result[i].x < data[i].x ||
-                (result[i].x == data[i].x && result[i].y > data[i].y)) {
-               result[i] = data[i];
-            }
-         }
-         return;
-      }
-   }
-
-
-   tl_assert(0);
+   current_memspace->answer = answer;
 }
 
 static
 void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 {
-   process_commands_init(cet);
+   process_commands_init(cet, answer);
    char command[MAX_MESSAGE_BUFFER_LENGTH + 1];
 
    if (answer) {
@@ -1259,23 +1169,26 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "RUN_FUNCTION"))) {
-         if (UNLIKELY(answer == NULL)) {
+         if (UNLIKELY(current_memspace->answer == NULL)) {
             VG_(printf)("Function cannot be called from this context\n");
             VG_(exit)(1);
          }
-         tl_assert(cet == CET_CALL || cet == CET_FUNCTION);
          ThreadState *tst = VG_(get_ThreadState)(1);
          tl_assert(tst);
          tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
          tl_assert(!tst->sched_jmpbuf_valid || cet == CET_REPORT);
 
-         answer->function = (void*) next_token_uword();
-         answer->function_type = next_token_uword();
+         if (cet == CET_FINISH) { // Thread finished, so after restore, status has to be fixed
+            tst->status = VgTs_Init;
+         }
+
+         current_memspace->answer->function = (void*) next_token_uword();
+         current_memspace->answer->function_type = next_token_uword();
          UWord count = next_token_uword();
          tl_assert(count <= 4);
          UWord i;
          for (i = 0; i < count; i++) {
-             answer->args[i] = next_token_uword();
+             current_memspace->answer->args[i] = next_token_uword();
          }
          return;
       }
@@ -1354,19 +1267,6 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          continue;
       }
 
-      if (!VG_(strcmp)(cmd, "REDUCE")) {
-         Addr addr = next_token_uword();
-         char datatype[20], op[10];
-         VG_(strncpy)(datatype, next_token(), 20);
-         UWord count = next_token_uword();
-         VG_(strncpy)(op, next_token(), 10);
-         UWord *buffer = (UWord*) next_token_uword();
-         buffer += 1; // skip size
-         run_reduce(addr, datatype, count, op, (Addr) buffer);
-         write_message("Ok\n");
-         continue;
-      }
-
       if (!VG_(strcmp)(cmd, "STATS")) {
           VG_(snprintf)(command,
                         MAX_MESSAGE_BUFFER_LENGTH,
@@ -1378,6 +1278,34 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                         stats.buffers_size);
           write_message(command);
           continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CLIENT_MALLOC"))) {
+         UWord size = next_token_uword();
+         void* buffer = client_malloc(0, size);
+         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
+                      "%lu\n", (UWord) buffer));
+         write_message(command);
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CLIENT_MALLOC_FROM_BUFFER"))) {
+         UWord *buffer = (UWord*) next_token_uword();
+         UWord size = *buffer;
+         void *mem = client_malloc(0, size);
+         extern_write((Addr)mem, size);
+         VG_(memcpy(mem, buffer + 1, size));
+         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
+                      "%lu\n", (UWord) mem));
+         write_message(command);
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CLIENT_FREE"))) {
+         Addr mem = next_token_uword();
+         client_free(0, (void*) mem);
+         write_message("Ok\n");
+         continue;
       }
 
       if (!VG_(strcmp(cmd, "QUIT"))) {

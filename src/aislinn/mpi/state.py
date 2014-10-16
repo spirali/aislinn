@@ -28,6 +28,7 @@ import consts
 import copy
 import comm
 import types
+import ops
 
 class State:
 
@@ -56,6 +57,7 @@ class State:
         self.flag_ptr = None
         self.index_ptr = None # Used for Waitany
         self.user_defined_types = [] # <-- Copy on write!
+        self.user_defined_ops = [] # <-- Copy on write!
         self.cc_id_counters = None
         self.probe_data = None
         self.finalized = False
@@ -95,6 +97,16 @@ class State:
         self.user_defined_types = copy.copy(self.user_defined_types)
         i = self.user_defined_types.index(datatype)
         self.user_defined_types[i] = None
+
+    def add_op(self, op):
+        op.op_id = consts.USER_DEFINED_OPS + len(self.user_defined_ops)
+        self.user_defined_ops = copy.copy(self.user_defined_ops)
+        self.user_defined_ops.append(op)
+
+    def remove_op(self, op):
+        i = self.user_defined_ops.index(op)
+        self.user_defined_ops = copy.copy(self.user_defined_ops)
+        self.user_defined_ops[i] = None
 
     def add_comm(self, comm):
         if self.cc_id_counters is None:
@@ -144,6 +156,16 @@ class State:
                return self.user_defined_types[type_id
                                               - consts.USER_DEFINED_TYPES]
         return types.buildin_types.get(type_id)
+
+    def get_op(self, op_id):
+        op = ops.buildin_operations.get(op_id)
+        if op is not None:
+            return op
+        if op_id >= consts.USER_DEFINED_OPS and \
+           op_id < consts.USER_DEFINED_OPS + len(self.user_defined_ops):
+               return self.user_defined_ops[op_id
+                                              - consts.USER_DEFINED_OPS]
+        return None # build-in
 
     def commit_datatype(self, datatype):
         """ datatype has to be valid type for this state """
@@ -217,6 +239,10 @@ class State:
 
         for request in self.persistent_requests:
             request.compute_hash(hashthread)
+
+        for op in self.user_defined_ops:
+            if op is not None:
+                op.compute_hash(hashthread)
 
     def add_message(self, message):
         self.messages.append(message)

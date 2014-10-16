@@ -60,7 +60,7 @@ class Op(Int):
 
     @classmethod
     def convert(cls, value, arg_position, state):
-        return check.check_op(value, arg_position)
+        return check.check_op(state, value, arg_position)
 
 
 class Count(Int):

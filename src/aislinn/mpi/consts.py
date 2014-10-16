@@ -64,6 +64,7 @@ MPI_LONG_DOUBLE_INT = 0xFF00117
 USER_DEFINED_TYPES = 0x0FF00FFF
 
 # ---- Operations -----------------------------------------
+MPI_OP_NULL = 0xDD00100
 MPI_MAX = 0xDD00101
 MPI_MIN = 0xDD00102
 MPI_SUM = 0xDD00103
@@ -76,6 +77,8 @@ MPI_LXOR = 0xDD0010A
 MPI_BXOR = 0xDD0010B
 MPI_MINLOC = 0xDD0010C
 MPI_MAXLOC = 0xDD0010D
+
+USER_DEFINED_OPS = 0xDD001FF
 
 # ---- Compare results -----------------------------------------
 MPI_UNEQUAL   = 0

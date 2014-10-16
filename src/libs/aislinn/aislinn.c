@@ -20,6 +20,12 @@ static void aislinn_function_call(Vg_AislinnCallAnswer *answer)
 			fn(answer->args[0]);
 			return;
 		}
+		case VG_AISLINN_FN_4_POINTER: {
+			Vg_AislinnFn4Pointer *fn = (Vg_AislinnFn4Pointer*) answer->function;
+			fn((void*)answer->args[0], (void*)answer->args[1],
+				(void*)answer->args[2], (void*)answer->args[3]);
+			return;
+		}
 		default:
 			fprintf(stderr, "Invalid function type\n");
 			exit(1);

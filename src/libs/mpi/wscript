@@ -1,9 +1,12 @@
 source_files =  (
     "mpi.c",
+    "mpi_generated.c",
 )
 
 def build(ctx):
-    ctx(rule="${PYTHON} ${SRC} ${TGT}", source='buildhelper.py mpi.h', target='mpi.c')
+    ctx(rule="${PYTHON} ${SRC} ${TGT}",
+        source='buildhelper.py mpi.h',
+        target='mpi_generated.c')
     ctx.stlib(source=source_files,
               includes=['#/valgrind/include', '#/include'],
               target="aislinn_mpi",
