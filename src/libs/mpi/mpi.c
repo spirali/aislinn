@@ -63,7 +63,7 @@ static void op_minloc(void *input, void *output, int *len, MPI_Datatype *dtype)
 	}
 
 	fprintf(stderr, "Invalid type for operation MPI_MINLOC %x\n", *dtype);
-//	MPI_Abort(MPI_COMM_WORLD, 1);
+	MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
 static void op_maxloc(void *input, void *output, int *len, MPI_Datatype *dtype)
@@ -95,7 +95,7 @@ static void op_maxloc(void *input, void *output, int *len, MPI_Datatype *dtype)
 	}
 
 	fprintf(stderr, "Invalid type for operation MPI_MAXLOC %x\n", *dtype);
-	//MPI_Abort(MPI_COMM_WORLD, 1);
+	MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
 int MPI_Init(int *argc, char ***argv)
@@ -110,4 +110,9 @@ int MPI_Init(int *argc, char ***argv)
 	};
 	aislinn_call("MPI_Init", args, 6);
 	return MPI_SUCCESS;
+}
+
+double MPI_Wtime()
+{
+	return 0.0;
 }

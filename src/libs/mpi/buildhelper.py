@@ -7,9 +7,8 @@ ignored_functions = set([ "MPI_Init" ])
 
 def get_functions(header):
     results = []
-    fstrings = (s.lstrip().replace("\n", " ").replace("\t", " ")
-                for s in header.split(";")
-                if s.lstrip().startswith("int MPI_"))
+    fstrings = re.findall("^int MPI_[A-Z][a-z_]*\([^\)]*\);",
+                          header, re.MULTILINE)
     rexp = re.compile("int (?P<name>MPI_[A-Z][a-z_]*)\((?P<args>[^\)]*)\)")
     for fstring in fstrings:
         match = rexp.match(fstring)
