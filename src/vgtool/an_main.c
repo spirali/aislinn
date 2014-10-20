@@ -1572,7 +1572,12 @@ void* user_memalign (ThreadId tid, SizeT alignB, SizeT n)
 static
 void* user_calloc (ThreadId tid, SizeT nmemb, SizeT size1)
 {
-   VG_(tool_panic)("user_calloc: Not implemented");
+    SizeT size = nmemb *size1;
+    Addr addr = memspace_alloc(size);
+    VG_(memset)((void*)addr, 0, size);
+    make_mem_defined(addr, size);
+    VPRINT(2, "client_calloc address=%lx size=%lu\n", addr, size);
+    return (void*) addr;
 }
 
 static
