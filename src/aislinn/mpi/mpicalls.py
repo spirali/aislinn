@@ -570,6 +570,10 @@ def MPI_Dims_create(generator, args, state, context):
     generator.controller.write_ints(dims_ptr, dims)
     return False
 
+def MPI_Comm_set_errhandler(generator, args, state, context):
+    # Currently we can do nothing, because error is never returned
+    return False
+
 def call_collective_operation(generator,
                               state,
                               context,
@@ -825,4 +829,6 @@ calls = dict((c.name, c) for c in [
                             at.Pointer, at.Pointer)),
      Call(MPI_Get_count, (at.Pointer, at.Datatype, at.Pointer)),
      Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
+     Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
+     Call(MPI_Comm_set_errhandler, (at.Comm, at.Pointer)),
      ])

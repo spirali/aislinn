@@ -475,6 +475,8 @@ int MPI_Errhandler_set(MPI_Comm comm, MPI_Errhandler errhandler);
 int MPI_Errhandler_get(MPI_Comm comm, MPI_Errhandler *errhandler);
 int MPI_Errhandler_free(MPI_Errhandler *errhandler);
 
+int MPI_Cancel(MPI_Request *request);
+
 /* ----------------------------------------------------------------------------
 /  DUMMY FUNCTIONS
 /  --------------------------------------------------------------------------*/
