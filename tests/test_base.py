@@ -184,6 +184,10 @@ class BaseTests(TestCase):
         self.execute(1, stdout="DELETE 2\nDELETE 1\nDELETE 3\n")
         self.no_errors()
 
+    def test_keyval2(self):
+        self.program("keyval2")
+        self.execute(1, stdout="DELETE 2\nDELETE 1\nDELETE 3\n")
+        self.no_errors()
 
 if __name__ == "__main__":
     unittest.main()

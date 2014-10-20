@@ -609,6 +609,18 @@ def MPI_Comm_delete_attr(generator, args, state, context):
     state.delete_attr(generator.controller, comm, keyval)
     return False
 
+def MPI_Keyval_create(generator, args, state, context):
+    return MPI_Comm_create_keyval(generator, args, state, context)
+
+def MPI_Attr_get(generator, args, state, context):
+    return MPI_Comm_get_attr(generator, args, state, context)
+
+def MPI_Attr_put(generator, args, state, context):
+    return MPI_Comm_set_attr(generator, args, state, context)
+
+def MPI_Attr_delete(generator, args, state, context):
+    return MPI_Comm_delete_attr(generator, args, state, context)
+
 def call_collective_operation(generator,
                               state,
                               context,
@@ -870,4 +882,8 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Comm_get_attr, (at.Comm, at.Keyval, at.Pointer, at.Pointer)),
      Call(MPI_Comm_set_attr, (at.Comm, at.Keyval, at.Pointer)),
      Call(MPI_Comm_delete_attr, (at.Comm, at.Keyval)),
+     Call(MPI_Keyval_create, (at.Pointer, at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Attr_get, (at.Comm, at.Keyval, at.Pointer, at.Pointer)),
+     Call(MPI_Attr_put, (at.Comm, at.Keyval, at.Pointer)),
+     Call(MPI_Attr_delete, (at.Comm, at.Keyval)),
      ])
