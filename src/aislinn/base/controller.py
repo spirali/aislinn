@@ -27,6 +27,7 @@ class Controller:
 
     FUNCTION_INT = 0
     FUNCTION_4_POINTER = 1
+    FUNCTION_2_INT_2_POINTER = 2
 
     debug_under_valgrind = False
     profile_under_valgrind = False
@@ -115,6 +116,9 @@ class Controller:
 
     def write_int(self, addr, value):
         self.send_and_receive_ok("WRITE {0} int {1}\n".format(addr, value))
+
+    def write_pointer(self, addr, value):
+        self.send_and_receive_ok("WRITE {0} pointer {1}\n".format(addr, value))
 
     def write_ints(self, addr, values):
         self.send_and_receive_ok("WRITE {0} ints {1} {2}\n" \

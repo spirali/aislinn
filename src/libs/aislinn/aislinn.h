@@ -20,10 +20,12 @@ typedef
 	enum {
 		VG_AISLINN_FN_INT,
 		VG_AISLINN_FN_4_POINTER,
+		VG_AISLINN_FN_2_INT_2_POINTER,
 	} Vg_AislinnFnType;
 
 typedef void (Vg_AislinnFnInt) (int);
 typedef void (Vg_AislinnFn4Pointer) (void*, void*, void*, void*);
+typedef void (Vg_AislinnFn2Int2Pointer) (int, int, void*, void*);
 
 typedef
 	struct {

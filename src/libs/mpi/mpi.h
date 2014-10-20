@@ -34,7 +34,6 @@ typedef unsigned long MPI_Aint;
 /* Constants */
 static const int MPI_SUCCESS = 0;
 static const int MPI_UNDEFINED = -0x0BEFBEEF;
-static const int MPI_KEYVAL_INVALID = -0x0BEEFBEF;
 static const int MPI_TAG_UB = 0x64400001;
 
 #define MPI_DATATYPE_NULL (MPI_Datatype) 0xFF00100
@@ -110,8 +109,7 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_PROC_NULL -0x0000CC00
 #define MPI_REQUEST_NULL ((MPI_Request) -0x0000DD00)
 #define MPI_GROUP_NULL ((MPI_Group) -0x0000EE00)
-
-#define MPI_KEYVAL_INVALID 0x24000000
+#define MPI_KEYVAL_INVALID -0x0000FF00
 
 #define MPI_COMM_NULL_COPY_FN ((MPI_Comm_copy_attr_function*)0)
 #define MPI_COMM_NULL_DELETE_FN ((MPI_Comm_delete_attr_function*)0)
@@ -409,6 +407,8 @@ int MPI_Comm_set_attr(
 int MPI_Comm_free_keyval(
   int *comm_keyval
 );
+
+int MPI_Comm_delete_attr(MPI_Comm comm, int comm_keyval);
 
 int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype *newtype);
 

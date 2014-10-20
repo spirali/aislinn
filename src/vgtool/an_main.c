@@ -1084,6 +1084,9 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                   *a = next_token_int();
                   a++;
                }
+         } else if (!VG_(strcmp)(param, "pointer")) {
+               extern_write((Addr)addr, sizeof(Addr));
+               *((Addr*) addr) = next_token_uword();
          } else if (!VG_(strcmp(param, "buffer"))) {
             UWord *buffer = (UWord*) next_token_uword();
             UWord size = *buffer;

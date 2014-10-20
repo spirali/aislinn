@@ -58,6 +58,8 @@ class State:
         self.index_ptr = None # Used for Waitany
         self.user_defined_types = [] # <-- Copy on write!
         self.user_defined_ops = [] # <-- Copy on write!
+        self.keyvals = [] # <-- Copy on write!
+        self.attrs = {} # <-- Copy on write!
         self.cc_id_counters = None
         self.probe_data = None
         self.finalized = False
@@ -86,6 +88,41 @@ class State:
         state.active_request_ids = copy.copy(self.active_request_ids)
         state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
+
+    def add_keyval(self, keyval):
+        assert keyval.keyval_id is None
+        keyval_id = 8000 + len(self.keyvals)
+        self.keyvals = copy.copy(self.keyvals)
+        self.keyvals.append(keyval)
+        keyval.keyval_id = keyval_id
+
+    def get_keyval(self, keyval_id):
+        for keyval in self.keyvals:
+            if keyval.keyval_id == keyval_id:
+                return keyval
+
+    def set_attr(self, controller, comm, keyval, value):
+        key = (comm.comm_id, keyval.keyval_id)
+        self.attrs = copy.copy(self.attrs)
+        if key in self.attrs:
+            self.delete_attr(controller, comm, keyval)
+        self.attrs[key] = value
+
+    def delete_attr(self, controller, comm, keyval):
+        key = (comm.comm_id, keyval.keyval_id)
+        value = self.attrs[key]
+        del self.attrs[key]
+        if keyval.delete_fn != consts.MPI_NULL_DELETE_FN:
+            result = controller.run_function(
+                    keyval.delete_fn,
+                    controller.FUNCTION_2_INT_2_POINTER,
+                    comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
+            if result != "FUNCTION_FINISH":
+                raise Exception("Calling MPI in free attr "
+                                "is yet not supported")
+
+    def get_attr(self, comm, keyval):
+        return self.attrs.get((comm.comm_id, keyval.keyval_id))
 
     def add_datatype(self, datatype):
         datatype.type_id = \

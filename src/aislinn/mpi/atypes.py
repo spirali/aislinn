@@ -98,6 +98,12 @@ class TagAT(Int): # Allow MPI_ANY_TAG
         return check.check_tag(value, arg_position, True)
 
 
+class Keyval(Int):
+    @classmethod
+    def convert(cls, value, arg_position, state):
+        return check.check_keyval(state, value, arg_position)
+
+
 class StatusPtr(Pointer):
 
     @classmethod

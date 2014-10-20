@@ -17,7 +17,6 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import types
 import errormsg
 import consts
 
@@ -175,3 +174,11 @@ def check_persistent_request(state, request_id, inactive):
 def check_request_ids(state, request_ids):
     for request_id in request_ids:
         check_request_id(state, request_id)
+
+def check_keyval(state, keyval_id, arg_position):
+    keyval = state.get_keyval(keyval_id)
+    if keyval is None:
+            errormsg.InvalidArgument(keyval_id,
+                                     arg_position,
+                                     "Invalid keyval").throw()
+    return keyval

@@ -28,6 +28,7 @@ import misc
 import atypes as at
 from request import SendRequest
 from comm import comm_id_name, comm_compare, group_compare, Group
+from keyval import Keyval
 
 
 def MPI_Initialized(generator, args, state, context):
@@ -574,6 +575,40 @@ def MPI_Comm_set_errhandler(generator, args, state, context):
     # Currently we can do nothing, because error is never returned
     return False
 
+def MPI_Comm_create_keyval(generator, args, state, context):
+    copy_fn, delete_fn, keyval_ptr, extra_ptr = args
+    assert copy_fn == consts.MPI_NULL_COPY_FN, "Copy function not implemented yet"
+    keyval = Keyval(copy_fn, delete_fn, extra_ptr)
+    state.add_keyval(keyval)
+    generator.controller.write_int(keyval_ptr, keyval.keyval_id)
+    return False
+
+def MPI_Comm_get_attr(generator, args, state, context):
+    comm, keyval, value_ptr, flag_ptr = args
+    value = state.get_attr(comm, keyval)
+    if value is not None:
+        generator.controller.write_pointer(value_ptr, value)
+        generator.controller.write_int(flag_ptr, 1)
+    else:
+        generator.controller.write_int(flag_ptr, 0)
+    return False
+
+def MPI_Comm_set_attr(generator, args, state, context):
+    comm, keyval, value = args
+    state.set_attr(generator.controller, comm, keyval, value)
+    return False
+
+def MPI_Comm_delete_attr(generator, args, state, context):
+    comm, keyval = args
+    if state.get_attr(comm, keyval) is None:
+        e = errormsg.CallError()
+        e.name = "value-not-found"
+        e.short_description = "Attribute not found"
+        e.description = "Attribute not found in the communicator"
+        e.throw()
+    state.delete_attr(generator.controller, comm, keyval)
+    return False
+
 def call_collective_operation(generator,
                               state,
                               context,
@@ -831,4 +866,8 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
      Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
      Call(MPI_Comm_set_errhandler, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_create_keyval, (at.Pointer, at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Comm_get_attr, (at.Comm, at.Keyval, at.Pointer, at.Pointer)),
+     Call(MPI_Comm_set_attr, (at.Comm, at.Keyval, at.Pointer)),
+     Call(MPI_Comm_delete_attr, (at.Comm, at.Keyval)),
      ])
