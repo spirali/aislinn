@@ -163,10 +163,15 @@ class Generator:
         # The order of the ops is important!
         operations = [ consts.MPI_SUM,
                     consts.MPI_PROD,
+                    consts.MPI_LAND,
+                    consts.MPI_LOR,
+                    consts.MPI_BAND,
+                    consts.MPI_BOR,
                     consts.MPI_MINLOC,
                     consts.MPI_MAXLOC ]
-        assert len(function_ptrs) == \
-               len(ops.buildin_operations) == len(operations)
+
+        assert len(function_ptrs) == len(ops.buildin_operations)
+        assert len(function_ptrs) == len(operations)
 
         for ptr, op_id in zip(function_ptrs, operations):
             ops.buildin_operations[op_id].fn_ptr = ptr

@@ -2,35 +2,63 @@
 #include "mpi.h"
 #include <stdio.h>
 
-#define DEFINE_OP(name, body) \
+#define CASE(mpi_type, c_type, body) \
+	case mpi_type: { \
+		c_type *in = (c_type*) input; \
+		c_type *out = (c_type*) output; \
+		for (i = 0; i < l; i++) { \
+			body; \
+		} \
+		return; \
+	}
+
+#define INT_TYPES(body) \
+	CASE(MPI_INT, int, body) \
+	CASE(MPI_LONG, long, body)
+
+#define FLOAT_TYPES(body) \
+	CASE(MPI_FLOAT, float, body) \
+	CASE(MPI_DOUBLE, double, body)
+
+#define DEFINE_OP(name) \
 	static void name(void *input, void *output, int *len, MPI_Datatype *dtype) \
 	{ \
 		int i, l = *len; \
-		switch (*dtype) { \
-			case MPI_INT: { \
-				int *in = (int*) input; \
-				int *out = (int*) output; \
-				for (i = 0; i < l; i++) { \
-					body; \
-				} \
-				return; \
-			} \
-			case MPI_DOUBLE: { \
-				double *in = (double*) input; \
-				double *out = (double*) output; \
-				for (i = 0; i < l; i++) { \
-					body; \
-				} \
-				return; \
-			} \
-			default: \
-				fprintf(stderr, "Invalid type for operation " #name "\n"); \
-				MPI_Abort(MPI_COMM_WORLD, 1); \
+		switch (*dtype) {
+
+#define END_OP(name) \
+		default: \
+			fprintf(stderr, "Invalid type for operation " #name "\n"); \
+			MPI_Abort(MPI_COMM_WORLD, 1); \
 		} \
 	}
 
-DEFINE_OP(op_sum, out[i] += in[i])
-DEFINE_OP(op_prod, out[i] *= in[i])
+DEFINE_OP(op_sum)
+INT_TYPES(out[i] += in[i])
+FLOAT_TYPES(out[i] += in[i])
+END_OP(op_sum)
+
+DEFINE_OP(op_prod)
+INT_TYPES(out[i] *= in[i])
+FLOAT_TYPES(out[i] *= in[i])
+END_OP(op_prod)
+
+DEFINE_OP(op_land)
+INT_TYPES(out[i] = out[i] && in[i])
+END_OP(op_land)
+
+DEFINE_OP(op_lor)
+INT_TYPES(out[i] = out[i] || in[i])
+END_OP(op_lor)
+
+DEFINE_OP(op_band)
+INT_TYPES(out[i] &= in[i])
+END_OP(op_band)
+
+DEFINE_OP(op_bor)
+INT_TYPES(out[i] |= in[i])
+END_OP(op_bor)
+
 
 typedef struct { int x; int y; } Type_int_int;
 typedef struct { double x; int y; } Type_double_int;
@@ -100,15 +128,19 @@ static void op_maxloc(void *input, void *output, int *len, MPI_Datatype *dtype)
 
 int MPI_Init(int *argc, char ***argv)
 {
-	AislinnArgType args[6] = {
+	AislinnArgType args[10] = {
 		(AislinnArgType) argc,
 		(AislinnArgType) argv,
 		(AislinnArgType) &op_sum,
 		(AislinnArgType) &op_prod,
+		(AislinnArgType) &op_land,
+		(AislinnArgType) &op_lor,
+		(AislinnArgType) &op_band,
+		(AislinnArgType) &op_bor,
 		(AislinnArgType) &op_minloc,
 		(AislinnArgType) &op_maxloc,
 	};
-	aislinn_call("MPI_Init", args, 6);
+	aislinn_call("MPI_Init", args, 10);
 	return MPI_SUCCESS;
 }
 

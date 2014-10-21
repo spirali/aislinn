@@ -147,6 +147,15 @@ class CollectiveTests(TestCase):
         self.execute(3, "ok", stdout=output)
         self.no_errors()
 
+    def test_reduce2(self):
+        output = "0 0 1 0\n" \
+                 "1 1 1 0\n" \
+                 "0 0 ff 0\n" \
+                 "1 ff ffff 0\n"
+        self.program("reduce2")
+        self.execute(3, stdout=output)
+        self.no_errors()
+
     def test_allreduce(self):
         output = "OUT1: 600 603 606 609\n" \
                  "OUT2: 6000000 6110601 6222408 6335427\n" \
