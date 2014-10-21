@@ -258,7 +258,7 @@ void memspace_dump(void)
 }*/
 
 static
-Addr memspace_alloc(SizeT alloc_size)
+Addr memspace_alloc(SizeT alloc_size, SizeT allign)
 {
    if (UNLIKELY(alloc_size == 0)) {
       alloc_size = 1;
@@ -275,31 +275,55 @@ Addr memspace_alloc(SizeT alloc_size)
       if (block->type == BLOCK_FREE) {
          Word s = next->address - block->address;
          if (s >= alloc_size) {
-            Word diff = s - alloc_size;
-            block->type = BLOCK_USED;
-            Addr address = block->address;
-            if (diff > 0) {
-               AllocationBlock new_block;
-               new_block.type = BLOCK_FREE;
-               new_block.address = address + alloc_size;
-               VG_(insertIndexXA)(a, i + 1, &new_block);
+            Addr old_address = block->address;
+            Addr address = ((old_address - 1) / allign + 1) * allign;
+            SizeT padding = address - block->address;
+            if (s >= alloc_size - padding) {
+                SizeT diff = s - alloc_size - padding;
+                block->type = BLOCK_USED;
+                if (padding > 0) {
+                    block->address = address;
+                    AllocationBlock new_block;
+                    new_block.type = BLOCK_FREE;
+                    new_block.address = old_address;
+                    VG_(insertIndexXA)(a, i, &new_block);
+                    i++;
+                }
+                if (diff > 0) {
+                    AllocationBlock new_block;
+                    new_block.type = BLOCK_FREE;
+                    new_block.address = address + alloc_size;
+                    VG_(insertIndexXA)(a, i + 1, &new_block);
+                }
+                return address;
             }
-            return address;
          }
       }
       block = next;
       i++;
    }
 
-
    // No sufficient block found, create a new one
-   Addr address = block->address;
-   block->type = BLOCK_USED;
+   Addr old_address = block->address;
+   Addr address = ((old_address - 1) / allign + 1) * allign;
+   SizeT padding = address - block->address;
+
+   if (padding > 0) {
+       block->type = BLOCK_FREE;
+       AllocationBlock new_block;
+       new_block.type = BLOCK_USED;
+       new_block.address = address;
+       VG_(addToXA)(a, &new_block);
+   } else {
+        block->type = BLOCK_USED;
+   }
+
    AllocationBlock new_block;
    new_block.type = BLOCK_END;
-   new_block.address = address + alloc_size;
+   new_block.address = address + alloc_size + padding;
 
-   if (new_block.address - current_memspace->heap_space >= heap_max_size) {
+   if (UNLIKELY(new_block.address - \
+                current_memspace->heap_space >= heap_max_size)) {
       report_error("heaperror");
       tl_assert(0);
    }
@@ -1559,7 +1583,7 @@ static void print_debug_usage(void)
 static void* client_malloc (ThreadId tid, SizeT n)
 {   
    //memspace_dump();
-    Addr addr = memspace_alloc(n);
+    Addr addr = memspace_alloc(n, 1);
     VG_(memset)((void*)addr, 0, n);
     make_mem_undefined(addr, n);
     VPRINT(2, "client_malloc address=%lx size=%lu\n", addr, n);
@@ -1569,14 +1593,18 @@ static void* client_malloc (ThreadId tid, SizeT n)
 static
 void* user_memalign (ThreadId tid, SizeT alignB, SizeT n)
 {
-    VG_(tool_panic)("user_memalign: Not implemented");
+    Addr addr = memspace_alloc(n, alignB);
+    VG_(memset)((void*)addr, 0, n);
+    make_mem_defined(addr, n);
+    VPRINT(2, "client_memalign address=%lx size=%lu\n", addr, n);
+    return (void*) addr;
 }
 
 static
 void* user_calloc (ThreadId tid, SizeT nmemb, SizeT size1)
 {
     SizeT size = nmemb *size1;
-    Addr addr = memspace_alloc(size);
+    Addr addr = memspace_alloc(size, 1);
     VG_(memset)((void*)addr, 0, size);
     make_mem_defined(addr, size);
     VPRINT(2, "client_calloc address=%lx size=%lu\n", addr, size);
