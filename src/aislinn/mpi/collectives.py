@@ -717,6 +717,9 @@ class CommDup(CollectiveOperation):
 
         if self.newcomm_id is None:
             self.newcomm_id = state.gstate.clone_communicator(comm).comm_id
+        new_comm = state.get_comm(self.newcomm_id)
+        state.copy_comm_attrs(generator, comm, new_comm)
+
 
     def can_be_completed(self, state):
         return True

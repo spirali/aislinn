@@ -28,6 +28,7 @@ class Controller:
     FUNCTION_INT = 0
     FUNCTION_4_POINTER = 1
     FUNCTION_2_INT_2_POINTER = 2
+    FUNCTION_2_INT_4_POINTER = 3
 
     debug_under_valgrind = False
     profile_under_valgrind = False
@@ -126,6 +127,9 @@ class Controller:
 
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))
+
+    def read_pointer(self, addr):
+        return self.send_and_receive_int("READ {0} pointer\n".format(addr))
 
     def read_ints(self, addr, count):
         line = self.send_and_receive("READ {0} ints {1}\n".format(addr, count))

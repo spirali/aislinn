@@ -21,17 +21,19 @@ typedef
 		VG_AISLINN_FN_INT,
 		VG_AISLINN_FN_4_POINTER,
 		VG_AISLINN_FN_2_INT_2_POINTER,
+		VG_AISLINN_FN_2_INT_4_POINTER,
 	} Vg_AislinnFnType;
 
 typedef void (Vg_AislinnFnInt) (int);
 typedef void (Vg_AislinnFn4Pointer) (void*, void*, void*, void*);
 typedef void (Vg_AislinnFn2Int2Pointer) (int, int, void*, void*);
+typedef void (Vg_AislinnFn2Int4Pointer) (int, int, void*, void*, void*, void*);
 
 typedef
 	struct {
 		void *function;
 		Vg_AislinnFnType function_type;
-		AislinnArgType args[4];
+		AislinnArgType args[6];
 	} Vg_AislinnCallAnswer;
 
 void aislinn_call_0(const char *name);

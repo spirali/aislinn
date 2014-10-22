@@ -1156,6 +1156,9 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                                       MAX_MESSAGE_BUFFER_LENGTH - written,
                                       "\n");
              tl_assert(written < MAX_MESSAGE_BUFFER_LENGTH);
+         } else if (!VG_(strcmp)(param, "pointer")) {
+                VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
+                             "%lu\n", *((Addr*) addr)));
          } else if(!VG_(strcmp)(param, "pointers")) {
                 UWord count = next_token_uword();
                 UWord written = 0;
@@ -1212,7 +1215,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          current_memspace->answer->function = (void*) next_token_uword();
          current_memspace->answer->function_type = next_token_uword();
          UWord count = next_token_uword();
-         tl_assert(count <= 4);
+         tl_assert(count <= 6);
          UWord i;
          for (i = 0; i < count; i++) {
              current_memspace->answer->args[i] = next_token_uword();

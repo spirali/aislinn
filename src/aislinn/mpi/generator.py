@@ -696,6 +696,12 @@ class Generator:
             return node
         return node
 
+    def run_function(self, *args):
+        result = self.controller.run_function(*args)
+        if result != "FUNCTION_FINISH":
+            raise Exception("Calling MPI in callback functions "
+                            "is yet not supported")
+
     def create_report(self):
         for error_message in self.error_messages:
             error_message.events = \

@@ -444,7 +444,7 @@ def MPI_Comm_free(generator, args, state, context):
         e.description = "Communicator {0} cannot be freed".format(name)
         e.throw()
     comm = check.check_comm(state, comm_id, 1)
-    state.remove_comm(comm)
+    state.remove_comm(generator, comm)
     generator.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
     return False
 
@@ -577,7 +577,6 @@ def MPI_Comm_set_errhandler(generator, args, state, context):
 
 def MPI_Comm_create_keyval(generator, args, state, context):
     copy_fn, delete_fn, keyval_ptr, extra_ptr = args
-    assert copy_fn == consts.MPI_NULL_COPY_FN, "Copy function not implemented yet"
     keyval = Keyval(copy_fn, delete_fn, extra_ptr)
     state.add_keyval(keyval)
     generator.controller.write_int(keyval_ptr, keyval.keyval_id)
@@ -595,7 +594,7 @@ def MPI_Comm_get_attr(generator, args, state, context):
 
 def MPI_Comm_set_attr(generator, args, state, context):
     comm, keyval, value = args
-    state.set_attr(generator.controller, comm, keyval, value)
+    state.set_attr(generator, comm, keyval, value)
     return False
 
 def MPI_Comm_delete_attr(generator, args, state, context):
@@ -606,7 +605,7 @@ def MPI_Comm_delete_attr(generator, args, state, context):
         e.short_description = "Attribute not found"
         e.description = "Attribute not found in the communicator"
         e.throw()
-    state.delete_attr(generator.controller, comm, keyval)
+    state.delete_attr(generator, comm, keyval)
     return False
 
 def MPI_Keyval_create(generator, args, state, context):

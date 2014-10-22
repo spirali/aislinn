@@ -157,8 +157,9 @@ class BaseTests(TestCase):
         self.no_errors()
 
     def test_keyval(self):
+        output="DELETE 2\nCOPY 4\nDELETE 1\nDELETE 3\nDELETE 4\n"
         self.program("keyval")
-        self.execute(1, stdout="DELETE 2\nDELETE 1\nDELETE 3\n")
+        self.execute(1, stdout=output)
         self.no_errors()
 
     def test_keyval2(self):

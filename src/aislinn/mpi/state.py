@@ -101,28 +101,50 @@ class State:
             if keyval.keyval_id == keyval_id:
                 return keyval
 
-    def set_attr(self, controller, comm, keyval, value):
+    def set_attr(self, generator, comm, keyval, value):
         key = (comm.comm_id, keyval.keyval_id)
         self.attrs = copy.copy(self.attrs)
         if key in self.attrs:
-            self.delete_attr(controller, comm, keyval)
+            self.delete_attr(generator, comm, keyval)
         self.attrs[key] = value
 
-    def delete_attr(self, controller, comm, keyval):
+    def delete_attr(self, generator, comm, keyval):
         key = (comm.comm_id, keyval.keyval_id)
         value = self.attrs[key]
         del self.attrs[key]
         if keyval.delete_fn != consts.MPI_NULL_DELETE_FN:
-            result = controller.run_function(
-                    keyval.delete_fn,
-                    controller.FUNCTION_2_INT_2_POINTER,
-                    comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
-            if result != "FUNCTION_FINISH":
-                raise Exception("Calling MPI in free attr "
-                                "is yet not supported")
+            generator.run_function(
+                keyval.delete_fn,
+                generator.controller.FUNCTION_2_INT_2_POINTER,
+                comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
 
     def get_attr(self, comm, keyval):
         return self.attrs.get((comm.comm_id, keyval.keyval_id))
+
+    def get_comm_attrs(self, comm):
+        for (comm_id, keyval_id), value in self.attrs.items():
+            if comm_id == comm.comm_id:
+                yield self.get_keyval(keyval_id), value
+
+    def copy_comm_attrs(self, generator, comm, new_comm):
+        for keyval, value in self.get_comm_attrs(comm):
+            if keyval.copy_fn == consts.MPI_NULL_COPY_FN:
+                continue
+            tmp = generator.controller.client_malloc(generator.POINTER_SIZE + \
+                                                     generator.INT_SIZE)
+            value_out_ptr = tmp
+            flag_ptr = tmp + generator.POINTER_SIZE
+
+            generator.run_function(
+                keyval.copy_fn,
+                generator.controller.FUNCTION_2_INT_4_POINTER,
+                comm.comm_id, keyval.keyval_id, keyval.extra_ptr,
+                value, value_out_ptr, flag_ptr)
+
+            if generator.controller.read_int(flag_ptr):
+                self.set_attr(generator, new_comm, keyval,
+                              generator.controller.read_pointer(value_out_ptr))
+            generator.controller.client_free(tmp)
 
     def add_datatype(self, datatype):
         datatype.type_id = \
@@ -152,7 +174,10 @@ class State:
         self.comms = copy.copy(self.comms)
         self.comms.append(comm)
 
-    def remove_comm(self, comm):
+    def remove_comm(self, generator, comm):
+        for keyval, value in self.get_comm_attrs(comm):
+            self.delete_attr(generator, comm, keyval)
+
         self.comms = copy.copy(self.comms)
         i = self.comms.index(comm)
         del self.cc_id_counters[i + 2]
