@@ -1057,6 +1057,81 @@ static void process_commands_init(CommandsEnterType cet,
    current_memspace->answer = answer;
 }
 
+static void debug_compare(UWord state_id1, UWord state_id2)
+{
+    State *state1 = (State*) VG_(HT_lookup(states_table, state_id1));
+    MemoryImage *image1 = &state1->memimage;
+    Page **pages1 = image1->pages;
+    State *state2 = (State*) VG_(HT_lookup(states_table, state_id2));
+    MemoryImage *image2 = &state2->memimage;
+    Page **pages2 = image2->pages;
+    UWord p1 = 0, p2 = 0, i;
+
+    VG_(printf)("Comparing states %lu %lu\n", state_id1, state_id2);
+
+    while (p1 < image1->pages_count && p2 < image2->pages_count) {
+        Page *page1 = pages1[p1];
+        Page *page2 = pages2[p2];
+
+        if (page1 == page2) {
+            p1++;
+            p2++;
+            continue;
+        }
+
+        if (page1->base < page2->base) {
+            VG_(printf)("Page %lx: Only in state1\n", page1->base);
+            p1++;
+            continue;
+        }
+
+        if (page1->base > page2->base) {
+            VG_(printf)("Page %lx: Only in state2\n", page2->base);
+            p2++;
+            continue;
+        }
+
+        for (i = 0; i < PAGE_SIZE; i++) {
+            if (page1->va->vabits[i] != page1->va->vabits[i]) {
+                VG_(printf)("%lx: VA state1=%d state2=%d\n",
+                            page1->base + i, (int) page1->va->vabits[i],
+                                             (int) page2->va->vabits[i]);
+            }
+            if (page1->va->vabits[i] &&
+                page1->data[i] != page2->data[i]) {
+                VG_(printf)("%lx: DATA state1=%d state2=%d\n",
+                            page1->base + i, (int) page1->data[i],
+                                             (int) page2->data[i]);
+            }
+        }
+        p1++;
+        p2++;
+    }
+
+    while (p1 < image1->pages_count) {
+        VG_(printf)("Page %lx: Only in state1\n", pages1[p1]->base);
+        p1++;
+    }
+
+    while (p2 < image2->pages_count) {
+        VG_(printf)("Page %lx: Only in state2\n", pages2[p2]->base);
+        p2++;
+    }
+
+    SizeT size = sizeof(ThreadArchState);
+    //size -= offsetof(VexGuestArchState, guest_RAX);
+    char *s1 = ((char*) &state1->threadstate); // + offsetof(VexGuestArchState, guest_RAX);
+    char *s2 = ((char*) &state2->threadstate); // + offsetof(VexGuestArchState, guest_RAX);
+    for (i = 0; i < size; i++) {
+        if (s1[i] != s2[i]) {
+            VG_(printf)("Arch.vex %lu: %d %d\n",
+                        i, (int) s1[i], (int) s2[i]);
+        }
+    }
+
+    VG_(printf)("------ End of comparison -----------\n");
+}
+
 static
 void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 {
@@ -1139,8 +1214,8 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          void *addr = (void*) next_token_uword();
          char *param = next_token();
          if (!VG_(strcmp)(param, "int")) {
-            VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
-                         "%d\n", *((Int*) addr)));
+            VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH,
+                         "%d\n", *((Int*) addr));
          } else if(!VG_(strcmp)(param, "ints")) {
              UWord count = next_token_uword();
              UWord written = 0;
@@ -1157,8 +1232,8 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                                       "\n");
              tl_assert(written < MAX_MESSAGE_BUFFER_LENGTH);
          } else if (!VG_(strcmp)(param, "pointer")) {
-                VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
-                             "%lu\n", *((Addr*) addr)));
+                VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH,
+                             "%lu\n", *((Addr*) addr));
          } else if(!VG_(strcmp)(param, "pointers")) {
                 UWord count = next_token_uword();
                 UWord written = 0;
@@ -1341,6 +1416,14 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!VG_(strcmp(cmd, "QUIT"))) {
          VG_(exit)(1);
       }
+
+      if (!VG_(strcmp(cmd, "DEBUG_COMPARE"))) {
+            UWord state1 = next_token_uword();
+            UWord state2 = next_token_uword();
+            debug_compare(state1, state2);
+            write_message("Ok\n");
+            continue;
+      }
       write_message("Error: Unknown command\n");
    }
 }
@@ -1449,6 +1532,10 @@ void new_mem_startup(Addr a, SizeT len,
 static void new_mem_stack (Addr a, SizeT len)
 {
    //VG_(printf)("NEW STACK %lx %lu\n", a - VG_STACK_REDZONE_SZB, len);
+   /* When undefined memory trackig will work, then hashing will ignore these values
+    * now we reset new stack content to zero to have more deterministic memory
+    * and therefore more equivalent states will have same hash */
+   VG_(memset)((void*) (a - VG_STACK_REDZONE_SZB), 0, len);
    make_mem_undefined(a - VG_STACK_REDZONE_SZB, len);
 }
 
@@ -1456,6 +1543,8 @@ static
 void new_mem_stack_signal(Addr a, SizeT len, ThreadId tid)
 {
    //VG_(printf)("STACK SIGNAL %lx %lu", a - VG_STACK_REDZONE_SZB, len);
+   /* Same reason for reseting stack as in new_mem_stack */
+   VG_(memset)((void*) (a - VG_STACK_REDZONE_SZB), 0, len);
    make_mem_undefined(a - VG_STACK_REDZONE_SZB, len);
 }
 

@@ -103,6 +103,11 @@ def parse_args():
                        metavar="NAME",
                        type=str,
                        default=None)
+    parser.add_argument("--debug-compare-states",
+                       metavar="NAME",
+                       type=str,
+                       default=None)
+
     args = parser.parse_args()
 
     if args.verbose == 0:

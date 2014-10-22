@@ -7,7 +7,7 @@ def options(ctx):
 
 def configure(ctx):
     ctx.load("compiler_cc python")
-    if not ctx.env.CXXFLAGS:
+    if not ctx.env.CFLAGS:
         ctx.env.append_value("CFLAGS", "-O2")
         ctx.env.append_value("CFLAGS", "-g")
 

@@ -204,6 +204,10 @@ class Controller:
     def send_and_receive_int(self, command):
         return int(self.send_and_receive(command))
 
+    def debug_compare(self, state_id1, state_id2):
+        self.send_and_receive_ok(
+                "DEBUG_COMPARE {0} {1}\n".format(state_id1, state_id2))
+
     def _start_valgrind(self, port):
         args = (
             paths.VALGRIND_BIN,

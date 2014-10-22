@@ -99,6 +99,12 @@ class Generator:
         self.search = aislinn_args.search
         self.max_states = aislinn_args.max_states
         self.debug_state = aislinn_args.debug_state
+        if aislinn_args.debug_compare_states:
+            self.debug_compare_states = \
+                aislinn_args.debug_compare_states.split(";")
+        else:
+            self.debug_compare_states = None
+        self.debug_captured_states = None
         self.is_full_statespace = False
 
     def get_statistics(self):
@@ -232,6 +238,9 @@ class Generator:
         return True
 
     def final_check(self):
+        if self.debug_compare_states is not None:
+            self.debug_compare()
+
         # Check there is no memory leak
         assert self.vg_states.resource_count == 0
         assert self.vg_buffers.resource_count == 0
@@ -240,6 +249,28 @@ class Generator:
         # All pages are active, i.e. we have freed everyhing else
         assert stats["pages"] == stats["active-pages"]
         assert stats["buffers-size"] == 0
+
+    def debug_compare(self):
+        if self.debug_captured_states is None:
+            self.debug_captured_states = []
+        logging.info("%s states was captured", len(self.debug_captured_states))
+        if len(self.debug_captured_states) < 2:
+            return
+
+        gstate1 = self.debug_captured_states[0]
+        gstate2 = self.debug_captured_states[1]
+
+        for i, (s1, s2) in enumerate(zip(gstate1.states, gstate2.states)):
+            if s1.vg_state.id == s2.vg_state.id:
+                logging.info("States of rank %s are the same", i)
+                continue
+            self.controller.debug_compare(s1.vg_state.id, s2.vg_state.id)
+
+        for gstate in self.debug_captured_states:
+            gstate.dispose()
+        self.cleanup()
+
+
 
     def cleanup(self):
         if self.vg_states.not_used_resources:
@@ -430,6 +461,12 @@ class Generator:
 
     def expand_node(self, node, gstate):
         logging.debug("Expanding node %s", node.uid)
+
+        if self.debug_compare_states is not None \
+                and node.uid in self.debug_compare_states:
+            if self.debug_captured_states is None:
+                self.debug_captured_states = []
+            self.debug_captured_states.append(gstate.copy())
 
         if self.fast_expand_node(node, gstate):
             # Do not dispose state because we have reused gstate
@@ -699,6 +736,7 @@ class Generator:
     def run_function(self, *args):
         result = self.controller.run_function(*args)
         if result != "FUNCTION_FINISH":
+            print result
             raise Exception("Calling MPI in callback functions "
                             "is yet not supported")
 
