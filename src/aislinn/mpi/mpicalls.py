@@ -591,6 +591,14 @@ def MPI_Comm_create_keyval(generator, args, state, context):
     generator.controller.write_int(keyval_ptr, keyval.keyval_id)
     return False
 
+def MPI_Comm_free_keyval(generator, args, state, context):
+    keyval_ptr = args[0]
+    keyval_id = generator.controller.read_int(keyval_ptr)
+    keyval = check.check_keyval(state, keyval_id, 1)
+    state.remove_keyval(keyval)
+    generator.controller.write_int(keyval_ptr, consts.MPI_KEYVAL_INVALID)
+    return False
+
 def MPI_Comm_get_attr(generator, args, state, context):
     comm, keyval, value_ptr, flag_ptr = args
     value = state.get_attr(comm, keyval)
@@ -619,6 +627,9 @@ def MPI_Comm_delete_attr(generator, args, state, context):
 
 def MPI_Keyval_create(generator, args, state, context):
     return MPI_Comm_create_keyval(generator, args, state, context)
+
+def MPI_Keyval_free(generator, args, state, context):
+    return MPI_Comm_free_keyval(generator, args, state, context)
 
 def MPI_Attr_get(generator, args, state, context):
     return MPI_Comm_get_attr(generator, args, state, context)
@@ -887,10 +898,12 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
      Call(MPI_Comm_set_errhandler, (at.Comm, at.Pointer)),
      Call(MPI_Comm_create_keyval, (at.Pointer, at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Comm_free_keyval, (at.Pointer,)),
      Call(MPI_Comm_get_attr, (at.Comm, at.Keyval, at.Pointer, at.Pointer)),
      Call(MPI_Comm_set_attr, (at.Comm, at.Keyval, at.Pointer)),
      Call(MPI_Comm_delete_attr, (at.Comm, at.Keyval)),
      Call(MPI_Keyval_create, (at.Pointer, at.Pointer, at.Pointer, at.Pointer)),
+     Call(MPI_Keyval_free, (at.Pointer,)),
      Call(MPI_Attr_get, (at.Comm, at.Keyval, at.Pointer, at.Pointer)),
      Call(MPI_Attr_put, (at.Comm, at.Keyval, at.Pointer)),
      Call(MPI_Attr_delete, (at.Comm, at.Keyval)),

@@ -146,6 +146,11 @@ int main(int argc, char *argv[])
 	MPI_Comm_delete_attr(MPI_COMM_WORLD, key[0]);
 	MPI_Comm_delete_attr(MPI_COMM_WORLD, key[1]);
 	MPI_Comm_delete_attr(MPI_COMM_SELF, key[1]);
+	MPI_Comm_free_keyval(&key[0]);
+	MPI_Comm_free_keyval(&key[1]);
+	if (key[0] != MPI_KEYVAL_INVALID || key[1] != MPI_KEYVAL_INVALID) {
+		return 2;
+	}
 	MPI_Comm_free(&new_comm);
 	return 0;
 }

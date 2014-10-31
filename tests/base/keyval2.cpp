@@ -89,6 +89,10 @@ int main(int argc, char *argv[])
 	MPI_Attr_delete(MPI_COMM_WORLD, key[0]);
 	MPI_Attr_delete(MPI_COMM_WORLD, key[1]);
 	MPI_Attr_delete(MPI_COMM_SELF, key[1]);
-
+	MPI_Keyval_free(&key[0]);
+	MPI_Keyval_free(&key[1]);
+	if (key[0] != MPI_KEYVAL_INVALID || key[1] != MPI_KEYVAL_INVALID) {
+		return 2;
+	}
 	return 0;
 }

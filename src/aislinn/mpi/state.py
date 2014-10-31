@@ -96,20 +96,24 @@ class State:
         self.keyvals.append(keyval)
         keyval.keyval_id = keyval_id
 
+    def remove_keyval(self, keyval):
+        self.keyvals = copy.copy(self.keyvals)
+        self.keyvals[self.keyvals.index(keyval)] = None
+
     def get_keyval(self, keyval_id):
         for keyval in self.keyvals:
-            if keyval.keyval_id == keyval_id:
+            if keyval and keyval.keyval_id == keyval_id:
                 return keyval
 
     def set_attr(self, generator, comm, keyval, value):
-        key = (comm.comm_id, keyval.keyval_id)
+        key = (comm.comm_id, keyval)
         self.attrs = copy.copy(self.attrs)
         if key in self.attrs:
             self.delete_attr(generator, comm, keyval)
         self.attrs[key] = value
 
     def delete_attr(self, generator, comm, keyval):
-        key = (comm.comm_id, keyval.keyval_id)
+        key = (comm.comm_id, keyval)
         value = self.attrs[key]
         del self.attrs[key]
         if keyval.delete_fn != consts.MPI_NULL_DELETE_FN:
@@ -119,12 +123,12 @@ class State:
                 comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
 
     def get_attr(self, comm, keyval):
-        return self.attrs.get((comm.comm_id, keyval.keyval_id))
+        return self.attrs.get((comm.comm_id, keyval))
 
     def get_comm_attrs(self, comm):
-        for (comm_id, keyval_id), value in self.attrs.items():
+        for (comm_id, keyval), value in self.attrs.items():
             if comm_id == comm.comm_id:
-                yield self.get_keyval(keyval_id), value
+                yield keyval, value
 
     def copy_comm_attrs(self, generator, comm, new_comm):
         for keyval, value in self.get_comm_attrs(comm):
