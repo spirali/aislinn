@@ -278,8 +278,7 @@ Addr memspace_alloc(SizeT alloc_size, SizeT allign)
             Addr old_address = block->address;
             Addr address = ((old_address - 1) / allign + 1) * allign;
             SizeT padding = address - block->address;
-            if (s >= alloc_size - padding) {
-                SizeT diff = s - alloc_size - padding;
+            if (s >= alloc_size + padding) {
                 block->type = BLOCK_USED;
                 if (padding > 0) {
                     block->address = address;
@@ -289,6 +288,7 @@ Addr memspace_alloc(SizeT alloc_size, SizeT allign)
                     VG_(insertIndexXA)(a, i, &new_block);
                     i++;
                 }
+                SizeT diff = s - (alloc_size + padding);
                 if (diff > 0) {
                     AllocationBlock new_block;
                     new_block.type = BLOCK_FREE;
@@ -320,7 +320,7 @@ Addr memspace_alloc(SizeT alloc_size, SizeT allign)
 
    AllocationBlock new_block;
    new_block.type = BLOCK_END;
-   new_block.address = address + alloc_size + padding;
+   new_block.address = address + alloc_size;
 
    if (UNLIKELY(new_block.address - \
                 current_memspace->heap_space >= heap_max_size)) {
