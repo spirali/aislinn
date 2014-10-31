@@ -56,6 +56,15 @@ def MPI_Finalized(generator, args, state, context):
     generator.controller.write_int(args[0], flag)
     return False
 
+def MPI_Abort(generator, args, state, context):
+    comm, exitcode = args
+
+    e = errormsg.CallError()
+    e.name = "mpi-abort"
+    e.short_description = "MPI_Abort called"
+    e.description = "MPI_Abort called with exitcode={0}".format(exitcode)
+    e.throw()
+
 def MPI_Comm_rank(generator, args, state, context):
     comm, ptr = args
     rank = comm.group.pid_to_rank(state.pid)
@@ -885,4 +894,5 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Attr_get, (at.Comm, at.Keyval, at.Pointer, at.Pointer)),
      Call(MPI_Attr_put, (at.Comm, at.Keyval, at.Pointer)),
      Call(MPI_Attr_delete, (at.Comm, at.Keyval)),
+     Call(MPI_Abort, (at.Comm, at.Int)),
      ])
