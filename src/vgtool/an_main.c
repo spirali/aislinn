@@ -257,6 +257,28 @@ void memspace_dump(void)
    }
 }*/
 
+/*
+static void memspace_sanity_check(void)
+{
+   memspace_dump();
+   XArray *a = current_memspace->allocation_blocks;
+   Word i;
+   SizeT size = VG_(sizeXA)(a);
+   tl_assert(size > 0);
+
+   AllocationBlock *block, *next;+   for (i = 0; i < size - 1; i++) {
+       block = VG_(indexXA)(a, i);
+       next = VG_(indexXA)(a, i + 1);
+       tl_assert(next->address % 4 == 0);
+       tl_assert(next->address > block->address);
+       tl_assert(block->type == BLOCK_USED || block->type == BLOCK_FREE);
+       tl_assert(block->type != BLOCK_FREE || !next->type == BLOCK_FREE);
+   }
+   block = VG_(indexXA)(a, size - 1);
+   tl_assert(block->type == BLOCK_END);
+}
+*/
+
 static
 Addr memspace_alloc(SizeT alloc_size, SizeT allign)
 {
@@ -430,7 +452,7 @@ static Page *page_new(Addr a)
     page->data = NULL;
     page->va = VG_(malloc)("an.va", sizeof(VA));
     VG_(memset)(page->va, 0, sizeof(VA));
-    VPRINT(2, "page_new %p base=%lx\n", page, a);
+    VPRINT(3, "page_new %p base=%lx\n", page, a);
     return page;
 }
 
@@ -486,7 +508,7 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
 }
 
 static void INLINE make_own_copy_of_page(Page **page) {
-   VPRINT(2, "make_own_copy base=%lx refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
+   VPRINT(3, "make_own_copy base=%lx refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
    if (UNLIKELY((*page)->ref_count >= 2)) {
       (*page)->ref_count--;
       Page *new_page = page_clone(*page);
