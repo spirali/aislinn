@@ -177,6 +177,8 @@ class Generator:
         # The order of the ops is important!
         operations = [ consts.MPI_SUM,
                     consts.MPI_PROD,
+                    consts.MPI_MIN,
+                    consts.MPI_MAX,
                     consts.MPI_LAND,
                     consts.MPI_LOR,
                     consts.MPI_BAND,

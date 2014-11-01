@@ -20,6 +20,11 @@
 	CASE(MPI_FLOAT, float, body) \
 	CASE(MPI_DOUBLE, double, body)
 
+#define NUM_TYPES(body) \
+	INT_TYPES(body) \
+	FLOAT_TYPES(body)
+
+
 #define DEFINE_OP(name) \
 	static void name(void *input, void *output, int *len, MPI_Datatype *dtype) \
 	{ \
@@ -34,14 +39,20 @@
 	}
 
 DEFINE_OP(op_sum)
-INT_TYPES(out[i] += in[i])
-FLOAT_TYPES(out[i] += in[i])
+NUM_TYPES(out[i] += in[i])
 END_OP(op_sum)
 
 DEFINE_OP(op_prod)
-INT_TYPES(out[i] *= in[i])
-FLOAT_TYPES(out[i] *= in[i])
+NUM_TYPES(out[i] *= in[i])
 END_OP(op_prod)
+
+DEFINE_OP(op_min)
+NUM_TYPES(out[i] = (out[i] <= in[i]) ? out[i] : in[i])
+END_OP(op_min)
+
+DEFINE_OP(op_max)
+NUM_TYPES(out[i] = (out[i] >= in[i]) ? out[i] : in[i])
+END_OP(op_max)
 
 DEFINE_OP(op_land)
 INT_TYPES(out[i] = out[i] && in[i])
@@ -130,12 +141,14 @@ static int consts_pool[1];
 
 int MPI_Init(int *argc, char ***argv)
 {
-	AislinnArgType args[11] = {
+	AislinnArgType args[13] = {
 		(AislinnArgType) argc,
 		(AislinnArgType) argv,
 		(AislinnArgType) &consts_pool,
 		(AislinnArgType) &op_sum,
 		(AislinnArgType) &op_prod,
+		(AislinnArgType) &op_min,
+		(AislinnArgType) &op_max,
 		(AislinnArgType) &op_land,
 		(AislinnArgType) &op_lor,
 		(AislinnArgType) &op_band,
@@ -143,7 +156,7 @@ int MPI_Init(int *argc, char ***argv)
 		(AislinnArgType) &op_minloc,
 		(AislinnArgType) &op_maxloc,
 	};
-	aislinn_call("MPI_Init", args, 11);
+	aislinn_call("MPI_Init", args, 13);
 	return MPI_SUCCESS;
 }
 

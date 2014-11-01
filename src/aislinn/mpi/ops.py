@@ -49,6 +49,8 @@ class BuildinOperation(Operation):
 buildin_operations = dict((o.op_id, o) for o in [
     BuildinOperation(consts.MPI_SUM, "MPI_SUM"),
     BuildinOperation(consts.MPI_PROD, "MPI_PROD"),
+    BuildinOperation(consts.MPI_MIN, "MPI_MIN"),
+    BuildinOperation(consts.MPI_MAX, "MPI_MAX"),
     BuildinOperation(consts.MPI_LAND, "MPI_LAND"),
     BuildinOperation(consts.MPI_LOR, "MPI_LOR"),
     BuildinOperation(consts.MPI_BAND, "MPI_BAND"),

@@ -140,8 +140,10 @@ class CollectiveTests(TestCase):
     def test_reduce(self):
         output = "OUT1: 600 603 606 609\n" \
                  "OUT2: 6000000 6110601 6222408 6335427\n" \
+                 "OUT3: 100 101 102 103\n" \
                  "OUT1d: 0.6 0.603 0.606 0.609\n" \
-                 "OUT2d: 0.006 0.0061106 0.00622241 0.00633543\n"
+                 "OUT2d: 0.006 0.0061106 0.00622241 0.00633543\n" \
+                 "OUT3d: 0.3 0.301 0.302 0.303\n"
         self.program("reduce")
 
         self.execute(3, "ok", stdout=output)

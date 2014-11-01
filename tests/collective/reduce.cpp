@@ -22,14 +22,16 @@ int main(int argc, char **argv)
 		d[i] = (rank + 1) * 100 + i;
 		dd[i] = ((rank + 1) * 100 + i) / 1000.0;
 	}
-	int out1[mysize], out2[mysize];
-	double out1d[mysize], out2d[mysize];
+	int out1[mysize], out2[mysize], out3[mysize];
+	double out1d[mysize], out2d[mysize], out3d[mysize];
 
 	if (!strcmp(argv[1], "ok")) {
 		MPI_Reduce(d, out1, mysize, MPI_INT, MPI_SUM, root, MPI_COMM_WORLD);
 		MPI_Reduce(d, out2, mysize, MPI_INT, MPI_PROD, root, MPI_COMM_WORLD);
+		MPI_Reduce(d, out3, mysize, MPI_INT, MPI_MIN, root, MPI_COMM_WORLD);
 		MPI_Reduce(dd, out1d, mysize, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
 		MPI_Reduce(dd, out2d, mysize, MPI_DOUBLE, MPI_PROD, root, MPI_COMM_WORLD);
+		MPI_Reduce(dd, out3d, mysize, MPI_DOUBLE, MPI_MAX, root, MPI_COMM_WORLD);
 	}
 
 	/*
@@ -52,17 +54,29 @@ int main(int argc, char **argv)
 		}
 		printf("\n");
 
+		printf("OUT3:");
+		for (int i = 0; i < mysize; i++) {
+			printf(" %i", out3[i]);
+		}
+		printf("\n");
+
 		printf("OUT1d:");
 		for (int i = 0; i < mysize; i++) {
 			printf(" %g", out1d[i]);
 		}
 		printf("\n");
+
 		printf("OUT2d:");
 		for (int i = 0; i < mysize; i++) {
 			printf(" %g", out2d[i]);
 		}
 		printf("\n");
 
+		printf("OUT3d:");
+		for (int i = 0; i < mysize; i++) {
+			printf(" %g", out3d[i]);
+		}
+		printf("\n");
 	}
 	MPI_Finalize();
 	return 0;
