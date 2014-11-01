@@ -290,6 +290,14 @@ def MPI_Gather(generator, args, state, context):
                                      True,
                                      args)
 
+def MPI_Allgather(generator, args, state, context):
+    return call_collective_operation(generator,
+                                     state,
+                                     context,
+                                     collectives.Allgather,
+                                     True,
+                                     args)
+
 def MPI_Gatherv(generator, args, state, context):
     return call_collective_operation(generator,
                                      state,
@@ -846,6 +854,8 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Gatherv, (at.Pointer, at.Count, at.Datatype,
                          at.Pointer, at.Pointer, at.Pointer,
                          at.Int, at.Rank, at.Comm)),
+     Call(MPI_Allgather, (at.Pointer, at.Count, at.Datatype,
+                       at.Pointer, at.Int, at.Int, at.Comm)),
      Call(MPI_Scatter, (at.Pointer, at.Int, at.Int,
                          at.Pointer, at.Count, at.Datatype,
                          at.Rank, at.Comm)),

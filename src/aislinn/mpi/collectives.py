@@ -302,8 +302,59 @@ class Gather(OperationWithBuffers):
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.recvcount))
-        hashthread.update(str(self.recvtype if self.recvtype else None))
+        hashthread.update(str(self.recvtype.type_id if self.recvtype else None))
         hashthread.update(str(self.recvbuf))
+
+
+class Allgather(OperationWithBuffers):
+
+    name = "allgather"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
+        self.recvbufs = [ None ] * self.process_count
+        self.recvcounts = [ None ] * self.process_count
+        self.recvtypes = [ None ] * self.process_count
+
+    def enter_main(self,
+                   generator,
+                   state,
+                   comm,
+                   args):
+        sendbuf, sendcount, sendtype, \
+               recvbuf, recvcount, recvtype = args
+
+        rank = state.get_rank(comm)
+        self.recvbufs[rank] = recvbuf
+        self.recvtypes[rank] = check.check_datatype(state, recvtype, 7)
+        check.check_count(recvcount, 5)
+        self.recvcounts[rank] = recvcount
+
+        self.sendtype = sendtype
+        self.sendcount = sendcount
+
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer_and_pack(
+                sendtype, sendcount, sendbuf)
+
+    def can_be_completed(self, state):
+        return self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        controller = generator.controller
+        for i, vg_buffer in enumerate(self.buffers):
+            self.recvtypes[rank].unpack(controller,
+                 vg_buffer,
+                 self.recvcounts[rank],
+                 self.recvbufs[rank] + i * self.recvtypes[rank].size
+                                  * self.recvcounts[rank])
+
+    def compute_hash_data(self, hashthread):
+        OperationWithBuffers.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.recvcounts))
+        # FIXME: hash self.recvtypes
+        hashthread.update(str(self.recvbufs))
 
 
 class Scatterv(OperationWithSingleBuffer):

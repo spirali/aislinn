@@ -189,6 +189,12 @@ class CollectiveTests(TestCase):
         self.execute(3, "2", stdout=output)
         self.no_errors()
 
+    def test_allgather(self):
+        output = 3 * "OUT: 100 200 300 400 101 202 303 404 102 204 306 408\n"
+        self.program("allgather")
+        self.execute(3, stdout=output)
+        self.no_errors()
+
     def test_userop(self):
         result = set(["103 9", "NC: 20 10", "NC: 30 10", "NC: 40 10"])
         self.program("userop")

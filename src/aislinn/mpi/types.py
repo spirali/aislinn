@@ -38,7 +38,6 @@ class BuildinType(Datatype):
                                      pointer,
                                      self.size * count)
 
-
     def unpack(self, controller, vg_buffer, count, pointer, index=0):
         controller.write_buffer(pointer, vg_buffer.id, index, self.size * count)
 
