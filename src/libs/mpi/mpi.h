@@ -34,7 +34,6 @@ typedef unsigned long MPI_Aint;
 /* Constants */
 static const int MPI_SUCCESS = 0;
 static const int MPI_UNDEFINED = -0x0BEFBEEF;
-static const int MPI_TAG_UB = 0x64400001;
 
 #define MPI_DATATYPE_NULL (MPI_Datatype) 0xFF00100
 #define MPI_PACKED (MPI_Datatype) 0xFF00101
@@ -123,6 +122,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
 #define MPI_COMBINER_DUP 0x09000100
 #define MPI_COMBINER_CONTIGUOUS 0x09000101
+
+#define MPI_TAG_UB 0x02200101
 
 /* Constants for MPI_Comm_compare */
 #define MPI_UNEQUAL   0

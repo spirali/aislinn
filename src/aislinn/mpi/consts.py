@@ -88,3 +88,7 @@ MPI_UNEQUAL   = 0
 MPI_SIMILAR   = 1
 MPI_CONGRUENT = 2
 MPI_IDENT     = 3
+
+# ---- Special attributes -------------------------------------
+
+MPI_TAG_UB = 0x02200101

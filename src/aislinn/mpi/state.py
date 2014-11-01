@@ -29,6 +29,7 @@ import copy
 import comm
 import types
 import ops
+from keyval import Keyval
 
 class State:
 
@@ -101,6 +102,11 @@ class State:
         self.keyvals[self.keyvals.index(keyval)] = None
 
     def get_keyval(self, keyval_id):
+        if keyval_id == consts.MPI_TAG_UB:
+            keyval = Keyval(None, None, None)
+            keyval.keyval_id = keyval_id
+            return keyval
+
         for keyval in self.keyvals:
             if keyval and keyval.keyval_id == keyval_id:
                 return keyval

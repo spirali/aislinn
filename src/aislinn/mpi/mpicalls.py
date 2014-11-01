@@ -601,7 +601,10 @@ def MPI_Comm_free_keyval(generator, args, state, context):
 
 def MPI_Comm_get_attr(generator, args, state, context):
     comm, keyval, value_ptr, flag_ptr = args
-    value = state.get_attr(comm, keyval)
+    if keyval.keyval_id == consts.MPI_TAG_UB:
+        value = generator.get_const_ptr(consts.MPI_TAG_UB)
+    else:
+        value = state.get_attr(comm, keyval)
     if value is not None:
         generator.controller.write_pointer(value_ptr, value)
         generator.controller.write_int(flag_ptr, 1)

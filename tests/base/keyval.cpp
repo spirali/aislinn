@@ -143,6 +143,11 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	MPI_Comm_get_attr(new_comm, MPI_TAG_UB, &out2, &flag);
+	if (!flag) {
+		return 100;
+	}
+
 	MPI_Comm_delete_attr(MPI_COMM_WORLD, key[0]);
 	MPI_Comm_delete_attr(MPI_COMM_WORLD, key[1]);
 	MPI_Comm_delete_attr(MPI_COMM_SELF, key[1]);

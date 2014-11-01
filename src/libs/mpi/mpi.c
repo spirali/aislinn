@@ -126,11 +126,14 @@ static void op_maxloc(void *input, void *output, int *len, MPI_Datatype *dtype)
 	MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
+static int consts_pool[1];
+
 int MPI_Init(int *argc, char ***argv)
 {
-	AislinnArgType args[10] = {
+	AislinnArgType args[11] = {
 		(AislinnArgType) argc,
 		(AislinnArgType) argv,
+		(AislinnArgType) &consts_pool,
 		(AislinnArgType) &op_sum,
 		(AislinnArgType) &op_prod,
 		(AislinnArgType) &op_land,
@@ -140,7 +143,7 @@ int MPI_Init(int *argc, char ***argv)
 		(AislinnArgType) &op_minloc,
 		(AislinnArgType) &op_maxloc,
 	};
-	aislinn_call("MPI_Init", args, 10);
+	aislinn_call("MPI_Init", args, 11);
 	return MPI_SUCCESS;
 }
 

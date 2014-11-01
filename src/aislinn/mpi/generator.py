@@ -70,6 +70,7 @@ class Generator:
             self.controller.profile_under_valgrind = True
         self.statespace = StateSpace()
         self.fatal_error = False
+        self.consts_pool = None
         self.initial_node = None
         self.process_count = None
         self.working_queue = deque()
@@ -135,6 +136,11 @@ class Generator:
         for error_message in error_messages:
             self.add_error_message(error_message)
 
+    def get_const_ptr(self, id):
+        if id == consts.MPI_TAG_UB:
+            return self.consts_pool
+        raise Exception("Invalid const id")
+
     def initial_execution(self, result):
         while True:
             result = result.split()
@@ -164,7 +170,9 @@ class Generator:
                 return True
             break
 
-        function_ptrs = result[4:] # skip CALL MPI_Init argc argv
+        self.consts_pool = convert_type(result[4], "ptr")
+        self.controller.write_int(self.get_const_ptr(consts.MPI_TAG_UB), 0xFFFF)
+        function_ptrs = result[5:] # skip CALL MPI_Init argc argv consts_pool
 
         # The order of the ops is important!
         operations = [ consts.MPI_SUM,
