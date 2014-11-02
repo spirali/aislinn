@@ -111,19 +111,20 @@ class State:
             if keyval and keyval.keyval_id == keyval_id:
                 return keyval
 
-    def set_attr(self, generator, comm, keyval, value):
+    def set_attr(self, generator, context, comm, keyval, value):
         key = (comm.comm_id, keyval)
         self.attrs = copy.copy(self.attrs)
         if key in self.attrs:
-            self.delete_attr(generator, comm, keyval)
+            self.delete_attr(generator, context, comm, keyval)
         self.attrs[key] = value
 
-    def delete_attr(self, generator, comm, keyval):
+    def delete_attr(self, generator, context, comm, keyval):
         key = (comm.comm_id, keyval)
         value = self.attrs[key]
         del self.attrs[key]
         if keyval.delete_fn != consts.MPI_NULL_DELETE_FN:
             generator.run_function(
+                self, context,
                 keyval.delete_fn,
                 generator.controller.FUNCTION_2_INT_2_POINTER,
                 comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
@@ -136,7 +137,7 @@ class State:
             if comm_id == comm.comm_id:
                 yield keyval, value
 
-    def copy_comm_attrs(self, generator, comm, new_comm):
+    def copy_comm_attrs(self, generator, context, comm, new_comm):
         for keyval, value in self.get_comm_attrs(comm):
             if keyval.copy_fn == consts.MPI_NULL_COPY_FN:
                 continue
@@ -146,13 +147,14 @@ class State:
             flag_ptr = tmp + generator.POINTER_SIZE
 
             generator.run_function(
+                self, context,
                 keyval.copy_fn,
                 generator.controller.FUNCTION_2_INT_4_POINTER,
                 comm.comm_id, keyval.keyval_id, keyval.extra_ptr,
                 value, value_out_ptr, flag_ptr)
 
             if generator.controller.read_int(flag_ptr):
-                self.set_attr(generator, new_comm, keyval,
+                self.set_attr(generator, context, new_comm, keyval,
                               generator.controller.read_pointer(value_out_ptr))
             generator.controller.client_free(tmp)
 
@@ -184,9 +186,9 @@ class State:
         self.comms = copy.copy(self.comms)
         self.comms.append(comm)
 
-    def remove_comm(self, generator, comm):
+    def remove_comm(self, generator, context, comm):
         for keyval, value in self.get_comm_attrs(comm):
-            self.delete_attr(generator, comm, keyval)
+            self.delete_attr(generator, context, comm, keyval)
 
         self.comms = copy.copy(self.comms)
         i = self.comms.index(comm)

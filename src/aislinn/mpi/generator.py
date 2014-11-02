@@ -52,6 +52,10 @@ class ExecutionContext:
         self.error_messages.append(error_message)
 
 
+class StopSearchException(Exception):
+    pass
+
+
 class Generator:
 
     # TODO: Universal architecture detection
@@ -69,7 +73,6 @@ class Generator:
         if aislinn_args.profile_under_valgrind:
             self.controller.profile_under_valgrind = True
         self.statespace = StateSpace()
-        self.fatal_error = False
         self.consts_pool = None
         self.initial_node = None
         self.process_count = None
@@ -226,8 +229,6 @@ class Generator:
                 else: # bfs
                     node, gstate = self.working_queue.popleft()
                 self.expand_node(node, gstate)
-                if self.fatal_error:
-                    return True
                 self.cleanup()
 
                 if tick:
@@ -242,6 +243,8 @@ class Generator:
 
             self.final_check()
             self.is_full_statespace = True
+        except StopSearchException:
+            logging.debug("StopSearchException catched")
         finally:
             self.controller.kill()
             self.end_time = datetime.datetime.now()
@@ -337,10 +340,9 @@ class Generator:
                     e.description = "Message is bigger than receive buffer"
                     e.pid = state.pid
                     self.add_error_message(e)
-                    self.fatal_error = True
                     # TODO: In fact it is not fatal error, it should be handle
                     # in a way that we can continue
-                    return False
+                    raise StopSearchException()
                 request.datatype.unpack(self.controller,
                                         message.vg_buffer,
                                         count,
@@ -631,6 +633,7 @@ class Generator:
                 e.last_arc = arc
                 e.pid = state.pid
             self.add_error_messages(context.error_messages)
+            raise StopSearchException()
 
     def save_state(self, make_hash):
         if make_hash:
@@ -654,43 +657,65 @@ class Generator:
         e.stacktrace = self.controller.get_stacktrace()
         return e
 
+    def process_call(self, name, args, state, context, callback=False):
+        try:
+            call = mpicalls.calls_non_communicating.get(name)
+            if call is None:
+                call = mpicalls.calls_communicating.get(name)
+                if callback:
+                    e = errormsg.CallError()
+                    e.name = "comm-not-allowed"
+                    e.short_description = "Communication function " \
+                                          "called in callback"
+                    e.description = "Communication function '{0}' " \
+                                    "called in callback".format(name)
+                    e.throw()
+            if call is not None:
+                return call.run(self, args, state, context)
+            else:
+                raise Exception("Unkown function call: {0} {1}".format(name, repr(args)))
+        except errormsg.ExecutionError as e:
+            logging.debug("ExecutionError: %s", e.error_message)
+            error_message = e.error_message
+            if error_message.stacktrace is None:
+                error_message.stacktrace = self.controller.get_stacktrace()
+            if error_message.function_name is None:
+                error_message.function_name = name
+            if callback:
+                # If callback is true, that we are in recursive call of this function,
+                # hence throw error and at will added to context later
+                error_message.throw()
+            context.add_error_message(error_message)
+            # TODO: It is not necessary to stop everything, just expansion of
+            # this state
+            return True
+
     def execute_state(self, state):
         if state.vg_state is not None:
             state.vg_state.dec_ref()
             state.vg_state = None
         context = ExecutionContext()
-        try:
-            while True:
-                call = self.controller.run_process().split()
-                if call[0] == "EXIT":
-                    exitcode = convert_type(call[1], "int")
-                    e = event.ExitEvent("Exit", state.pid, exitcode)
-                    context.add_event(e)
-                    state.set_finished()
-                    if exitcode != 0:
-                        context.add_error_message(
-                                errormsg.NonzeroExitCode(exitcode))
-                    return context
-                if call[0] == "REPORT":
-                    context.add_error_message(
-                            self.make_error_message_from_report(call))
-                    self.fatal_error = True
-                    return context
-                call_class = mpicalls.calls.get(call[1])
-                if call_class is not None:
-                    if call_class.run(self, call[2:], state, context):
-                        break
+        while True:
+            result = self.controller.run_process().split()
+            if result[0] == "CALL":
+                if self.process_call(result[1], result[2:], state, context):
+                    break
                 else:
-                    raise Exception("Unkown function call: " + repr(call))
-        except errormsg.ExecutionError as e:
-            logging.debug("ExecutionError: %s", e.error_message)
-            error_message = e.error_message
-            error_message.stacktrace = self.controller.get_stacktrace()
-            error_message.function_name = call[1]
-            context.add_error_message(error_message)
-            # TODO: It is not necessary to stop everything, just expansion of
-            # this state
-            self.fatal_error = True
+                    continue
+            if result[0] == "EXIT":
+                exitcode = convert_type(result[1], "int")
+                e = event.ExitEvent("Exit", state.pid, exitcode)
+                context.add_event(e)
+                state.set_finished()
+                if exitcode != 0:
+                    context.add_error_message(
+                            errormsg.NonzeroExitCode(exitcode))
+                return context
+            if result[0] == "REPORT":
+                context.add_error_message(
+                        self.make_error_message_from_report(result))
+                return context
+            raise Exception("Invalid command")
         state.vg_state = self.save_state(True)
         return context
 
@@ -739,16 +764,22 @@ class Generator:
             e.description = "The state {0} was captured " \
                             "because of option --debug-state".format(uids)
             self.add_error_message(e)
-            self.fatal_error = True
-            return node
+            raise StopSearchException()
         return node
 
-    def run_function(self, *args):
+    def run_function(self, state, context, *args):
         result = self.controller.run_function(*args)
-        if result != "FUNCTION_FINISH":
-            print result
-            raise Exception("Calling MPI in callback functions "
-                            "is yet not supported")
+        while result != "FUNCTION_FINISH":
+            result = result.split()
+            if result[0] == "EXIT":
+                e = errormsg.CallError()
+                e.name = "exit-in-callback"
+                e.message = "Program terminated in callback"
+                e.throw()
+            assert result[0] == "CALL"
+            assert not self.process_call(
+                result[1], result[2:], state, context, callback=True)
+            result = self.controller.run_process()
 
     def create_report(self):
         for error_message in self.error_messages:

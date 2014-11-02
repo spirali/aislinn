@@ -64,11 +64,11 @@ class CollectiveOperation:
     def after_copy(self):
         pass
 
-    def enter(self, generator, state, comm, args):
+    def enter(self, generator, state, context, comm, args):
         logging.debug("Entering collective operation %s", self)
         assert self.remaining_processes_enter >= 0
         self.remaining_processes_enter -= 1
-        self.enter_main(generator, state, comm, args)
+        self.enter_main(generator, state, context, comm, args)
 
     def complete(self, generator, state):
         logging.debug("Completing collective operation %s", self)
@@ -177,6 +177,7 @@ class Barrier(CollectiveOperation):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         pass
@@ -206,6 +207,7 @@ class Gatherv(OperationWithBuffers):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
@@ -264,6 +266,7 @@ class Gather(OperationWithBuffers):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
@@ -319,6 +322,7 @@ class Allgather(OperationWithBuffers):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
@@ -379,6 +383,7 @@ class Scatterv(OperationWithSingleBuffer):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         sendbuf, sendcounts, displs, sendtype, \
@@ -444,6 +449,7 @@ class Scatter(OperationWithSingleBuffer):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
@@ -503,6 +509,7 @@ class Bcast(OperationWithSingleBuffer):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         buffer, count, datatype, root = args
@@ -538,6 +545,16 @@ class Bcast(OperationWithSingleBuffer):
 
 def execute_reduce_op(generator, state, comm, rank, ccop,
                       recvbuf, buffers):
+
+    # This is hack to get execution context,
+    # By this approach we lost events from reduce function
+    # On the other hand, it is not clear in which context
+    # should be reduction operations called
+    # BUT! Errors are still catched almost correctly (traceback is not full)
+    # because exception is propagated to the real context
+    from generator import ExecutionContext
+    context = ExecutionContext()
+
     controller = generator.controller
     tmp = controller.client_malloc(generator.INT_SIZE * 2)
     len_ptr = tmp
@@ -549,13 +566,11 @@ def execute_reduce_op(generator, state, comm, rank, ccop,
 
     for r in xrange(1, ccop.process_count):
         buffer_mem = controller.client_malloc_from_buffer(buffers[r].id)
-        result = controller.run_function(
+        generator.run_function(
+                state, context,
                 ccop.op.fn_ptr,
                 controller.FUNCTION_4_POINTER,
                 buffer_mem, recvbuf, len_ptr, datatype_ptr)
-        if result != "FUNCTION_FINISH":
-            raise Exception("Calling MPI in user operations "
-                            "is yet not supported")
         controller.client_free(buffer_mem)
     controller.client_free(tmp)
 
@@ -573,6 +588,7 @@ class Reduce(OperationWithBuffers):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
 
@@ -633,6 +649,7 @@ class AllReduce(OperationWithBuffers):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
 
@@ -692,6 +709,7 @@ class CommSplit(CollectiveOperation):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         color, key, newcomm_ptr = args
@@ -758,6 +776,7 @@ class CommDup(CollectiveOperation):
     def enter_main(self,
                    generator,
                    state,
+                   context,
                    comm,
                    args):
         newcomm_ptr = args
@@ -769,7 +788,7 @@ class CommDup(CollectiveOperation):
         if self.newcomm_id is None:
             self.newcomm_id = state.gstate.clone_communicator(comm).comm_id
         new_comm = state.get_comm(self.newcomm_id)
-        state.copy_comm_attrs(generator, comm, new_comm)
+        state.copy_comm_attrs(generator, context, comm, new_comm)
 
 
     def can_be_completed(self, state):

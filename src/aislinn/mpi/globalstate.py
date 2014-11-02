@@ -95,6 +95,7 @@ class GlobalState(EqMixin):
     def call_collective_operation(self,
                                   generator,
                                   state,
+                                  context,
                                   comm,
                                   op_class,
                                   blocking,
@@ -109,7 +110,7 @@ class GlobalState(EqMixin):
             op = op_class(self, comm, blocking, cc_id)
             self.collective_operations.append(op)
         state.inc_cc_id_counter(comm)
-        op.enter(generator, state, comm, args)
+        op.enter(generator, state, context, comm, args)
         return op
 
     def finish_collective_operation(self, op):

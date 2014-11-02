@@ -185,7 +185,7 @@ def main():
         pr = cProfile.Profile()
         pr.enable()
     if not generator.run(args.p):
-            sys.exit(1)
+        sys.exit(1)
     if args.profile:
         pr.disable()
         with open("aislinn.stats", "w") as f:

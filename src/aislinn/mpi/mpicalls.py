@@ -430,7 +430,8 @@ def MPI_Comm_split(generator, args, state, context):
     comm = args[0]
     args = args[1:]
     op = state.gstate.call_collective_operation(
-                generator, state, comm, collectives.CommSplit, True, args)
+                generator, state, context, comm,
+                collectives.CommSplit, True, args)
     request_id = state.add_collective_request(comm.comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
@@ -438,7 +439,8 @@ def MPI_Comm_split(generator, args, state, context):
 def MPI_Comm_dup(generator, args, state, context):
     comm, new_comm_ptr = args
     op = state.gstate.call_collective_operation(
-                generator, state, comm, collectives.CommDup, True, new_comm_ptr)
+                generator, state, context, comm,
+                collectives.CommDup, True, new_comm_ptr)
     request_id = state.add_collective_request(comm.comm_id, op.cc_id)
     state.set_wait((request_id,))
     return True
@@ -461,7 +463,7 @@ def MPI_Comm_free(generator, args, state, context):
         e.description = "Communicator {0} cannot be freed".format(name)
         e.throw()
     comm = check.check_comm(state, comm_id, 1)
-    state.remove_comm(generator, comm)
+    state.remove_comm(generator, context, comm)
     generator.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
     return False
 
@@ -622,7 +624,7 @@ def MPI_Comm_get_attr(generator, args, state, context):
 
 def MPI_Comm_set_attr(generator, args, state, context):
     comm, keyval, value = args
-    state.set_attr(generator, comm, keyval, value)
+    state.set_attr(generator, context, comm, keyval, value)
     return False
 
 def MPI_Comm_delete_attr(generator, args, state, context):
@@ -633,7 +635,7 @@ def MPI_Comm_delete_attr(generator, args, state, context):
         e.short_description = "Attribute not found"
         e.description = "Attribute not found in the communicator"
         e.throw()
-    state.delete_attr(generator, comm, keyval)
+    state.delete_attr(generator, context, comm, keyval)
     return False
 
 def MPI_Keyval_create(generator, args, state, context):
@@ -666,7 +668,7 @@ def call_collective_operation(generator,
         args = args[:-2]
 
     op = state.gstate.call_collective_operation(
-                generator, state, comm, op_class, blocking, args)
+                generator, state, context, comm, op_class, blocking, args)
     request_id = state.add_collective_request(comm.comm_id, op.cc_id)
     if blocking:
         state.set_wait((request_id,))
@@ -791,21 +793,9 @@ class Call:
         return r
 
 
-calls = dict((c.name, c) for c in [
-     Call(MPI_Initialized, (at.Pointer,)),
-     Call(MPI_Finalize, ()),
-     Call(MPI_Finalized, (at.Pointer,)),
-     Call(MPI_Comm_rank, (at.Comm, at.Pointer)),
-     Call(MPI_Comm_size, (at.Comm, at.Pointer)),
+calls_communicating = dict((c.name, c) for c in [
      Call(MPI_Comm_dup, (at.Comm, at.Pointer)),
      Call(MPI_Comm_split, (at.Comm, at.Int, at.Int, at.Pointer)),
-     Call(MPI_Comm_free, (at.Pointer,)),
-     Call(MPI_Comm_compare, (at.Comm, at.Comm, at.Pointer)),
-     Call(MPI_Comm_group, (at.Comm, at.Pointer)),
-     Call(MPI_Group_free, (at.Pointer,)),
-     Call(MPI_Group_size, (at.Group, at.Pointer)),
-     Call(MPI_Group_incl, (at.Group, at.Count, at.Pointer, at.Pointer)),
-     Call(MPI_Group_compare, (at.Group, at.Group, at.Pointer)),
      Call(MPI_Send, (at.Pointer, at.Count, at.Datatype,
                      at.Rank, at.Tag, at.Comm)),
      Call(MPI_Bsend, (at.Pointer, at.Count, at.Datatype,
@@ -838,7 +828,6 @@ calls = dict((c.name, c) for c in [
                       at.Rank, at.Tag, at.Comm, at.Pointer)),
      Call(MPI_Start, (at.Pointer,)),
      Call(MPI_Startall, (at.Count, at.Pointer,)),
-     Call(MPI_Request_free, (at.Pointer,)),
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Iprobe, (at.Int, at.TagAT, at.Comm, at.Pointer, at.Pointer)),
      Call(MPI_Probe, (at.Int, at.TagAT, at.Comm, at.Pointer)),
@@ -886,6 +875,22 @@ calls = dict((c.name, c) for c in [
                         at.Comm, at.Pointer)),
      Call(MPI_Iallreduce, (at.Pointer, at.Pointer, at.Count,
                            at.Datatype, at.Op, at.Comm, at.Pointer)),
+])
+
+calls_non_communicating = dict((c.name, c) for c in [
+     Call(MPI_Initialized, (at.Pointer,)),
+     Call(MPI_Finalize, ()),
+     Call(MPI_Finalized, (at.Pointer,)),
+     Call(MPI_Comm_rank, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_size, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_free, (at.Pointer,)),
+     Call(MPI_Comm_compare, (at.Comm, at.Comm, at.Pointer)),
+     Call(MPI_Comm_group, (at.Comm, at.Pointer)),
+     Call(MPI_Group_free, (at.Pointer,)),
+     Call(MPI_Group_size, (at.Group, at.Pointer)),
+     Call(MPI_Group_incl, (at.Group, at.Count, at.Pointer, at.Pointer)),
+     Call(MPI_Group_compare, (at.Group, at.Group, at.Pointer)),
+     Call(MPI_Request_free, (at.Pointer,)),
      Call(MPI_Op_create, (at.Pointer, at.Int, at.Pointer)),
      Call(MPI_Op_free, (at.Pointer,)),
      Call(MPI_Type_commit, (at.Pointer,)),
@@ -921,4 +926,4 @@ calls = dict((c.name, c) for c in [
      Call(MPI_Attr_put, (at.Comm, at.Keyval, at.Pointer)),
      Call(MPI_Attr_delete, (at.Comm, at.Keyval)),
      Call(MPI_Abort, (at.Comm, at.Int)),
-     ])
+])
