@@ -404,9 +404,6 @@ class State:
         self.add_request(request)
         return request_id
 
-    def find_request(self, request_id):
-        return self.requests[request_id]
-
     def _finish_request(self, generator, request,
                         index_pointer, index_status):
         assert request.is_completed()
@@ -414,7 +411,8 @@ class State:
         request = request.original_request
         if request is None:
             return
-        if self.active_request_pointer is not None:
+        if self.active_request_pointer is not None and \
+                self.get_persistent_request(request.id) is None:
             generator.controller.write_int(
                     self.active_request_pointer + \
                     generator.REQUEST_SIZE * index_pointer,
