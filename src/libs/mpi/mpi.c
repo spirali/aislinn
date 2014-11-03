@@ -14,16 +14,21 @@
 
 #define INT_TYPES(body) \
 	CASE(MPI_INT, int, body) \
-	CASE(MPI_LONG, long, body)
+	CASE(MPI_UNSIGNED, unsigned, body) \
+	CASE(MPI_LONG, long, body) \
+	CASE(MPI_UNSIGNED_LONG, unsigned long, body) \
+	CASE(MPI_LONG_LONG_INT, long long int, body) \
+	CASE(MPI_UNSIGNED_LONG_LONG, unsigned long long, body) \
+	CASE(MPI_CHAR, char, body)
 
 #define FLOAT_TYPES(body) \
 	CASE(MPI_FLOAT, float, body) \
-	CASE(MPI_DOUBLE, double, body)
+	CASE(MPI_DOUBLE, double, body) \
+	CASE(MPI_LONG_DOUBLE, long double, body)
 
 #define NUM_TYPES(body) \
 	INT_TYPES(body) \
 	FLOAT_TYPES(body)
-
 
 #define DEFINE_OP(name) \
 	static void name(void *input, void *output, int *len, MPI_Datatype *dtype) \
@@ -33,7 +38,7 @@
 
 #define END_OP(name) \
 		default: \
-			fprintf(stderr, "Invalid type for operation " #name "\n"); \
+			fprintf(stderr, "Invalid type for operation " #name " datatype=%i\n", *dtype); \
 			MPI_Abort(MPI_COMM_WORLD, 1); \
 		} \
 	}
