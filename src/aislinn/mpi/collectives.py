@@ -544,7 +544,7 @@ class Bcast(OperationWithSingleBuffer):
                                for t in self.datatypes]))
 
 def execute_reduce_op(generator, state, comm, rank, ccop,
-                      recvbuf, buffers):
+                      recvbuf, buffers, scan=False):
 
     # This is hack to get execution context,
     # By this approach we lost events from reduce function
@@ -564,7 +564,12 @@ def execute_reduce_op(generator, state, comm, rank, ccop,
 
     generator.controller.write_buffer(recvbuf, buffers[0].id)
 
-    for r in xrange(1, ccop.process_count):
+    if scan:
+        limit = rank + 1
+    else:
+        limit = ccop.process_count
+
+    for r in xrange(1, limit):
         buffer_mem = controller.client_malloc_from_buffer(buffers[r].id)
         generator.run_function(
                 state, context,
@@ -679,14 +684,22 @@ class AllReduce(OperationWithBuffers):
         execute_reduce_op(generator, state, comm, rank,
                           self, self.recvbufs[rank], self.buffers)
 
-
-
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.recvbufs))
         hashthread.update(str(self.datatype.type_id))
         hashthread.update(str(self.count))
         hashthread.update(str(self.op))
+
+
+class Scan(AllReduce):
+
+    name = "scan"
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        execute_reduce_op(generator, state, comm, rank,
+                          self, self.recvbufs[rank], self.buffers, scan=True)
 
 
 class CommSplit(CollectiveOperation):

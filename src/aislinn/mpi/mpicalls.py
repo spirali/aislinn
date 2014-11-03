@@ -338,6 +338,14 @@ def MPI_Allreduce(generator, args, state, context):
                                      True,
                                      args)
 
+def MPI_Scan(generator, args, state, context):
+    return call_collective_operation(generator,
+                                     state,
+                                     context,
+                                     collectives.Scan,
+                                     True,
+                                     args)
+
 def MPI_Bcast(generator, args, state, context):
     return call_collective_operation(generator,
                                      state,
@@ -857,6 +865,8 @@ calls_communicating = dict((c.name, c) for c in [
                        at.Datatype, at.Op, at.Int,
                        at.Comm)),
      Call(MPI_Allreduce, (at.Pointer, at.Pointer, at.Count,
+                          at.Datatype, at.Op, at.Comm)),
+     Call(MPI_Scan, (at.Pointer, at.Pointer, at.Count,
                           at.Datatype, at.Op, at.Comm)),
      Call(MPI_Igather, (at.Pointer, at.Count, at.Datatype,
                         at.Pointer, at.Int, at.Int,

@@ -201,6 +201,20 @@ class CollectiveTests(TestCase):
         self.execute(4, stdout=result)
         self.no_errors()
 
+    def test_scan(self):
+        result = set(("OUT[0]: 10 10 10",
+                      "OUT[1]: 15 5 50",
+                      "OUT[2]: 27 5 600",
+                      "OUT[4]: 40 0 0",
+                      "OUT[3]: 40 5 7800"))
+
+        self.program("scan")
+
+        self.execute(1, stdout="OUT[0]: 10 10 10\n")
+        self.no_errors()
+        self.execute(5, stdout=result)
+        self.no_errors()
+
 
 if __name__ == "__main__":
     unittest.main()
