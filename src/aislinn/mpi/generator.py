@@ -243,6 +243,9 @@ class Generator:
 
             self.final_check()
             self.is_full_statespace = True
+        except errormsg.ExecutionError as e:
+            logging.debug("ExecutionError catched")
+            self.add_error_message(e.error_message)
         except StopSearchException:
             logging.debug("StopSearchException catched")
         finally:
@@ -339,10 +342,9 @@ class Generator:
                     e.short_description = "Message truncated"
                     e.description = "Message is bigger than receive buffer"
                     e.pid = state.pid
-                    self.add_error_message(e)
+                    e.throw()
                     # TODO: In fact it is not fatal error, it should be handle
                     # in a way that we can continue
-                    raise StopSearchException()
                 request.datatype.unpack(self.controller,
                                         message.vg_buffer,
                                         count,
@@ -351,7 +353,12 @@ class Generator:
             if request.is_collective():
                 op = state.gstate.get_operation_by_cc_id(request.comm_id,
                                                          request.cc_id)
-                op.complete(self, state)
+                try:
+                    op.complete(self, state)
+                except errormsg.ExecutionError as e:
+                    if e.error_message.node is None:
+                        e.error_message.node = node
+                    raise e
         return True
 
     def fast_partial_expand(self, node, gstate):
@@ -763,8 +770,7 @@ class Generator:
             e.short_description = "Captured state"
             e.description = "The state {0} was captured " \
                             "because of option --debug-state".format(uids)
-            self.add_error_message(e)
-            raise StopSearchException()
+            e.throw()
         return node
 
     def run_function(self, state, context, *args):
