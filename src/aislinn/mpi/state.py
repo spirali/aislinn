@@ -30,6 +30,7 @@ import comm
 import types
 import ops
 from keyval import Keyval
+import logging
 
 class State:
 
@@ -341,12 +342,16 @@ class State:
         request = SendRequest(request_id, send_type,
                               comm_id, target, tag, data_ptr, datatype, count)
         self.add_request(request)
+        logging.debug("New send request pid=%s request_id=%s",
+                      self.pid, request_id)
         return request_id
 
     def add_completed_request(self):
         request_id = self._new_request_id()
         request = CompletedRequest(request_id, None)
         self.add_request(request)
+        logging.debug("New completed request pid=%s request_id=%s",
+                      self.pid, request_id)
         return request_id
 
     def get_request(self, request_id):
@@ -356,6 +361,8 @@ class State:
         return None
 
     def get_request_index(self, request_id):
+        if request_id == consts.MPI_REQUEST_NULL:
+            return -1
         for i, request in enumerate(self.requests):
             if request.id == request_id:
                 return i
@@ -372,6 +379,8 @@ class State:
         request = ReceiveRequest(
                 request_id, comm_id, source, tag, data_ptr, datatype, count)
         self.add_request(request)
+        logging.debug("New recv request pid=%s request_id=%s",
+                      self.pid, request_id)
         return request_id
 
     def make_request_persistent(self, request_id):
@@ -432,6 +441,7 @@ class State:
                           message.size)
 
     def finish_active_requests(self, generator):
+        logging.debug("Removing active requests")
         self.requests = copy.copy(self.requests)
         for index, request_id in enumerate(self.active_request_ids):
             request = self.get_request(request_id)
@@ -508,6 +518,9 @@ class State:
 
     def is_matching_covering_active_requests(self, matching):
         for request_id in self.active_request_ids:
+            if request_id == consts.MPI_REQUEST_NULL:
+                # Ignore MPI_REQUEST_NULL, it get here through MPI_Waitany
+                continue
             request = self.get_request(request_id)
             if request.is_completed():
                 continue
@@ -521,6 +534,9 @@ class State:
     def active_requests_covered_by_matching(self, matching):
         result = []
         for i, request_id in enumerate(self.active_request_ids):
+            if request_id == consts.MPI_REQUEST_NULL:
+                # Ignore MPI_REQUEST_NULL, it get here through MPI_Waitany
+                continue
             request = self.get_request(request_id)
             if request.is_completed():
                 result.append((i, request))

@@ -309,27 +309,10 @@ class Generator:
             assert not request.is_receive() or \
                    message is not None or \
                    request.source == consts.MPI_PROC_NULL
+            logging.debug("Matching pid=%s request=%s message=%s",
+                          state.pid, request, message)
             state.set_request_as_completed(request, message)
-            """
-            if request.pointer is not None:
-                self.controller.write_int(request.pointer,
-                                          consts.MPI_REQUEST_NULL)
-            if request.is_receive() \
-               and request.source == consts.MPI_PROC_NULL \
-               and request.status_ptr:
-                self.write_status(request.status_ptr,
-                                  consts.MPI_PROC_NULL,
-                                  consts.MPI_ANY_TAG,
-                                  0)
-            """
             if message:
-                """
-                if request.status_ptr:
-                    self.write_status(request.status_ptr,
-                                      message.source,
-                                      message.tag,
-                                      message.size)
-                """
                 count = request.datatype.get_count(message.size)
                 if count is None:
                     # This should never happen because
@@ -402,13 +385,20 @@ class Generator:
                    continue
 
                 if state.status == State.StatusWaitAny:
-                    if len(state.active_request_ids) > 1:
+                    count = len(state.active_request_ids) - \
+                                state.active_request_ids.count(consts.MPI_COMM_NULL)
+                    if count > 1:
                         # We cannot continue because we need branch,
                         # so the best we can hope
                         # for is "partial_found"
                         continue
-                    assert len(state.active_request_ids) == 1
-                    self.controller.write_int(state.index_ptr, 1)
+                    assert count == 1
+                    for i, request_id in enumerate(state.active_request_ids):
+                        if request_id != consts.MPI_REQUEST_NULL:
+                            self.controller.write_int(state.index_ptr, i)
+                            break
+                    else:
+                        raise Exception("Internal error")
 
                 logging.debug("Fast expand status=wait pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)

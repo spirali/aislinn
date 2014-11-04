@@ -262,7 +262,17 @@ def MPI_Waitall(generator, args, state, context):
 def MPI_Waitany(generator, args, state, context):
     count, requests_ptr, index_ptr, status_ptr = args
     request_ids = generator.controller.read_ints(requests_ptr, count)
-    check.check_request_ids(state, request_ids)
+
+    for i, request_id in enumerate(request_ids):
+        if request_id == consts.MPI_REQUEST_NULL:
+            continue
+        if state.get_persistent_request(request_id) is None:
+            check.check_request_id(state, request_id)
+        elif not state.get_request(request_id):
+            request_ids[i] = consts.MPI_REQUEST_NULL
+    if all(id == consts.MPI_REQUEST_NULL for id in request_ids):
+        generator.controller.write_int(index_ptr, consts.MPI_UNDEFINED)
+        return False
     state.set_wait(request_ids, requests_ptr, status_ptr,
                    wait_any=True, index_ptr=index_ptr)
     return True

@@ -151,6 +151,11 @@ class SendRecvTests(TestCase):
         self.execute(3, ("b",), stdout=result, send_protocol="randezvous")
         self.no_errors()
 
+    def test_waitany3(self):
+        self.program("waitany3")
+        self.execute(2)
+        self.no_errors()
+
     def test_send_protocol(self):
         self.program("deadlock1")
         self.execute(3, send_protocol="eager")
@@ -247,6 +252,7 @@ class SendRecvTests(TestCase):
         self.no_errors()
         self.execute(2, "6")
         self.single_error("message-truncated")
+
 
 if __name__ == "__main__":
     unittest.main()

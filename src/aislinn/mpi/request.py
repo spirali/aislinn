@@ -20,7 +20,6 @@
 
 from base.utils import EqMixin
 import consts
-import copy
 from message import Message
 
 class Request(EqMixin):
@@ -93,8 +92,8 @@ class SendRequest(Request):
             self.message.compute_hash(hashthread)
 
     def __repr__(self):
-        return "<SendRqst type={0} target={1} tag={2}>" \
-                .format(self.send_type, self.target, self.tag)
+        return "<SendRqst id={0} type={1} target={2} tag={3}>" \
+                .format(self.id, self.send_type, self.target, self.tag)
 
 
 class ReceiveRequest(Request):
@@ -121,7 +120,7 @@ class ReceiveRequest(Request):
         return self.source != consts.MPI_ANY_SOURCE
 
     def __repr__(self):
-        return "<RecvRqst {1:x} source={0.source}, tag={0.tag}>" \
+        return "<RecvRqst {1:x} id={0.id} source={0.source}, tag={0.tag}>" \
                 .format(self, id(self))
 
 
@@ -140,8 +139,8 @@ class CompletedRequest(Request):
         return True
 
     def __repr__(self):
-        return "<CompleteRqst {0:x} {1}>" \
-                .format(id(self), repr(self.original_request))
+        return "<CompleteRqst {0:x} {1} {2}>" \
+                .format(id(self), self.id, repr(self.original_request))
 
 
 class CollectiveRequest(Request):
