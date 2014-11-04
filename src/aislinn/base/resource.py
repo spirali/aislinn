@@ -27,6 +27,10 @@ class Resource:
 
     def inc_ref(self):
         self.ref_count += 1
+        assert self.ref_count > 1
+
+    def inc_ref_revive(self):
+        self.ref_count += 1
         if self.ref_count == 1:
             self.manager.revive(self)
 

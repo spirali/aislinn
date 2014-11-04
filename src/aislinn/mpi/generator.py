@@ -638,7 +638,9 @@ class Generator:
             vg_state = self.vg_state_cache.get(hash)
             if vg_state:
                 logging.debug("State %s retrieved from cache", hash)
-                vg_state.inc_ref()
+                vg_state.inc_ref_revive()
+                # _may_revive is used, because object can be freed this time,
+                # but cache, hence it was not freed yet
                 return vg_state
         else:
             hash = None
