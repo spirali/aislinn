@@ -114,12 +114,13 @@ class State:
 
     def set_attr(self, generator, context, comm, keyval, value):
         key = (comm.comm_id, keyval)
-        self.attrs = copy.copy(self.attrs)
         if key in self.attrs:
             self.delete_attr(generator, context, comm, keyval)
+        self.attrs = copy.copy(self.attrs)
         self.attrs[key] = value
 
     def delete_attr(self, generator, context, comm, keyval):
+        self.attrs = copy.copy(self.attrs)
         key = (comm.comm_id, keyval)
         value = self.attrs[key]
         del self.attrs[key]
