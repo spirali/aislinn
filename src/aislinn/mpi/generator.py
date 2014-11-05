@@ -18,7 +18,7 @@
 #
 
 
-import base.controller
+from base.controller import Controller, UnexpectedOutput
 import errormsg
 from state import State
 from base.node import Node, Arc
@@ -66,7 +66,7 @@ class Generator:
 
     def __init__(self, args, valgrind_args, aislinn_args):
         self.args = args
-        self.controller = base.controller.Controller(args)
+        self.controller = Controller(args)
         self.controller.valgrind_args = valgrind_args
         if aislinn_args.debug_under_valgrind:
             self.controller.debug_under_valgrind = True
@@ -248,6 +248,10 @@ class Generator:
 
             self.final_check()
             self.is_full_statespace = True
+        except UnexpectedOutput as e:
+            logging.debug("UnexpectedOutput catched")
+            error_message = self.unexpected_output_error_message(e.output)
+            self.add_error_message(error_message)
         except errormsg.ExecutionError as e:
             logging.debug("ExecutionError catched")
             self.add_error_message(e.error_message)
@@ -309,43 +313,48 @@ class Generator:
 
     def apply_matching(self, node, state, matching):
         logging.debug("Applying matching state=%s matching=%s", state, matching)
-        for request, message in matching:
-            assert not request.is_receive() or \
-                   message is not None or \
-                   request.source == consts.MPI_PROC_NULL
-            logging.debug("Matching pid=%s request=%s message=%s",
-                          state.pid, request, message)
-            state.set_request_as_completed(request, message)
-            if message:
-                count = request.datatype.get_count(message.size)
-                if count is None:
-                    # This should never happen because
-                    # datatype check should be already performed
-                    raise Exception("Internal error")
-                if count > request.count:
-                    e = errormsg.ErrorMessage()
-                    e.node = node
-                    e.name = "message-truncated"
-                    e.short_description = "Message truncated"
-                    e.description = "Message is bigger than receive buffer"
-                    e.pid = state.pid
-                    e.throw()
-                    # TODO: In fact it is not fatal error, it should be handle
-                    # in a way that we can continue
-                request.datatype.unpack(self.controller,
-                                        message.vg_buffer,
-                                        count,
-                                        request.data_ptr)
-                state.remove_message(message)
-            if request.is_collective():
-                op = state.gstate.get_operation_by_cc_id(request.comm_id,
-                                                         request.cc_id)
-                try:
+        try:
+            for request, message in matching:
+                assert not request.is_receive() or \
+                       message is not None or \
+                       request.source == consts.MPI_PROC_NULL
+                logging.debug("Matching pid=%s request=%s message=%s",
+                              state.pid, request, message)
+                state.set_request_as_completed(request, message)
+                if message:
+                    count = request.datatype.get_count(message.size)
+                    if count is None:
+                        # This should never happen because
+                        # datatype check should be already performed
+                        raise Exception("Internal error")
+                    if count > request.count:
+                        e = errormsg.ErrorMessage()
+                        e.node = node
+                        e.name = "message-truncated"
+                        e.short_description = "Message truncated"
+                        e.description = "Message is bigger than receive buffer"
+                        e.pid = state.pid
+                        e.throw()
+                        # TODO: In fact it is not fatal error, it should be handle
+                        # in a way that we can continue
+                    request.datatype.unpack(self.controller,
+                                            message.vg_buffer,
+                                            count,
+                                            request.data_ptr)
+                    state.remove_message(message)
+                if request.is_collective():
+                    op = state.gstate.get_operation_by_cc_id(request.comm_id,
+                                                             request.cc_id)
                     op.complete(self, state)
-                except errormsg.ExecutionError as e:
-                    if e.error_message.node is None:
-                        e.error_message.node = node
-                    raise e
+        except UnexpectedOutput as e:
+            error_message = self.unexpected_output_error_message(e.output)
+            error_message.node = node
+            error_message.throw()
+        except errormsg.ExecutionError as e:
+            if e.error_message.node is None:
+                e.error_message.node = node
+            raise e
+
         return True
 
     def fast_partial_expand(self, node, gstate):
@@ -655,6 +664,9 @@ class Generator:
         e.stacktrace = self.controller.get_stacktrace()
         return e
 
+    def unexpected_output_error_message(self, output):
+        return self.make_error_message_from_report(output.split())
+
     def process_call(self, name, args, state, context, callback=False):
         try:
             call = mpicalls.calls_non_communicating.get(name)
@@ -673,6 +685,13 @@ class Generator:
                 return call.run(self, args, state, context)
             else:
                 raise Exception("Unkown function call: {0} {1}".format(name, repr(args)))
+        except UnexpectedOutput as e:
+            error_message = self.unexpected_output_error_message(e.output)
+            if callback:
+                error_message.throw()
+            else:
+                context.add_error_message(error_message)
+            return True
         except errormsg.ExecutionError as e:
             logging.debug("ExecutionError: %s", e.error_message)
             error_message = e.error_message
@@ -783,7 +802,8 @@ class Generator:
 
     def create_report(self):
         for error_message in self.error_messages:
-            error_message.events = \
-                    self.statespace.events_to_node(error_message.node,
-                                                   error_message.last_arc)
+            if error_message.node:
+                error_message.events = \
+                        self.statespace.events_to_node(error_message.node,
+                                                       error_message.last_arc)
         return Report(self)

@@ -23,6 +23,11 @@ import subprocess
 import paths
 import time
 
+class UnexpectedOutput(Exception):
+
+    def __init__(self, output):
+        self.output = output
+
 class Controller:
 
     FUNCTION_INT = 0
@@ -199,7 +204,7 @@ class Controller:
         self.send_command(command)
         r = self.receive_line()
         if r != "Ok":
-            raise Exception("Received line is to ok: " + r)
+            raise UnexpectedOutput(r)
 
     def send_and_receive_int(self, command):
         return int(self.send_and_receive(command))

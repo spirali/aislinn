@@ -40,6 +40,13 @@ class MemTests(TestCase):
         self.execute(1)
         self.no_errors()
 
+    def test_invalid_mem(self):
+        self.program("invalidmem")
+        self.execute(1, "noinit")
+        self.single_error("invalidwrite")
+        self.execute(1)
+        self.single_error("invalidwrite")
+
 
 if __name__ == "__main__":
     unittest.main()

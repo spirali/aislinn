@@ -1,6 +1,7 @@
 
 from utils import TestCase
 import unittest
+import base.controller
 
 class VgToolTests(TestCase):
 
@@ -116,6 +117,13 @@ class VgToolTests(TestCase):
         c.restore_state(s)
         self.assertEquals(c.run_function(fn_b, 0, 40), "CALL B 40")
         self.assertEquals(c.run_process(), "FUNCTION_FINISH")
+
+    def test_invalid_extern_write(self):
+        self.program("simple")
+        c = self.controller()
+        c.start()
+        self.assertRaises(base.controller.UnexpectedOutput,
+                          c.write_int, 0x0, 0)
 
 if __name__ == "__main__":
     unittest.main()

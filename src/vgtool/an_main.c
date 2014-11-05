@@ -885,6 +885,10 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 {
    //VG_(printf)("TRACE WRITE %lu %lu\n", addr, size);
    AuxMapEnt *ent = maybe_find_in_auxmap(addr);
+   if (UNLIKELY(ent == NULL)) {
+        report_error_write(addr, size);
+        tl_assert(0); // no return here
+   }
    make_own_copy_of_page(&ent->page);
    Page *page = ent->page;
    Addr offset = addr - page->base;

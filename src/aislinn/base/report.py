@@ -167,11 +167,12 @@ class Report:
             root.append(e)
             ev = xml.Element("events")
             root.append(ev)
-            for event in error.events:
-                e = self.entries_to_xml("event", event.get_entries())
-                e.set("name", event.name)
-                e.set("pid", str(event.pid))
-                ev.append(e)
+            if error.events is not None:
+                for event in error.events:
+                    e = self.entries_to_xml("event", event.get_entries())
+                    e.set("name", event.name)
+                    e.set("pid", str(event.pid))
+                    ev.append(e)
         return xml.ElementTree(root)
 
     def create_html_head(self, html):

@@ -33,6 +33,9 @@ class ErrorMessage:
     function_name = None
 
     stacktrace = None
+    node = None
+    last_arc = None
+    pid = None
 
     def __init__(self):
         self.node = None
@@ -113,7 +116,7 @@ class InvalidArgument(CallError):
 class RuntimeErr(ErrorMessage):
 
     def __init__(self, args):
-        pass
+        ErrorMessage.__init__(self)
 
 
 class HeapExhausted(RuntimeErr):
@@ -130,6 +133,7 @@ class InvalidWrite(RuntimeErr):
     short_description = "Invalid write"
 
     def __init__(self, args):
+        RuntimeErr.__init__(self, args)
         assert len(args) == 2
         self.addr = int(args[0], 16)
         self.size = int(args[1])
