@@ -137,6 +137,7 @@ class OperationWithBuffers(CollectiveOperation):
         self.buffers = [ None ] * self.process_count
 
     def after_copy(self):
+        self.buffers = copy.copy(self.buffers)
         for vg_buffer in self.buffers:
             if vg_buffer:
                 vg_buffer.inc_ref()
