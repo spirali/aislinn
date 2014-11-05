@@ -735,6 +735,9 @@ class State:
                     return i
             i += 1
 
+    def __repr__(self):
+        return "<state {0:x} pid={1}>".format(id(self), self.pid)
+
 # Used for message normalization
 # Matching cannot depenend on order messages according to
 # comm_id and source process

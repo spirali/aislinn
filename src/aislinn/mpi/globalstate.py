@@ -133,3 +133,8 @@ class GlobalState(EqMixin):
         for pid in comm.group.pids():
             self.states[pid].add_comm(new_comm)
         return new_comm
+
+    def sanity_check(self):
+        if self.collective_operations is not None:
+            for op in self.collective_operations:
+                op.sanity_check()

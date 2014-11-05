@@ -212,6 +212,10 @@ class Generator:
         self.statespace.initial_node = self.initial_node
         return False
 
+    def sanity_check(self):
+        for node, gstate in self.working_queue:
+            gstate.sanity_check()
+
     def run(self, process_count):
         self.init_time = datetime.datetime.now()
         self.process_count = process_count
@@ -224,6 +228,7 @@ class Generator:
             tick = self.statistics_tick
             tick_counter = tick
             while self.working_queue:
+                # self.sanity_check()
                 if self.search == "dfs":
                     node, gstate = self.working_queue.pop()
                 else: # bfs
@@ -286,8 +291,6 @@ class Generator:
             gstate.dispose()
         self.cleanup()
 
-
-
     def cleanup(self):
         if self.vg_states.not_used_resources:
             vg_states = self.vg_states.pickup_resources_to_clean()
@@ -305,6 +308,7 @@ class Generator:
         self.controller.write_ints(status_ptr, [ source, tag, size ])
 
     def apply_matching(self, node, state, matching):
+        logging.debug("Applying matching state=%s matching=%s", state, matching)
         for request, message in matching:
             assert not request.is_receive() or \
                    message is not None or \
@@ -360,9 +364,7 @@ class Generator:
 
                 self.controller.restore_state(state.vg_state.id)
 
-                if not self.apply_matching(node, state, matches[0]):
-                    return False
-
+                self.apply_matching(node, state, matches[0])
                 state.vg_state.dec_ref()
                 state.vg_state = self.save_state(True)
                 new_node = self.add_node(node, gstate)
@@ -402,8 +404,7 @@ class Generator:
 
                 logging.debug("Fast expand status=wait pid=%s", state.pid)
                 self.controller.restore_state(state.vg_state.id)
-                if not self.apply_matching(node, state, matches[0]):
-                    return False
+                self.apply_matching(node, state, matches[0])
                 state.finish_active_requests(self)
                 self.execute_state_and_add_node(node, state)
                 return True
@@ -469,7 +470,7 @@ class Generator:
         return False
 
     def expand_node(self, node, gstate):
-        logging.debug("Expanding node %s", node.uid)
+        logging.debug("--------- Expanding node %s %s ------------", node.uid, gstate)
 
         if self.debug_compare_states is not None \
                 and node.uid in self.debug_compare_states:
@@ -561,19 +562,18 @@ class Generator:
             self.execute_state_and_add_node(node, new_state)
 
         matches = state.check_requests()
-        logging.debug("Wait or test all: len(matches)=%s pid=%s",
-                len(matches), state.pid)
+        logging.debug("Wait or test all: state=%s matches=%s", state, matches)
         for matching in matches:
             covered = state.is_matching_covering_active_requests(matching)
             if not covered and not any(r.is_receive() for r, m in matching):
                 # Not all request is completed and no new receive request
                 # matched so there is no reason to create new state
                 continue
+            logging.debug("covered=%s", covered)
             new_gstate = state.gstate.copy()
             new_state = new_gstate.get_state(state.pid)
             self.controller.restore_state(new_state.vg_state.id)
-            if not self.apply_matching(node, new_state, matching):
-                return
+            self.apply_matching(node, new_state, matching)
             if not covered:
                 # Not all active requests are ready, so just apply matchings
                 # and create new state
@@ -597,19 +597,18 @@ class Generator:
         #    self.execute_state_and_add_node(node, new_state)
 
         matches = state.check_requests()
-        logging.debug("Wait or test any: len(matches)=%s pid=%s",
-                len(matches), state.pid)
+        logging.debug("Wait or test any: state=%s matches=%s", state, matches)
         for matching in matches:
             for i, request in \
                 state.active_requests_covered_by_matching(matching):
 
+                logging.debug("Wait any choice: request=%s", request)
                 new_gstate = state.gstate.copy()
                 new_state = new_gstate.get_state(state.pid)
                 self.controller.restore_state(new_state.vg_state.id)
 
-                if not self.apply_matching(node, new_state, matching):
-                    return
-                self.controller.write_int(state.index_ptr, i)
+                self.apply_matching(node, new_state, matching)
+                self.controller.write_int(new_state.index_ptr, i)
 
                 # We need to refresh request, from new state
                 request = new_state.get_request(request.id)
@@ -670,6 +669,7 @@ class Generator:
                                     "called in callback".format(name)
                     e.throw()
             if call is not None:
+                logging.debug("Call %s %s", name, args)
                 return call.run(self, args, state, context)
             else:
                 raise Exception("Unkown function call: {0} {1}".format(name, repr(args)))
@@ -745,23 +745,25 @@ class Generator:
         else:
             hash = None
 
-        uids = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
+        uid = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
                  for state in gstate.states ])
         #uids += [ [ m.vg_buffer.id for m in s.messages ] for s in gstate.states ]
 
-        node = Node(uids, hash)
+        node = Node(uid, hash)
+        logging.debug("New node %s", node.uid)
+
         if prev:
             node.prev = prev
         self.statespace.add_node(node)
         self.working_queue.append((node, gstate))
 
-        if self.debug_state == uids:
+        if self.debug_state == uid:
             e = errormsg.ErrorMessage()
             e.node = node
             e.name = "captured-state"
             e.short_description = "Captured state"
             e.description = "The state {0} was captured " \
-                            "because of option --debug-state".format(uids)
+                            "because of option --debug-state".format(uid)
             e.throw()
         return node
 

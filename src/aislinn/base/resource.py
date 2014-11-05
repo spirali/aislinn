@@ -42,8 +42,9 @@ class Resource:
             assert self.ref_count == 0
             self.manager.add_not_used_resource(self)
 
-    def __str__(self):
-        return "<{0} {1}>".format(self.manager.resource_name, self.id)
+    def __repr__(self):
+        return "<{0} {1:x} {2} ref={3}>".format(
+                self.manager.resource_name, id(self), self.id, self.ref_count)
 
 
 class ResourceManager:

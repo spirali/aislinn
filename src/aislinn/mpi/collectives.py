@@ -36,6 +36,7 @@ class CollectiveOperation:
         self.remaining_processes_enter = self.process_count
         self.remaining_processes_complete = self.process_count
         self.data = None
+        logging.debug("New collective operation %s", self)
 
     def check_compatability(self, op_class, blocking):
         if self.name != op_class.name:
@@ -67,6 +68,7 @@ class CollectiveOperation:
     def enter(self, generator, state, context, comm, args):
         logging.debug("Entering collective operation %s", self)
         assert self.remaining_processes_enter >= 0
+        assert self.remaining_processes_complete >= 0
         self.remaining_processes_enter -= 1
         self.enter_main(generator, state, context, comm, args)
 
@@ -124,6 +126,9 @@ class CollectiveOperation:
                             self.remaining_processes_enter,
                             self.remaining_processes_complete)
 
+    def sanity_check(self):
+        pass
+
 
 class OperationWithBuffers(CollectiveOperation):
 
@@ -147,6 +152,12 @@ class OperationWithBuffers(CollectiveOperation):
                 hashthread.update(vg_buffer.hash)
             else:
                 hashthread.update("-")
+
+    def sanity_check(self):
+        CollectiveOperation.sanity_check(self)
+        for vg_buffer in self.buffers:
+            assert vg_buffer is None or vg_buffer.ref_count > 0, \
+                "Zero reference in " + repr(vg_buffer)
 
 
 class OperationWithSingleBuffer(CollectiveOperation):
@@ -773,6 +784,7 @@ class CommSplit(CollectiveOperation):
         hashthread.update(str(self.keys))
         hashthread.update(str(self.newcomm_ptrs))
         hashthread.update(str(self.comm_ids))
+
 
 class CommDup(CollectiveOperation):
 
