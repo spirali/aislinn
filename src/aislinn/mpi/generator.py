@@ -404,6 +404,11 @@ class Generator:
                         # for is "partial_found"
                         continue
                     assert count == 1
+
+                logging.debug("Fast expand status=wait pid=%s", state.pid)
+                self.controller.restore_state(state.vg_state.id)
+
+                if state.status == State.StatusWaitAny:
                     for i, request_id in enumerate(state.active_request_ids):
                         if request_id != consts.MPI_REQUEST_NULL:
                             self.controller.write_int(state.index_ptr, i)
@@ -411,8 +416,6 @@ class Generator:
                     else:
                         raise Exception("Internal error")
 
-                logging.debug("Fast expand status=wait pid=%s", state.pid)
-                self.controller.restore_state(state.vg_state.id)
                 self.apply_matching(node, state, matches[0])
                 state.finish_active_requests(self)
                 self.execute_state_and_add_node(node, state)
