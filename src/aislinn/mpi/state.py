@@ -385,9 +385,10 @@ class State:
         return request_id
 
     def make_request_persistent(self, request_id):
-        # This function has to be called immediately after add_XXX_request
         request = self.get_request(request_id)
+        self.requests = copy.copy(self.requests)
         self.requests.remove(request)
+        self.persistent_requests = copy.copy(self.persistent_requests)
         self.persistent_requests.append(request)
 
     def remove_persistent_request(self, request):
