@@ -1095,6 +1095,8 @@ static void debug_compare(UWord state_id1, UWord state_id2)
 
     VG_(printf)("Comparing states %lu %lu\n", state_id1, state_id2);
 
+    VG_(printf)("Answer pointers: state1=%p state2=%p\n", image1->answer, image2->answer);
+
     while (p1 < image1->pages_count && p2 < image2->pages_count) {
         Page *page1 = pages1[p1];
         Page *page2 = pages2[p2];
@@ -1146,12 +1148,12 @@ static void debug_compare(UWord state_id1, UWord state_id2)
 
     SizeT size = sizeof(ThreadArchState);
     //size -= offsetof(VexGuestArchState, guest_RAX);
-    char *s1 = ((char*) &state1->threadstate); // + offsetof(VexGuestArchState, guest_RAX);
-    char *s2 = ((char*) &state2->threadstate); // + offsetof(VexGuestArchState, guest_RAX);
+    UChar *s1 = ((UChar*) &state1->threadstate); // + offsetof(VexGuestArchState, guest_RAX);
+    UChar *s2 = ((UChar*) &state2->threadstate); // + offsetof(VexGuestArchState, guest_RAX);
     for (i = 0; i < size; i++) {
         if (s1[i] != s2[i]) {
-            VG_(printf)("Arch.vex %lu: %d %d\n",
-                        i, (int) s1[i], (int) s2[i]);
+            VG_(printf)("Arch.vex %lu: %d (%x) %d (%x) words (%lx, %lx)\n",
+                        i, s1[i], s1[i], s2[i], s2[i], *((UWord*) &s1[i]), *((UWord*) &s2[i]));
         }
     }
 

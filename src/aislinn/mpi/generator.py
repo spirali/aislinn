@@ -105,7 +105,8 @@ class Generator:
         self.debug_state = aislinn_args.debug_state
         if aislinn_args.debug_compare_states:
             self.debug_compare_states = \
-                aislinn_args.debug_compare_states.split(";")
+                aislinn_args.debug_compare_states.split("~")
+            logging.info("debug_compare_states=%s", self.debug_compare_states)
         else:
             self.debug_compare_states = None
         self.debug_captured_states = None
@@ -244,6 +245,8 @@ class Generator:
 
                 if self.statespace.nodes_count > self.max_states:
                     logging.info("Maximal number of states reached")
+                    if self.debug_compare_states is not None:
+                        self.debug_compare()
                     return True
 
             self.final_check()

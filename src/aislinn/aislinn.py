@@ -104,10 +104,11 @@ def parse_args():
                        type=str,
                        default=None)
     parser.add_argument("--debug-compare-states",
-                       metavar="NAME",
+                       metavar="STATE~STATE",
                        type=str,
                        default=None)
-
+    parser.add_argument("--debug-statespace",
+                       action="store_true")
     args = parser.parse_args()
 
     if args.verbose == 0:
@@ -196,6 +197,10 @@ def main():
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
         logging.info("Statespace graph written into 'statespace.dot'")
+
+    if args.debug_statespace:
+        generator.statespace.write("statespace.txt")
+        logging.info("Statespace written into 'statespace.txt'")
 
     if args.output == "xml":
         generator.create_report().write_xml("report.xml")

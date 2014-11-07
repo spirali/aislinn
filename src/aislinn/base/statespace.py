@@ -57,6 +57,16 @@ class StateSpace:
                 _write_node(node)
             f.write("}\n")
 
+    def write(self, filename):
+        def _write_node(node):
+            f.write("{0}\n".format(node.uid))
+            for arc in node.arcs:
+                f.write("\t{0} {1}\n".format(arc.node.uid, arc.label))
+        with open(filename, "w") as f:
+            f.write("{0}\n".format(self.initial_node.uid))
+            for node in self.all_nodes():
+                _write_node(node)
+
     def arcs_to_node(self, node):
         end = self.initial_node
         n = node
