@@ -73,12 +73,19 @@ typedef
    } VA;
 
 typedef
+   enum {
+      INVALID_HASH,
+      VALID_HASH,
+      EMPTY,
+   } PageStatus;
+
+typedef
    struct {
       Addr base;
       Int ref_count;
       VA *va;
       UChar *data;
-      Bool has_hash;
+      PageStatus status;
       MD5_Digest hash;
    } Page;
 
@@ -448,7 +455,7 @@ static Page *page_new(Addr a)
     Page *page = (Page*) VG_(malloc)("an.page", sizeof(Page));
     page->base = a;
     page->ref_count = 1;
-    page->has_hash = False;
+    page->status = EMPTY;
     page->data = NULL;
     page->va = VG_(malloc)("an.va", sizeof(VA));
     VG_(memset)(page->va, 0, sizeof(VA));
@@ -460,6 +467,7 @@ static Page *page_new(Addr a)
 static Page* page_clone(Page *page)
 {
    Page *new_page = page_new(page->base);
+   new_page->status = page->status;
    VG_(memcpy)(new_page->va, page->va, sizeof(VA));
    return new_page;
 }
@@ -507,20 +515,14 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
    return nyu;
 }
 
-static void INLINE make_own_copy_of_page(Page **page) {
-   VPRINT(3, "make_own_copy base=%lx refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
+static void INLINE page_prepare_for_write(Page **page) {
+   VPRINT(3, "page_prepare_for_write base=%lx refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
    if (UNLIKELY((*page)->ref_count >= 2)) {
       (*page)->ref_count--;
       Page *new_page = page_clone(*page);
       *page = new_page;
-   } else {
-    (*page)->has_hash = False;
    }
-}
-
-
-static void INLINE page_prepare_for_va_write(Page **page) {
-   make_own_copy_of_page(page);
+   (*page)->status = INVALID_HASH;
 }
 
 static INLINE Page** get_page_ptr (Addr a)
@@ -558,7 +560,7 @@ void set_address_range_perms (
    }
 
    page_ptr = get_page_ptr(a);
-   page_prepare_for_va_write(page_ptr);
+   page_prepare_for_write(page_ptr);
    va = (*page_ptr)->va;
    pg_off = PAGE_OFF(a);
    while (lenA > 0) {
@@ -572,7 +574,7 @@ void set_address_range_perms (
 part2:
    while (lenB >= PAGE_SIZE) {
       page_ptr = get_page_ptr(a);
-      page_prepare_for_va_write(page_ptr);
+      page_prepare_for_write(page_ptr);
       va = (*page_ptr)->va;
 
       VG_(memset)(&((va)->vabits), perm, VA_CHUNKS);
@@ -583,7 +585,7 @@ part2:
    tl_assert(lenB < PAGE_SIZE);
 
    page_ptr = get_page_ptr(a);
-   page_prepare_for_va_write(page_ptr);
+   page_prepare_for_write(page_ptr);
    va = (*page_ptr)->va;
    pg_off = 0;
    while (lenB > 0) {
@@ -612,21 +614,21 @@ static void hash_to_string(MD5_Digest *digest, char *out);
 
 static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
 {
-   if (!page->has_hash) {
+   if (page->status == INVALID_HASH) {
       //VPRINT(2, "rehashing page %lu\n", page->base);
-      page->has_hash = True;
       AN_(MD5_CTX) ctx2;
       AN_(MD5_Init)(&ctx2);
       UWord i;
       /* This is quite performance critical
        * It needs benchmarking before changing this code */
-      UChar *d = (UChar*) page->base;
+      UChar *base = (UChar*) page->base;
       SizeT s = 0;
-      UChar *b = d;
+      UChar *b = base;
+      Bool empty = True;
       for (i = 0; i < PAGE_SIZE; i++) {
          if (page->va->vabits[i]) {
             if (s == 0) {
-               b = d + i;
+               b = base + i;
             }
             s++;
          } else if (s != 0) {
@@ -634,16 +636,26 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
             for (xx = 0; xx < s; xx++) {
                 VG_(printf)("%d,", b[xx]);
             }*/
+            empty = False;
             AN_(MD5_Update)(&ctx2, b, s);
             s = 0;
          }
       }
       if (s != 0) {
+         empty = False;
          AN_(MD5_Update)(&ctx2, b, s);
       }
+
+      if (empty) {
+        page->status = EMPTY;
+        return;
+      }
       AN_(MD5_Final)(&page->hash, &ctx2);
+      page->status = VALID_HASH;
    }
-   AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
+   if (page->status != EMPTY) {
+        AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
+   }
 }
 
 /*static void page_dump(Page *page)
@@ -889,7 +901,7 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
         report_error_write(addr, size);
         tl_assert(0); // no return here
    }
-   make_own_copy_of_page(&ent->page);
+   page_prepare_for_write(&ent->page);
    Page *page = ent->page;
    Addr offset = addr - page->base;
    SizeT i;
