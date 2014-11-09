@@ -43,17 +43,25 @@ class CollectiveTests(TestCase):
                   "OUT2: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n"
         self.program("gatherv")
 
-        self.execute(1, "waitall", stdout=output1)
+        self.execute(1, "gatherv", stdout=output1)
         self.no_errors()
-        self.execute(3, "waitall", stdout=output3)
+        self.execute(3, "gatherv", stdout=output3)
         self.no_errors()
 
-        self.execute(1, "wait", stdout=output1)
+        self.execute(1, "iwaitall", stdout=output1)
         self.no_errors()
-        self.execute(3, "wait", stdout=output3)
+        self.execute(3, "iwaitall", stdout=output3)
+        self.no_errors()
+
+        self.execute(1, "iwait", stdout=output1)
+        self.no_errors()
+        self.execute(3, "iwait", stdout=output3)
         self.no_errors()
 
         self.execute(3, "mismatch")
+        self.single_error("rootmismatch")
+
+        self.execute(3, "imismatch")
         self.single_error("rootmismatch")
 
     def test_allgatherv(self):

@@ -42,12 +42,7 @@ int main(int argc, char **argv)
 		ds += recvs[i];
 	}
 
-	if (!strcmp(argv[1], "waitall")) {
-		MPI_Gatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
-		MPI_Gatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
-	}
-
-	if (!strcmp(argv[1], "wait")) {
+	if (!strcmp(argv[1], "gatherv")) {
 		MPI_Gatherv(&d, mysize, MPI_INT, out1, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
 		MPI_Gatherv(&d, mysize, MPI_INT, out2, recvs, displs, MPI_INT, root, MPI_COMM_WORLD);
 	}
