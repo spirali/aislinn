@@ -373,6 +373,61 @@ class Allgather(OperationWithBuffers):
         hashthread.update(str(self.recvbufs))
 
 
+class Allgatherv(OperationWithBuffers):
+
+    name = "allgatherv"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
+        self.recvbufs = [ None ] * self.process_count
+        self.recvcounts = [ None ] * self.process_count
+        self.recvtypes = [ None ] * self.process_count
+        self.displs =  [ None ] * self.process_count
+
+    def enter_main(self,
+                   generator,
+                   state,
+                   context,
+                   comm,
+                   args):
+        sendbuf, sendcount, sendtype, \
+               recvbuf, recvcounts, displs, recvtype = args
+        rank = state.get_rank(comm)
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer_and_pack(
+                sendtype, sendcount, sendbuf)
+
+        recvtype = check.check_datatype(state, recvtype, 7)
+        self.recvtypes[rank] = recvtype
+        self.recvbufs[rank] = recvbuf
+        self.recvcounts[rank] = generator.controller.read_ints(
+                recvcounts, self.process_count)
+        self.displs[rank] = generator.controller.read_ints(
+                displs, self.process_count)
+
+    def can_be_completed(self, state):
+        return self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        controller = generator.controller
+        recvbuf = self.recvbufs[rank]
+        recvtype = self.recvtypes[rank]
+        for vg_buffer, count, displ in zip(self.buffers,
+                                           self.recvcounts[rank],
+                                           self.displs[rank]):
+            recvtype.unpack(controller,
+                            vg_buffer,
+                            count,
+                            recvbuf + displ * recvtype.size)
+
+    def compute_hash_data(self, hashthread):
+        OperationWithBuffers.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.recvbufs))
+        hashthread.update(str(self.recvtypes))
+        hashthread.update(str(self.displs))
+
+
 class Scatterv(OperationWithSingleBuffer):
 
     name = "scatterv"

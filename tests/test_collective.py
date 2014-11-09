@@ -56,6 +56,17 @@ class CollectiveTests(TestCase):
         self.execute(3, "mismatch")
         self.single_error("rootmismatch")
 
+    def test_allgatherv(self):
+        output1 = "OUT1: 100 101\n" \
+                  "OUT2: 100 101\n"
+        output3 = 3 * "OUT1: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n"\
+                      "OUT2: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n"
+        self.program("allgatherv")
+        self.execute(1, stdout=output1)
+        self.no_errors()
+        self.execute(3, stdout=output3)
+        self.no_errors()
+
     def test_igather(self):
         output = "OUT1: 100 101 102 103 200 201 202 203 300 301 302 303\n" \
                  "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 3000 3001 3002 3003\n"
