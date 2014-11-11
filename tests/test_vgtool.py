@@ -48,6 +48,7 @@ class VgToolTests(TestCase):
         stats = c.get_stats()
         # All pages are active
         self.assertEquals(stats["pages"], stats["active-pages"])
+        c.kill()
 
     def test_local(self):
         self.program("local")
@@ -60,6 +61,7 @@ class VgToolTests(TestCase):
         c.write_int(arg, 210);
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
+        c.kill()
 
     def test_global(self):
         self.program("global")
@@ -72,6 +74,7 @@ class VgToolTests(TestCase):
         c.write_int(arg, 210);
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
+        c.kill()
 
     def test_restore_after_quit(self):
         self.program("simple")
@@ -98,6 +101,7 @@ class VgToolTests(TestCase):
         self.assertNotEquals(h1, h2)
         self.assertNotEquals(h2, h3)
         self.assertNotEquals(h2, h3)
+        c.kill()
 
     def test_function_call(self):
         self.program("function")
@@ -117,6 +121,7 @@ class VgToolTests(TestCase):
         c.restore_state(s)
         self.assertEquals(c.run_function(fn_b, 0, 40), "CALL B 40")
         self.assertEquals(c.run_process(), "FUNCTION_FINISH")
+        c.kill()
 
     def test_invalid_extern_write(self):
         self.program("simple")
@@ -124,6 +129,35 @@ class VgToolTests(TestCase):
         c.start()
         self.assertRaises(base.controller.UnexpectedOutput,
                           c.write_int, 0x0, 0)
+        c.kill()
+
+    def test_syscall(self):
+        self.program("syscall")
+        c = self.controller()
+        c.discard_stdout = True
+        c.start()
+        s = c.save_state()
+
+        self.assertEquals(c.run_process(), "CALL Second")
+        c.restore_state(s)
+        c.set_capture_syscall("write", True)
+        action, syscall, fd, data_ptr, size = c.run_process().split()
+        self.assertEquals(action, "SYSCALL")
+        self.assertEquals(syscall, "write")
+        self.assertEquals(fd, "1")
+        self.assertEquals(c.read_mem(data_ptr, size), "Hello 1!\n")
+        action, syscall, fd, data_ptr, size = c.run_process().split()
+        self.assertEquals(action, "SYSCALL")
+        self.assertEquals(syscall, "write")
+        self.assertEquals(fd, "1")
+        self.assertEquals(c.read_mem(data_ptr, size), "Hello 2!\n")
+        self.assertEquals(c.run_process(), "CALL Second")
+
+        c.restore_state(s)
+        c.set_capture_syscall("write", False)
+        self.assertEquals(c.run_process(), "CALL Second")
+
+        c.kill()
 
 if __name__ == "__main__":
     unittest.main()

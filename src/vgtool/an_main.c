@@ -46,13 +46,14 @@
 #include "../../include/aislinn.h"
 #include "md5/md5.h"
 
+#include <linux/unistd.h>
+
 /* Here, the internals of valgring are exponsed
  * But aislinn cannot work without it.
  * Some sufficient public interface should be
  * made in the future */
 #include "../coregrind/pub_core_threadstate.h"
 #include "../coregrind/pub_core_libcfile.h"
-
 
 #define INLINE    inline __attribute__((always_inline))
 #define NOINLINE __attribute__ ((noinline))
@@ -148,6 +149,10 @@ Int message_buffer_size = 0;
 
 Int server_port = -1;
 
+struct {
+    Bool syscall_write;
+} capture_syscalls;
+
 static struct {
    Word pages; // Number of currently allocated pages
    Word buffers_size; // Sum of buffer sizes
@@ -158,7 +163,8 @@ typedef
       CET_FINISH,
       CET_CALL,
       CET_FUNCTION,
-      CET_REPORT,
+      CET_SYSCALL,
+      CET_REPORT,      
    } CommandsEnterType;
 
 static void write_message(const char *str);
@@ -998,6 +1004,21 @@ static void write_message(const char *str)
    tl_assert(r == len);
 }
 
+// Same as write_message but with DATA message
+static void write_data(void *ptr, SizeT size)
+{
+   char tmp[100];
+   VG_(snprintf)(tmp, 100, "DATA %lu\n", size);
+   write_message(tmp);
+   VPRINT(1, "AN>> [[ DATA at=%p size=%lu ]]", ptr, size);
+   Int r = VG_(write_socket)(control_socket, ptr, size);
+   if (r == -1) {
+      VG_(printf)("Connection closed\n");
+      VG_(exit)(1);
+   }
+}
+
+
 struct BufferCtrl {
    HChar *buffer;
    int size;
@@ -1088,7 +1109,7 @@ static void process_commands_init(CommandsEnterType cet,
    ThreadState *tst = VG_(get_ThreadState)(1);
    tl_assert(tst);
    tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
-   tl_assert(!tst->sched_jmpbuf_valid || cet == CET_REPORT);
+   tl_assert(cet == CET_SYSCALL || !tst->sched_jmpbuf_valid || cet == CET_REPORT);
    // Reset invalid jmpbuf to make be able generate reasonable hash of state
    // If cet == CET_REPORT then we do not return to program so we dont care about hash
    tst->arch.vex.guest_RDX = 0; // Result of client request
@@ -1190,6 +1211,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       char *cmd = VG_(strtok(command, " "));
 
       if (!VG_(strcmp(cmd, "SAVE"))) {
+         tl_assert(cet != CET_SYSCALL);
          State *state = state_save_current();
          VG_(HT_add_node(states_table, state));
          VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", state->id));
@@ -1198,6 +1220,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp)(cmd, "RESTORE")) {
+         tl_assert(cet != CET_SYSCALL);
          UWord state_id = next_token_uword();
 
          State *state = (State*) VG_(HT_lookup(states_table, state_id));
@@ -1289,10 +1312,15 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                                          MAX_MESSAGE_BUFFER_LENGTH - written,
                                          "\n");
                 tl_assert(written < MAX_MESSAGE_BUFFER_LENGTH);
-             } else {
-            write_message("Error: Invalid argument\n");
-            VG_(exit)(1);
+         } else if(!VG_(strcmp)(param, "mem")) {
+                SizeT size = next_token_uword();
+                write_data(addr, size);
+                continue; // we want to skip "write_message" at the end of switch
+         } else {
+                write_message("Error: Invalid argument\n");
+                VG_(exit)(1);
          }
+
          write_message(command);
          continue;
       }
@@ -1305,7 +1333,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          ThreadState *tst = VG_(get_ThreadState)(1);
          tl_assert(tst);
          tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
-         tl_assert(!tst->sched_jmpbuf_valid || cet == CET_REPORT);
+         tl_assert(cet == CET_SYSCALL || !tst->sched_jmpbuf_valid);
 
          if (cet == CET_FINISH) { // Thread finished, so after restore, status has to be fixed
             tst->status = VgTs_Init;
@@ -1380,6 +1408,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "HASH"))) {
+         tl_assert(cet != CET_SYSCALL);
          MD5_Digest digest;
          char digest_str[33]; // 16 * 2 + 1
          AN_(MD5_CTX) ctx;
@@ -1454,6 +1483,21 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "QUIT"))) {
+         VG_(exit)(1);
+      }
+
+      if (!VG_(strcmp(cmd, "SET"))) {
+         char *param = next_token();
+         if (!VG_(strcmp)(param, "syscall")) {
+             param = next_token();
+             Bool value = !VG_(strcmp)(next_token(), "on");
+             if (!VG_(strcmp)(param, "write")) {
+                 capture_syscalls.syscall_write = value;
+                 write_message("Ok\n");
+                 continue;
+             }
+         }
+         write_message("Error: Invalid argument\n");
          VG_(exit)(1);
       }
 
@@ -1803,7 +1847,26 @@ void post_reg_write_clientcall ( ThreadId tid,
    post_reg_write(/*dummy*/0, tid, offset, size);
 }
 
+static
+void pre_syscall_wrap(ThreadId tid, UInt syscallno,
+                      UWord* args, UInt nArgs)
+{
+    if (syscallno == __NR_write && capture_syscalls.syscall_write) {
+        char message[MAX_MESSAGE_BUFFER_LENGTH];
+        VG_(snprintf)(message,
+                      MAX_MESSAGE_BUFFER_LENGTH,
+                      "SYSCALL write %lu %lu %lu\n",
+                      args[0], args[1], args[2]);
+        write_message(message);
+        process_commands(CET_SYSCALL, NULL);
+    }
+}
 
+static
+void post_syscall_wrap(ThreadId tid, UInt syscallno,
+                       UWord* args, UInt nArgs, SysRes sys)
+{
+}
 
 static void an_pre_clo_init(void)
 {
@@ -1866,6 +1929,10 @@ static void an_pre_clo_init(void)
    VG_(track_post_reg_write_clientcall_return)(post_reg_write_clientcall);
 
    VG_(needs_client_requests) (an_handle_client_request);
+
+   VG_(needs_syscall_wrapper)(pre_syscall_wrap, post_syscall_wrap);
+
+   VG_(memset)(&capture_syscalls, 0, sizeof(capture_syscalls));
 }
 
 VG_DETERMINE_INTERFACE_VERSION(an_pre_clo_init)

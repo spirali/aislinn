@@ -22,6 +22,7 @@ import socket
 import subprocess
 import paths
 import time
+import os
 
 class UnexpectedOutput(Exception):
 
@@ -37,6 +38,8 @@ class Controller:
 
     debug_under_valgrind = False
     profile_under_valgrind = False
+
+    discard_stdout = False
 
     def __init__(self, args, cwd=None):
         self.process = None
@@ -130,6 +133,9 @@ class Controller:
         self.send_and_receive_ok("WRITE {0} ints {1} {2}\n" \
                 .format(addr, len(values), " ".join(map(str, values))))
 
+    def read_mem(self, addr, size):
+        return self.send_and_receive_data("READ {0} mem {1}\n".format(addr, size))
+
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))
 
@@ -186,6 +192,21 @@ class Controller:
             if len(b) > 40960:
                 raise Exception("Message too long")
 
+    def receive_data(self):
+        args = self.receive_result().split()
+        keyword, size = args
+        data_size = int(size)
+        data = self.recv_buffer[:data_size]
+        self.recv_buffer = self.recv_buffer[data_size:]
+        remaining = data_size - len(data)
+        while remaining > 0:
+            self.recv_buffer = self.conn.recv(4096)
+            data += self.recv_buffer[:remaining]
+            self.recv_buffer = self.recv_buffer[remaining:]
+            remaining = data_size - len(data)
+        assert len(data) == data_size
+        return data
+
     def send_command(self, command):
         assert command[-1] == "\n", "Command does not end with new line"
         self.conn.sendall(command)
@@ -200,6 +221,10 @@ class Controller:
         self.send_command(command)
         return self.receive_result()
 
+    def send_and_receive_data(self, command):
+        self.send_command(command)
+        return self.receive_data()
+
     def send_and_receive_ok(self, command):
         self.send_command(command)
         r = self.receive_line()
@@ -211,7 +236,11 @@ class Controller:
 
     def debug_compare(self, state_id1, state_id2):
         self.send_and_receive_ok(
-                "DEBUG_COMPARE {0} {1}\n".format(state_id1, state_id2))
+             "DEBUG_COMPARE {0} {1}\n".format(state_id1, state_id2))
+
+    def set_capture_syscall(self, syscall, value):
+        self.send_and_receive_ok(
+             "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
 
     def _start_valgrind(self, port):
         args = (
@@ -234,7 +263,12 @@ class Controller:
                 "--smc-check=all-non-file",
                 "--run-libc-freeres=no") + extra + args
 
-        self.process = subprocess.Popen(args, cwd=self.cwd)
+        if self.discard_stdout:
+            stdout = open(os.devnull, 'wb')
+        else:
+            stdout = None
+
+        self.process = subprocess.Popen(args, cwd=self.cwd, stdout=stdout)
 
     def _start_server(self):
         HOST = "127.0.0.1" # Connection only from localhost
