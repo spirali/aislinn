@@ -17,7 +17,6 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
 from mpi.generator import Generator
 import base.utils as utils
 import argparse

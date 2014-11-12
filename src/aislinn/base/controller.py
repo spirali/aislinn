@@ -22,7 +22,6 @@ import socket
 import subprocess
 import paths
 import time
-import os
 
 class UnexpectedOutput(Exception):
 
@@ -39,7 +38,7 @@ class Controller:
     debug_under_valgrind = False
     profile_under_valgrind = False
 
-    discard_stdout = False
+    stdout_arg = None
 
     def __init__(self, args, cwd=None):
         self.process = None
@@ -78,6 +77,9 @@ class Controller:
 
     def run_process(self):
         return self.send_and_receive("RUN\n")
+
+    def run_drop_syscall(self):
+        return self.send_and_receive("RUN_DROP_SYSCALL\n")
 
     def run_function(self, fn_pointer, fn_type, *args):
         command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(
@@ -263,12 +265,8 @@ class Controller:
                 "--smc-check=all-non-file",
                 "--run-libc-freeres=no") + extra + args
 
-        if self.discard_stdout:
-            stdout = open(os.devnull, 'wb')
-        else:
-            stdout = None
-
-        self.process = subprocess.Popen(args, cwd=self.cwd, stdout=stdout)
+        self.process = subprocess.Popen(
+            args, cwd=self.cwd, stdout=self.stdout_arg)
 
     def _start_server(self):
         HOST = "127.0.0.1" # Connection only from localhost

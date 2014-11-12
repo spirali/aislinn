@@ -2,6 +2,8 @@
 from utils import TestCase
 import unittest
 import base.controller
+import os
+import subprocess
 
 class VgToolTests(TestCase):
 
@@ -134,7 +136,7 @@ class VgToolTests(TestCase):
     def test_syscall(self):
         self.program("syscall")
         c = self.controller()
-        c.discard_stdout = True
+        c.stdout_arg = open(os.devnull, "rb")
         c.start()
         s = c.save_state()
 
@@ -158,6 +160,20 @@ class VgToolTests(TestCase):
         self.assertEquals(c.run_process(), "CALL Second")
 
         c.kill()
+
+    def test_syscall2(self):
+        self.program("syscall")
+        c = self.controller()
+        c.stdout_arg = subprocess.PIPE
+        c.start()
+        c.set_capture_syscall("write", True)
+        c.run_process()
+        c.run_drop_syscall()
+        self.assertEquals(c.run_process(), "CALL Second")
+        self.assertEquals(c.process.stdout.readline(), "Hello 2!\n")
+        c.kill()
+
+
 
 if __name__ == "__main__":
     unittest.main()

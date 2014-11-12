@@ -54,6 +54,7 @@
  * made in the future */
 #include "../coregrind/pub_core_threadstate.h"
 #include "../coregrind/pub_core_libcfile.h"
+#include "../coregrind/pub_core_syscall.h"
 
 #define INLINE    inline __attribute__((always_inline))
 #define NOINLINE __attribute__ ((noinline))
@@ -151,6 +152,8 @@ Int server_port = -1;
 
 struct {
     Bool syscall_write;
+
+    Bool drop_this_syscall;
 } capture_syscalls;
 
 static struct {
@@ -1341,6 +1344,13 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          return;
       }
 
+      if (!VG_(strcmp(cmd, "RUN_DROP_SYSCALL"))) {
+         tl_assert(cet == CET_SYSCALL);
+         tl_assert(!capture_syscalls.drop_this_syscall);
+         capture_syscalls.drop_this_syscall = True;
+         return;
+      }
+
       if (!VG_(strcmp(cmd, "RUN_FUNCTION"))) {
          if (UNLIKELY(current_memspace->answer == NULL)) {
             VG_(printf)("Function cannot be called from this context\n");
@@ -1848,8 +1858,8 @@ void post_reg_write_clientcall ( ThreadId tid,
 }
 
 static
-void pre_syscall_wrap(ThreadId tid, UInt syscallno,
-                      UWord* args, UInt nArgs)
+Bool syscall_control(ThreadId tid, UInt syscallno,
+                      UWord* args, UInt nArgs, SysRes *sysres)
 {
     if (syscallno == __NR_write && capture_syscalls.syscall_write) {
         char message[MAX_MESSAGE_BUFFER_LENGTH];
@@ -1858,15 +1868,22 @@ void pre_syscall_wrap(ThreadId tid, UInt syscallno,
                       "SYSCALL write %lu %lu %lu\n",
                       args[0], args[1], args[2]);
         write_message(message);
+        capture_syscalls.drop_this_syscall = False;
         process_commands(CET_SYSCALL, NULL);
+        if (capture_syscalls.drop_this_syscall) {
+            // Simulate that everything was written, arg[2] = len of buffer
+            *sysres = VG_(mk_SysRes_Success)(args[2]);
+            return False;
+        }
     }
+    return True;
 }
 
-static
+/*static
 void post_syscall_wrap(ThreadId tid, UInt syscallno,
                        UWord* args, UInt nArgs, SysRes sys)
 {
-}
+}*/
 
 static void an_pre_clo_init(void)
 {
@@ -1930,7 +1947,7 @@ static void an_pre_clo_init(void)
 
    VG_(needs_client_requests) (an_handle_client_request);
 
-   VG_(needs_syscall_wrapper)(pre_syscall_wrap, post_syscall_wrap);
+   VG_(needs_syscall_control)(syscall_control);
 
    VG_(memset)(&capture_syscalls, 0, sizeof(capture_syscalls));
 }
