@@ -81,15 +81,24 @@ def parse_args():
                        metavar="N",
                        type=int,
                        default=9999999)
+
+    parser.add_argument('--stdout',
+                        metavar="MODE",
+                        choices=["capture", "capture", "print", "drop"],
+                        default="capture",
+                        help="")
+
     parser.add_argument("--search",
                         metavar="SEARCH",
                         type=str,
                         default="bfs",
                         help="Statespace search strategy (bfs or dfs)")
+
     parser.add_argument("--stats",
                        metavar="TICKS",
                        type=int,
                        default=None)
+
     parser.add_argument("--write-dot",
                        action="store_true")
     parser.add_argument("--debug-under-valgrind",
@@ -98,6 +107,8 @@ def parse_args():
                        action="store_true")
     parser.add_argument("--profile",
                        action="store_true")
+
+    # Internal debug options
     parser.add_argument("--debug-state",
                        metavar="NAME",
                        type=str,
@@ -175,9 +186,10 @@ def main():
                          "The current version supports only 64b Linux")
            sys.exit(1)
 
-
     logging.debug("Run args: %s", run_args)
     logging.debug("Valgrind args: %s", valgrind_args)
+
+    logging.info("stdout mode: %s, stderr mode: -", args.stdout)
 
     if args.profile:
         import cProfile

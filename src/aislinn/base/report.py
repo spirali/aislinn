@@ -111,6 +111,8 @@ class Report:
         self.program_info.add("search",
                               generator.search,
                               "Search strategy")
+        self.program_info.add(
+                "stdout-mode", generator.stdout_mode, "Stdout mode")
 
         if generator.send_protocol == "threshold":
             self.program_info.add(
@@ -260,17 +262,22 @@ class Report:
                     .format(len(self.error_messages)))
             for error in self.error_messages:
                 div.child("h3", "Error: " + error.short_description)
-                lst = div.child("ul")
-                lst.child("li", error.description)
+                div.text(error.description)
                 if error.pid is not None:
-                    lst.child("li", "Rank {0} in MPI_COMM_WORLD".format(error.pid))
+                    div.child("h4", "Rank")
+                    div.text("Error occured on rank {0} in MPI_COMM_WORLD".format(error.pid))
                 if error.stacktrace is not None:
-                    li = lst.child("li", "Stacktrace:")
-                    li.child("pre", "{0}" \
+                    div.child("h4", "Stacktrace")
+                    div.child("pre", "{0}" \
                             .format(error.stacktrace.replace("|", "<br>")))
                 if error.events:
-                    li = lst.child("li", "Events:")
-                    self.export_events(error.events, li)
+                    div.child("h4", "Events")
+                    self.export_events(error.events, div)
+                if error.stdout:
+                    div.child("h4", "Stdout")
+                    for rank, stdout in enumerate(error.stdout):
+                        self.export_stream("stdout for rank {0}".format(rank),
+                                           stdout, div)
         else:
             div.child("p", "No errors found")
 
@@ -279,6 +286,10 @@ class Report:
             self.write_html_statistics(div)
 
         return html
+
+    def export_stream(self, title, stream, parent):
+        parent.child("h5", title)
+        parent.child("pre", stream if stream else ">>> EMPTY <<<")
 
     def write_xml(self, filename):
         self.create_xml().write(filename)
@@ -339,6 +350,11 @@ h2 {
 h3 {
 	font-size: 1.5em;
 	margin-top: 2em;
+}
+
+h4 {
+	font-size: 1.3em;
+	margin-top: 1.2em;
 }
 
 p {

@@ -22,6 +22,7 @@ from base.controller import Controller, UnexpectedOutput
 import errormsg
 from state import State
 from base.node import Node, Arc
+from base.stream import StreamChunk, STREAM_STDOUT
 from base.statespace import StateSpace
 from collections import deque
 from globalstate import GlobalState
@@ -36,16 +37,35 @@ import base.resource
 import logging
 import sys
 import datetime
+import copy
 
 
 class ExecutionContext:
 
     def __init__(self):
         self.events = []
+        self.stream_chunks = []
         self.error_messages = None
 
     def add_event(self, event):
         self.events.append(event)
+
+    def add_stream_chunk(self, stream_name, pid, data):
+        self.stream_chunks.append(((stream_name, pid), data))
+
+    def get_compact_stream_chunks(self):
+        if not self.stream_chunks:
+            return None
+        streams = {}
+        for key, data in self.stream_chunks:
+            lst = streams.get(key)
+            if lst is None:
+                lst = []
+                streams[key] = lst
+            lst.append(data)
+        return [ StreamChunk(key[0], key[1], "".join(streams[key]))
+                 for key in streams ]
+
 
     def add_error_message(self, error_message):
         if self.error_messages is None:
@@ -75,7 +95,6 @@ class Generator:
             self.controller.profile_under_valgrind = True
         self.statespace = StateSpace()
         self.consts_pool = None
-        self.initial_node = None
         self.process_count = None
         self.working_queue = deque()
         self.error_messages = []
@@ -103,6 +122,9 @@ class Generator:
 
         self.search = aislinn_args.search
         self.max_states = aislinn_args.max_states
+
+        self.stdout_mode = aislinn_args.stdout
+
         self.debug_state = aislinn_args.debug_state
         if aislinn_args.debug_compare_states:
             self.debug_compare_states = \
@@ -147,6 +169,7 @@ class Generator:
         raise Exception("Invalid const id")
 
     def initial_execution(self, result):
+        context = ExecutionContext()
         while True:
             result = result.split()
             if result[0] == "EXIT":
@@ -160,20 +183,28 @@ class Generator:
                 e = self.make_error_message_from_report(result)
                 self.add_error_message(e)
                 return True
-            elif result[1] == "MPI_Initialized":
-                assert len(result) == 3
-                ptr = convert_type(result[2], "ptr")
-                self.controller.write_int(ptr, 0)
-                result = self.controller.run_process()
-                continue
-            elif result[1] != "MPI_Init":
-                e = errormsg.ErrorMessage()
-                e.name = "nompiinit"
-                e.short_description = "MPI is not initialized"
-                e.description = "{0} was called without MPI_Init".format(result[1])
-                self.add_error_message(e)
-                return True
-            break
+            elif result[0] == "SYSCALL":
+                if self.process_syscall(0, result, context):
+                    result = self.controller.run_process()
+                else:
+                    result = self.controller.run_drop_syscall()
+            elif result[0] == "CALL":
+                if result[1] == "MPI_Initialized":
+                    assert len(result) == 3
+                    ptr = convert_type(result[2], "ptr")
+                    self.controller.write_int(ptr, 0)
+                    result = self.controller.run_process()
+                    continue
+                elif result[1] != "MPI_Init":
+                    e = errormsg.ErrorMessage()
+                    e.name = "nompiinit"
+                    e.short_description = "MPI is not initialized"
+                    e.description = "{0} was called without MPI_Init".format(result[1])
+                    self.add_error_message(e)
+                    return True
+                break
+            else:
+                assert 0, "Invalid reposponse " + result
 
         self.consts_pool = convert_type(result[4], "ptr")
         self.controller.write_int(self.get_const_ptr(consts.MPI_TAG_UB), 0xFFFF)
@@ -210,8 +241,19 @@ class Generator:
         vg_state.dec_ref()
         assert vg_state.ref_count == self.process_count
 
-        self.initial_node = self.add_node(None, gstate, True)
-        self.statespace.initial_node = self.initial_node
+        initial_node = Node("init", None)
+        self.statespace.add_node(initial_node)
+        self.statespace.initial_node = initial_node
+        chunks = context.get_compact_stream_chunks()
+        new_chunks = []
+        if chunks is not None:
+            for chunk in chunks:
+                for i in xrange(self.process_count):
+                    c = copy.copy(chunk)
+                    c.pid = i
+                    new_chunks.append(c)
+        start_node = self.add_node(initial_node, gstate, True)
+        initial_node.add_arc(Arc(start_node, streams=new_chunks))
         return False
 
     def sanity_check(self):
@@ -221,7 +263,7 @@ class Generator:
     def run(self, process_count):
         self.init_time = datetime.datetime.now()
         self.process_count = process_count
-        result = self.controller.start()
+        result = self.controller.start(capture_syscalls=["write"])
         if result is None:
             return False
         try:
@@ -381,7 +423,7 @@ class Generator:
                 state.vg_state.dec_ref()
                 state.vg_state = self.save_state(True)
                 new_node = self.add_node(node, gstate)
-                node.add_arc(Arc(new_node, ()))
+                node.add_arc(Arc(new_node))
                 return True
         return False
 
@@ -479,7 +521,7 @@ class Generator:
                     for r in synchronous:
                         new_state.set_request_as_synchronous(r)
                     new_node = self.add_node(node, new_gstate)
-                    node.add_arc(Arc(new_node, ()))
+                    node.add_arc(Arc(new_node))
                     new_state_created = True
                 if new_state_created:
                     return True
@@ -596,7 +638,7 @@ class Generator:
                 new_state.vg_state.dec_ref()
                 new_state.vg_state = self.save_state(True)
                 new_node = self.add_node(node, new_gstate)
-                node.add_arc(Arc(new_node, ()))
+                node.add_arc(Arc(new_node))
                 return
             new_state.finish_active_requests(self)
             if test:
@@ -637,7 +679,9 @@ class Generator:
     def execute_state_and_add_node(self, node, state):
         context = self.execute_state(state)
         new_node = self.add_node(node, state.gstate)
-        arc = Arc(new_node, context.events)
+        arc = Arc(new_node,
+                  context.events,
+                  context.get_compact_stream_chunks())
         node.add_arc(arc)
         if context.error_messages is not None:
             for e in context.error_messages:
@@ -715,18 +759,39 @@ class Generator:
             # this state
             return True
 
+    def process_syscall(self, pid, commands, context):
+        if commands[1] == "write":
+            fd, data_ptr, size = commands[2:]
+            if fd == "1":
+                if self.stdout_mode == "capture":
+                    context.add_stream_chunk(STREAM_STDOUT, pid,
+                                             self.controller.read_mem(data_ptr,
+                                                                      size))
+                return self.stdout_mode == "print"
+            return True
+        else:
+            raise Exception("Invalid syscall" + commands[1])
+
     def execute_state(self, state):
         if state.vg_state is not None:
             state.vg_state.dec_ref()
             state.vg_state = None
         context = ExecutionContext()
+        controller = self.controller
+        result = controller.run_process().split()
         while True:
-            result = self.controller.run_process().split()
             if result[0] == "CALL":
                 if self.process_call(result[1], result[2:], state, context):
                     break
                 else:
+                    result = controller.run_process().split()
                     continue
+            if result[0] == "SYSCALL":
+                if self.process_syscall(state.pid, result, context):
+                    result = controller.run_process().split()
+                else:
+                    result = controller.run_drop_syscall().split()
+                continue
             if result[0] == "EXIT":
                 exitcode = convert_type(result[1], "int")
                 e = event.ExitEvent("Exit", state.pid, exitcode)
@@ -740,7 +805,7 @@ class Generator:
                 context.add_error_message(
                         self.make_error_message_from_report(result))
                 return context
-            raise Exception("Invalid command")
+            raise Exception("Invalid command " + result[0])
         state.vg_state = self.save_state(True)
         return context
 
@@ -813,4 +878,12 @@ class Generator:
                 error_message.events = \
                         self.statespace.events_to_node(error_message.node,
                                                        error_message.last_arc)
+                if self.stdout_mode == "capture":
+                    error_message.stdout = \
+                            [ self.statespace.stream_to_node(
+                                error_message.node,
+                                error_message.last_arc,
+                                STREAM_STDOUT,
+                                pid)
+                              for pid in xrange(self.process_count) ]
         return Report(self)

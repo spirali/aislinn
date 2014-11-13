@@ -20,17 +20,17 @@ class BaseTests(TestCase):
 
         self.execute(1)
         self.no_errors()
-        self.assertEquals(self.report.number_of_nodes, 2)
+        self.assertEquals(self.report.number_of_nodes, 3)
 
         self.execute(3)
         self.no_errors()
-        self.assertEquals(self.report.number_of_nodes, 4)
+        self.assertEquals(self.report.number_of_nodes, 5)
 
     def test_exitcode(self):
         self.program("exitcode")
         self.execute(1)
         self.exit_code_error(0, 21)
-        self.assertEquals(self.report.number_of_nodes, 2)
+        self.assertEquals(self.report.number_of_nodes, 3)
 
     def test_arg_p(self):
         self.program("exitcode")

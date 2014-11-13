@@ -37,11 +37,11 @@ class ErrorMessage:
     last_arc = None
     pid = None
 
+    events = None
+    stdout = None
+
     def __init__(self):
-        self.node = None
-        self.last_arc = None
-        self.pid = None
-        self.events = None
+        pass
 
     def get_entries(self):
         e = EntryList()

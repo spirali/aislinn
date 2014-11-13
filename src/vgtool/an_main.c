@@ -1196,6 +1196,16 @@ static void debug_compare(UWord state_id1, UWord state_id2)
     VG_(printf)("------ End of comparison -----------\n");
 }
 
+static Bool set_capture_syscalls_by_name(const char *name, Bool value)
+{
+    if (!VG_(strcmp)(name, "write")) {
+        capture_syscalls.syscall_write = value;
+    } else {
+        return False;
+    }
+    return True;
+}
+
 static
 void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 {
@@ -1501,8 +1511,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          if (!VG_(strcmp)(param, "syscall")) {
              param = next_token();
              Bool value = !VG_(strcmp)(next_token(), "on");
-             if (!VG_(strcmp)(param, "write")) {
-                 capture_syscalls.syscall_write = value;
+             if (set_capture_syscalls_by_name(param, value)) {
                  write_message("Ok\n");
                  continue;
              }
@@ -1741,6 +1750,8 @@ static void an_fini(Int exitcode)
 
 static Bool process_cmd_line_option(const HChar* arg)
 {
+   const char *syscall_name;
+
    if (VG_INT_CLO(arg, "--port", server_port)) {
       return True;
    }
@@ -1751,6 +1762,10 @@ static Bool process_cmd_line_option(const HChar* arg)
 
    if (VG_INT_CLO(arg, "--heapsize", heap_max_size)) {
       return True;
+   }
+
+   if (VG_STR_CLO(arg, "--capture-syscall", syscall_name)) {
+      return set_capture_syscalls_by_name(syscall_name, True);
    }
 
    return False;
@@ -1887,6 +1902,8 @@ void post_syscall_wrap(ThreadId tid, UInt syscallno,
 
 static void an_pre_clo_init(void)
 {
+   VG_(memset)(&capture_syscalls, 0, sizeof(capture_syscalls));
+
    VG_(details_name)            ("Aislinn");
    VG_(details_version)         (NULL);
    VG_(details_description)     ("");
@@ -1948,8 +1965,6 @@ static void an_pre_clo_init(void)
    VG_(needs_client_requests) (an_handle_client_request);
 
    VG_(needs_syscall_control)(syscall_control);
-
-   VG_(memset)(&capture_syscalls, 0, sizeof(capture_syscalls));
 }
 
 VG_DETERMINE_INTERFACE_VERSION(an_pre_clo_init)

@@ -48,13 +48,13 @@ class Controller:
         self.cwd = cwd
         self.valgrind_args = ()
 
-    def start(self):
+    def start(self, capture_syscalls=()):
         assert self.process is None # Nothing is running
         assert self.conn is None
 
         s = self._start_server()
         port = s.getsockname()[1]
-        self._start_valgrind(port)
+        self._start_valgrind(port, capture_syscalls)
 
         # Give valgrind time to initialize, we definitely need a better system
         time.sleep(0.1)
@@ -244,13 +244,14 @@ class Controller:
         self.send_and_receive_ok(
              "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
 
-    def _start_valgrind(self, port):
+    def _start_valgrind(self, port, capture_syscalls):
         args = (
             paths.VALGRIND_BIN,
             "-q",
             "--tool=aislinn",
             "--port={0}".format(port)
-        ) + tuple(self.valgrind_args) + tuple(self.args)
+        ) + tuple([ "--capture-syscall=" + name for name in capture_syscalls ]) \
+          + tuple(self.valgrind_args) + tuple(self.args)
 
         if self.debug_under_valgrind or self.profile_under_valgrind:
             if self.profile_under_valgrind:

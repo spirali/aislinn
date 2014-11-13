@@ -181,6 +181,7 @@ class Program:
                   send_protocol=None):
         run_args = [ AISLINN,
                     "--output=xml",
+                    "--stdout=print",
                     "--verbose=0",
                     "-p={0}".format(processes) ]
 

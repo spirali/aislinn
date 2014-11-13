@@ -20,16 +20,25 @@
 
 class Arc:
 
-    def __init__(self, node, events):
+    def __init__(self, node, events=(), streams=()):
         self.node = node
         self.events = events
+        self.streams = streams
 
     @property
     def label(self):
-        if not self.events:
+        if not self.events and not self.streams:
             return "no-events"
         pids = list(set(e.pid for e in self.events))
-        return ",".join(map(str, pids))
+        l = ",".join(map(str, pids))
+        if self.streams:
+            l += "+s"
+        return l
+    def get_stream_chunk(self, stream_name, pid):
+        if self.streams:
+            for chunk in self.streams:
+                if chunk.stream_name == stream_name and chunk.pid == pid:
+                    return chunk
 
 
 class Node:
@@ -42,3 +51,6 @@ class Node:
 
     def add_arc(self, arc):
         self.arcs.append(arc)
+
+    def __repr__(self):
+        return "<Node {1:x} uid={0.uid}>".format(self, id(self))
