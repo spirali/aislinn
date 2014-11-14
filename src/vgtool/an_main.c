@@ -1010,14 +1010,33 @@ static void write_message(const char *str)
 // Same as write_message but with DATA message
 static void write_data(void *ptr, SizeT size)
 {
-   char tmp[100];
-   VG_(snprintf)(tmp, 100, "DATA %lu\n", size);
-   write_message(tmp);
    VPRINT(1, "AN>> [[ DATA at=%p size=%lu ]]", ptr, size);
-   Int r = VG_(write_socket)(control_socket, ptr, size);
+   char tmp[MAX_MESSAGE_BUFFER_LENGTH];
+   /*VG_(snprintf)(tmp, 100, "DATA 1\nX");
+   write_message(tmp);*/
+   SizeT sz;
+   int i = VG_(snprintf)(tmp, MAX_MESSAGE_BUFFER_LENGTH, "DATA %lu\n", size);
+   if (size > MAX_MESSAGE_BUFFER_LENGTH - i) {
+       sz = MAX_MESSAGE_BUFFER_LENGTH - i;
+   } else {
+       sz = size;
+   }
+   VG_(memcpy)(&tmp[i], ptr, sz);
+   Int r = VG_(write_socket)(control_socket, tmp, i + sz);
    if (r == -1) {
       VG_(printf)("Connection closed\n");
       VG_(exit)(1);
+   }
+   tl_assert(r == sz + i);
+
+   if (size - sz > 0) {
+       char *p = (char*)ptr;
+       r = VG_(write_socket)(control_socket, &p[sz], size - sz);
+       if (r == -1) {
+          VG_(printf)("Connection closed\n");
+          VG_(exit)(1);
+       }
+       tl_assert(r == size - sz);
    }
 }
 

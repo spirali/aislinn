@@ -9,34 +9,31 @@ class BaseTests(TestCase):
     def test_helloworld(self):
         self.program("helloworld")
 
-        self.execute(1)
-        self.single_error("nompicall")
-
-        self.execute(3)
-        self.single_error("nompicall")
+        self.execute(1, error="nompicall", check_output=False)
+        self.execute(3, error="nompicall", check_output=False)
 
     def test_helloworld2(self):
         self.program("helloworld2")
 
-        self.execute(1)
-        self.no_errors()
+        self.execute(1, check_output=False)
         self.assertEquals(self.report.number_of_nodes, 3)
 
-        self.execute(3)
-        self.no_errors()
+        self.execute(3, check_output=False)
         self.assertEquals(self.report.number_of_nodes, 5)
 
     def test_exitcode(self):
         self.program("exitcode")
-        self.execute(1)
-        self.exit_code_error(0, 21)
+        self.execute(1, error="exitcode")
+        self.check_error("exitcode", pid="0", exitcode="21")
         self.assertEquals(self.report.number_of_nodes, 3)
 
+    """
     def test_arg_p(self):
         self.program("exitcode")
         errmsg = "==AN== ERROR: Invalid number of processes (parameter -p)\n"
         self.execute(-1, exitcode=1, stderr=errmsg)
         self.execute(0, exitcode=1, stderr=errmsg)
+    """
 
     def test_invalid_args(self):
         self.program("args")
@@ -52,25 +49,22 @@ class BaseTests(TestCase):
                  "irecv_datatype" ]
 
         for arg in args:
-            self.execute(2, (arg,))
-            self.single_error("invalidarg", pid=0)
+            self.execute(2, arg, error="invalidarg")
+            self.check_error("invalidarg", pid="0")
 
     def test_globals(self):
         self.program("globals")
         self.execute(2)
-        self.no_errors()
 
     def test_typesize(self):
         self.program("typesize")
         self.execute(1, stdout="4 8 16 40\n")
-        self.no_errors()
 
     def test_contiguous(self):
         output = "1.11\n2.22\n3.33\n4.44\n5.55\n" \
                  "6.66\n7.77\n8.88\n9.99\n10.101\n"
         self.program("contiguous")
         self.execute(2, stdout=output)
-        self.no_errors()
 
     def test_vector(self):
         output = "0 1 2 3 4 5 10 11 12 13 14 15 16 17 18 19 20 21 26 27 28 29 "\
@@ -81,7 +75,6 @@ class BaseTests(TestCase):
                  "49 50 51 52 53 -1 58 59 \n"
         self.program("vector")
         self.execute(2, stdout=output)
-        self.no_errors()
 
     def test_struct(self):
         output = ("0 0 1 1 inf\n"
@@ -96,7 +89,6 @@ class BaseTests(TestCase):
                   "0 9 10 3 0.555556\n")
         self.program("struct")
         self.execute(2, stdout=output)
-        self.no_errors()
 
     def test_hvector(self):
         output = "0 1 2 3 4 5 10 11 12 13 14 15 16 17 18 19 20 21 26 27 28 29 "\
@@ -107,72 +99,80 @@ class BaseTests(TestCase):
                  "49 50 51 52 53 -1 58 59 \n"
         self.program("hvector")
         self.execute(2, stdout=output)
-        self.no_errors()
 
     def test_indexed(self):
         output = "0 1 20 21 22 23 40 41 42 43 44 45 46 47 66 67 " \
                  "68 69 86 87 88 89 90 91 -1 -1 -1 -1 -1 -1 \n" \
                  "20 21 22 23 -1 0 1 42 43 44 45 -1 40 41 66 67 " \
                  "68 69 -1 46 47 88 89 90 91 -1 86 87 -1 -1 \n"
-        output = None
         self.program("indexed")
         self.execute(2, "new", stdout=output)
-        self.no_errors()
         self.execute(2, "old", stdout=output)
-        self.no_errors()
 
     def test_uncommited(self):
         self.program("uncommited")
-        self.execute(2, stdout="")
-        self.single_error("uncommited")
+        self.execute(2, error="uncommited")
 
     def test_typefree1(self):
         self.program("typefree1")
-        self.execute(2, stdout="")
-        self.single_error("invalidarg")
+        self.execute(2, error="invalidarg")
 
     def test_typefree2(self):
         self.program("typefree2")
-        self.execute(2, stdout="")
-        self.single_error("remove-buildin-type")
+        self.execute(2, error="remove-buildin-type")
 
     def test_group(self):
         self.program("group")
-        self.execute(3, stdout="")
-        self.no_errors()
+        self.execute(3)
 
     def test_group2(self):
         self.program("group2")
-        self.execute(4, stdout="")
-        self.no_errors()
+        self.execute(4)
 
     def test_finalized(self):
         self.program("finalized")
         self.execute(1)
-        self.no_errors()
 
     def test_initialized(self):
         self.program("initialized")
         self.execute(1)
-        self.no_errors()
 
     def test_keyval(self):
         output="DELETE 2\nCOPY 4\nDELETE 1\nDELETE 3\nDELETE 4\n"
         self.program("keyval")
         self.execute(1, stdout=output)
-        self.no_errors()
 
     def test_keyval2(self):
         self.program("keyval2")
         self.execute(1, stdout="DELETE 2\nDELETE 1\nDELETE 3\n")
-        self.no_errors()
 
     def test_keyval3(self):
         self.program("keyval3")
         self.execute(1, stdout="DELETE 1\n")
-        self.no_errors()
-        self.execute(1, "error")
-        self.single_error("invalidarg")
+        self.execute(1, "error", error="invalidarg")
+
+    def test_print(self):
+        self.program("print")
+        self.output_default("Line1\nEnd\n")
+        self.output(1, "Line1\n0\n2\nEnd\n")
+        self.output(1, "Line1\n2\n0\nEnd\n")
+        self.execute(3)
+
+        self.reset_output()
+        self.output_default("Line1\nEnd\n")
+        self.output(1, "Line1\n0\n2\n3\nEnd\n")
+        self.output(1, "Line1\n0\n3\n2\nEnd\n")
+        self.output(1, "Line1\n2\n0\n3\nEnd\n")
+        self.output(1, "Line1\n2\n3\n0\nEnd\n")
+        self.output(1, "Line1\n3\n0\n2\nEnd\n")
+        self.output(1, "Line1\n3\n2\n0\nEnd\n")
+        self.execute(4)
+
+    def test_print_big(self):
+        self.program("print_big")
+        self.output(0, "abcd" * (1024 * 1024 * 10 // 4) + "\n")
+        self.execute(1)
+
 
 if __name__ == "__main__":
     unittest.main()

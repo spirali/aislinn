@@ -34,6 +34,7 @@ class Arc:
         if self.streams:
             l += "+s"
         return l
+
     def get_stream_chunk(self, stream_name, pid):
         if self.streams:
             for chunk in self.streams:

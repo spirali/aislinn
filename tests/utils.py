@@ -17,8 +17,11 @@ AISLINN_CPP = os.path.join(AISLINN_BIN, "aislinn-c++")
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.controller
 
-def make_set(lines):
-    return set(lines.splitlines())
+def set_to_sorted_list(s):
+    lst = list(s)
+    lst.sort()
+    return lst
+
 
 class TestCase(unittest.TestCase):
 
@@ -27,40 +30,18 @@ class TestCase(unittest.TestCase):
     def setUp(self):
         self.report = None
         self.program_instance = None
+        self.output_instance = None
+        self.reset_output_on_change = True
 
     def read_report(self):
         filename = os.path.join(AISLINN_BUILD, "report.xml")
-        self.report = Report(filename)
+        return Report(filename)
 
-    def no_errors(self):
-        if self.report is None:
-            self.read_report()
-        if len(self.report.errors) != 0:
-            names = [ e.name for e in self.report.errors ]
-            raise AssertionError("No error expected, got " + repr(names))
-
-    def single_error(self, error_name, pid=None):
-        if self.report is None:
-            self.read_report()
-        errors = self.report.errors
-        self.assertEquals(len(errors), 1)
-        error = errors[0]
-        self.assertEquals(error.name, error_name)
-        if pid is not None:
-            self.assertEquals(error.pid, pid)
-        return error
-
-    def check_child(self, element, name, value):
-        child = element.find(name)
-        self.assertTrue(child is not None,
-                        "Node {0} has not child {1}".format(element, name))
-        self.assertEquals(element.find(name).text, str(value))
-
-    def exit_code_error(self, pid, exitcode=0):
-        if self.report is None:
-            self.read_report()
-        error = self.single_error("exitcode", pid=pid)
-        self.assertEquals(error.find_int("exitcode"), exitcode)
+    def check_error(self, name, **args):
+        for error in self.report.errors:
+            if error.name == name:
+                for key, value in args.items():
+                    self.assertEquals(error.element.find(key).text, value)
 
     def program(self, test_name, files=None, **kw):
         if files is None:
@@ -68,11 +49,104 @@ class TestCase(unittest.TestCase):
         else:
             files = [ os.path.join(AISLINN_TESTS, self.category, test_name, n) for n in files ]
         self.program_instance = Program(files, **kw)
+        self.program_instance.build()
+        self.reset_output_on_change = True
 
-    def execute(self, *args, **kw):
-        self.assertTrue(self.program_instance is not None)
-        self.report = None
-        self.program_instance.run(*args, **kw)
+    def reset_output(self):
+        self.output_instance = Output()
+
+    def output(self, pid, data):
+        if self.reset_output_on_change:
+            self.reset_output()
+            self.reset_output_on_change = False
+        self.output_instance.add(pid, data)
+
+    def output_default(self, data):
+        if self.reset_output_on_change:
+            self.reset_output()
+            self.reset_output_on_change = False
+        self.output_instance.add_default(data)
+
+    def execute(self,
+            processes,
+            args=(),
+            error=None,
+            vgv=None,
+            stdout=None,
+            check_output=True,
+            send_protocol=None,
+            heapsize=None,
+            ):
+        aislinn_args = { "output" : "xml",
+                         "verbose" : 0,
+                         "stdout-write" : "1000",
+                         "stderr-write" : "1000" }
+
+        if error:
+            check_output = False
+
+        if vgv:
+            aislinn_args["vgv"] = vgv
+
+        if send_protocol:
+            aislinn_args["send-protocol"] = send_protocol
+
+        if heapsize:
+            aislinn_args["heapsize"] = heapsize
+
+        if stdout is not None:
+            aislinn_args["stdout"] = "print"
+            check_output = False
+
+        if isinstance(args, str):
+            args = args.split()
+
+        # Run ---------------------------
+        result_stdout, result_stderr = \
+                self.program_instance.run(aislinn_args, processes, args)
+        report = self.read_report()
+        self.report = report
+
+        # Check errors
+        found_errors = [ e.name for e in report.errors ]
+        if error is None and found_errors:
+            raise Exception("No errors expected, found: " + repr(found_errors))
+        if isinstance(error, str):
+            error = [ error ]
+        if error and set(error) != set(found_errors):
+            raise Exception("Different errors expected. Expected {0}, got {1}" \
+                    .format(error, found_errors))
+
+        # Stderr
+        self.assertEquals(result_stderr, "")
+
+        # Stdout
+        if stdout is not None:
+            self.assertEquals(result_stdout, stdout)
+        else:
+            self.assertEquals(result_stdout, "")
+
+        if check_output:
+            self.check_output(report, processes)
+        self.reset_output_on_change = True
+
+    def check_output(self, report, processes):
+        if self.output_instance is None:
+            self.reset_output()
+        for pid in xrange(processes):
+            expected_outputs = set(self.output_instance.get_output_for_process(pid))
+            program_outputs = report.get_outputs(pid)
+            if expected_outputs != program_outputs:
+                raise Exception("Unexpected or missing outputs for process {0}:\n"
+                                "Expected outputs: {1}\n"
+                                "Program outputs: {2}\n"
+                                "Extra outputs: {3}\n"
+                                "Missing outputs: {4}\n" \
+                                    .format(pid,
+                                            set_to_sorted_list(expected_outputs),
+                                            set_to_sorted_list(program_outputs),
+                                            set_to_sorted_list(program_outputs - expected_outputs),
+                                            set_to_sorted_list(expected_outputs - program_outputs)))
 
     def controller(self, verbose=False):
         self.assertTrue(self.program_instance is not None)
@@ -91,11 +165,6 @@ def cleanup_build_dir():
     else:
         os.makedirs(AISLINN_BUILD)
 
-def cleanup_report():
-    reportfile = os.path.join(AISLINN_BUILD, "report.xml")
-    if os.path.isfile(reportfile):
-        os.unlink(reportfile)
-
 def run(args,
         cwd=None):
     p = subprocess.Popen(args,
@@ -112,60 +181,50 @@ def check_prefix(prefix):
     return fn
 
 def run_and_check(args,
-                  cwd=None,
-                  exitcode=0,
-                  stdout="",
-                  stderr=""):
-    def raise_exception(message):
-        raise Exception(message +
-                "\nprogram: {0}\nstdout:\n{1}stderr:\n{2}\n"
-                .format(args, r_stdout, r_stderr))
-
+                  cwd=None):
     r_exitcode, r_stdout, r_stderr = run(args, cwd)
-    if exitcode != r_exitcode:
-        raise_exception("Exitcode {0} excepted but got {1}".format(exitcode,
-                                                                   r_exitcode))
-    if stdout is not None:
-        if isinstance(stdout, str):
-            if stdout != r_stdout:
-                if stdout == "":
-                    stdout = ">>> empty <<<"
-                raise_exception("Got unexpected stdout.\n"
-                                "Expected stdout:\n{0}".format(stdout))
-        elif isinstance(stdout, set) or isinstance(stdout, frozenset):
-            r_stdout_set = set(r_stdout.splitlines())
-            if stdout != r_stdout_set:
-                if stdout == "":
-                    stdout = ">>> empty <<<"
-                raise_exception("Got unexpected stdout.\n"
-                                "Expected stdout:\n{0}" \
-                                "\nDifferences (extra, missing):\n {1}\n {2}\n" \
-                                        .format(stdout,
-                                                r_stdout_set - stdout,
-                                                stdout - r_stdout_set))
-        else:
-            r = stdout(r_stdout)
-            if r is not None:
-                raise_exception("Expected stdout: " + r)
+    if r_exitcode != 0 or r_stdout or r_stderr:
+        raise Exception("\nprogram: {0}\nstdout:\n{1}stderr:\n{2}\n"
+                            .format(args, r_stdout, r_stderr))
 
-    if stderr is not None:
-        if isinstance(stderr, str):
-            if stderr != r_stderr:
-                if stderr == "":
-                    stderr = ">>> empty <<<"
-                raise_exception("Got unexpected stderr.\n"
-                                "Expected stderr:\n{0}".format(stderr))
+
+class Output:
+
+    def __init__(self):
+        self.default = None
+        self.contents = {}
+
+    def add_default(self, values):
+        if isinstance(values, str):
+            values = [values]
+
+        if self.default is not None:
+            self.default += values
         else:
-            r = stderr(r_stderr)
-            if r is not None:
-                raise_exception("Expected stderr: " + r)
+            self.default = values
+
+    def add(self, pid, values):
+        if isinstance(values, str):
+            values = [values]
+        if pid in self.contents:
+            self.contents[pid] += values
+        else:
+            self.contents[pid] = values
+
+    def get_output_for_process(self, pid):
+        values = self.contents.get(pid)
+        if values is not None:
+            return values
+        elif self.default:
+            return self.default
+        else:
+            return [""]
 
 
 class Program:
 
     def __init__(self, files):
         self.files = tuple(files)
-        self.is_built = False
 
     def build(self):
         cleanup_build_dir()
@@ -173,48 +232,27 @@ class Program:
                 "-g",
                 "-O3") + self.files
         run_and_check(args, cwd=AISLINN_BUILD)
-        self.is_built = True
 
-    def make_args(self, processes, args,
-                  vgv=None,
-                  heapsize=None,
-                  send_protocol=None):
-        run_args = [ AISLINN,
-                    "--output=xml",
-                    "--stdout=print",
-                    "--verbose=0",
-                    "-p={0}".format(processes) ]
-
-        if vgv is not None:
-            run_args.append("--vgv={0}".format(vgv))
-        if heapsize is not None:
-            run_args.append("--heapsize={0}".format(heapsize))
-        if send_protocol is not None:
-            run_args.append("--send-protocol={0}".format(send_protocol))
+    def run(self, aislinn_args, processes, program_args):
+        run_args = [ AISLINN, "-p={0}".format(processes) ] + \
+                   [ "--{0}={1}".format(name, value)
+                     for name, value in aislinn_args.items() ]
         run_args.append("./a.out")
-        run_args += list(args)
-        return run_args
+        run_args += list(program_args)
+        exitcode, stdout, stderr = run(run_args, cwd=AISLINN_BUILD)
+        if exitcode != 0:
+            raise Exception("Nonzero exit code\n"
+                            "exitcode={0}\nstdout={1}\nstderr={2}" \
+                                    .format(exitcode, stdout, stderr))
+        return stdout, stderr
 
-    def run(self, processes, args=(), exitcode=0, stdout=None, stderr="", **kw):
-        if not self.is_built:
-            self.build()
-        else:
-            cleanup_report()
-        if isinstance(args, str):
-            args = args.split()
-        run_and_check(self.make_args(processes, args, **kw),
-                      AISLINN_BUILD,
-                      exitcode,
-                      stdout,
-                      stderr)
 
     def controller(self, verbose):
-        if not self.is_built:
-            self.build()
         controller = base.controller.Controller(("./a.out",), AISLINN_BUILD)
         if verbose:
            controller.valgrind_args = ("--verbose=1",)
         return controller
+
 
 class Error(object):
 
@@ -232,6 +270,10 @@ class Error(object):
     def find_int(self, name):
         return int(self.element.find(name).text)
 
+    def __repr__(self):
+        return "E({0})".format(self.name)
+
+
 class Report:
 
     def __init__(self, filename):
@@ -241,3 +283,15 @@ class Report:
     @property
     def number_of_nodes(self):
         return int(self.root.find("analysis-info").find("nodes").text)
+
+    def get_stream(self, name):
+        for stream in self.root.find("streams").findall("stream"):
+            if stream.get("name") == name:
+                return stream
+
+    def get_outputs(self, pid):
+        for process in self.get_stream("<stdout>").findall("process"):
+            if int(process.get("pid")) == pid:
+                return set(o.text if o.text is not None else ""
+                           for o in process.findall("output"))
+

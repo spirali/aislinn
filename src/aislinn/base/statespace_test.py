@@ -63,7 +63,7 @@ def sspace_fork3():
     """
         Statespace example
 
-        n1 --0a- n11 -0c-- n111*
+        n1 --0a- n11 -0c-- n111* --- n1111
            --0a- n12 -0c-- n111*
            \-0b- n13 -0c-- n111*
     """
@@ -75,6 +75,7 @@ def sspace_fork3():
     make_node(s, "n11", "n111", None, [ stdout(0, "c") ])
     make_node(s, "n12", "n111", None, [ stdout(0, "c") ])
     make_node(s, "n13", "n111", None, [ stdout(0, "c") ])
+    make_node(s, "n111", "n1111", None)
     return s
 
 @pytest.fixture
@@ -98,6 +99,27 @@ def sspace_fork4():
     make_node(s, "n111", "n1111", None, [ stdout(0, "c") ])
     make_node(s, "n14", "n141", None, [ stdout(0, "aaac") ])
     return s
+
+@pytest.fixture
+def sspace_fork5():
+    """
+        Statespace example
+
+        n1 --0aa- n11* -0aa-- n111 ---- n1111
+           --0aa- n12 --- n11*
+                    \-bb-- n123
+    """
+    s = StateSpace()
+    make_node(s, None, "n1")
+    make_node(s, "n1", "n11", None, [ stdout(0, "aa") ])
+    make_node(s, "n1", "n12", None, [ stdout(0, "aa") ])
+    make_node(s, "n11", "n111", None, [ stdout(0, "aa") ])
+    make_node(s, "n111", "n1111", None)
+    make_node(s, "n12", "n11", None)
+    make_node(s, "n12", "n123", None, [ stdout(0, "bb") ])
+
+    return s
+
 
 @pytest.fixture
 def sspace_cycle():
@@ -154,34 +176,36 @@ def test_nodes_count(sspace_empty, sspace_complex, sspace_fork1):
     assert sspace_complex.nodes_count == 9
     assert sspace_fork1.nodes_count == 3
 
-def test_stream_tree_empty(sspace_empty):
-    snode = sspace_empty.get_stream_tree(STREAM_STDOUT, 0)
-    assert snode.count_of_words == 1
-    assert list(snode.all_outputs) == [ "" ]
+def test_outputs_empty(sspace_empty):
+    assert sspace_empty.get_all_outputs(STREAM_STDOUT, 0) == set(("",))
 
-def test_stream_tree_fork1(sspace_fork1):
-    snode = sspace_fork1.get_stream_tree(STREAM_STDOUT, 0)
-    assert snode.count_of_words == 2
-    assert list(snode.all_outputs) == [ "a", "b" ]
+def test_outputs_fork1(sspace_fork1):
+    assert sspace_fork1.get_all_outputs(STREAM_STDOUT, 0) == set(("a", "b"))
 
-def test_stream_tree_fork2(sspace_fork2):
-    snode = sspace_fork2.get_stream_tree(STREAM_STDOUT, 0)
-    assert snode.count_of_words == 1
-    assert list(snode.all_outputs) == [ "aa" ]
+def test_outputs_fork2(sspace_fork2):
+    assert sspace_fork2.get_all_outputs(STREAM_STDOUT, 0) == set(("aa",))
+    assert sspace_fork2.get_outputs_count(STREAM_STDOUT, 0, 1) == 1
+    assert sspace_fork2.get_outputs_count(STREAM_STDOUT, 0, 2) == 1
 
-def test_stream_tree_fork3(sspace_fork3):
-    snode = sspace_fork3.get_stream_tree(STREAM_STDOUT, 0)
-    assert snode.count_of_words == 2
-    assert list(snode.all_outputs) == [ "ac", "bc" ]
+def test_outputs_fork3(sspace_fork3):
+    assert sspace_fork3.get_all_outputs(STREAM_STDOUT, 0) == set(("ac", "bc"))
 
-def test_stream_tree_cycle(sspace_cycle):
-    snode = sspace_cycle.get_stream_tree(STREAM_STDOUT, 0)
-    assert snode.count_of_words == 1
-    assert list(snode.all_outputs) == [ "accc" ]
+def test_outputs_fork4(sspace_fork4):
+    assert sspace_fork4.get_all_outputs(STREAM_STDOUT, 0) == set(("", "aaac"))
+    assert sspace_fork4.get_outputs_count(STREAM_STDOUT, 0, 1) is None
+    assert sspace_fork4.get_outputs_count(STREAM_STDOUT, 0, 2) == 2
+    assert sspace_fork4.get_outputs_count(STREAM_STDOUT, 0, 3) == 2
 
-    snode = sspace_cycle.get_stream_tree(STREAM_STDOUT, 1)
-    # Infinite number of outputs are not supported now
-    assert snode is None
+def test_outputs_fork5(sspace_fork5):
+    assert sspace_fork5.get_all_outputs(STREAM_STDOUT, 0) == set(("aabb", "aaaa"))
+    assert sspace_fork5.get_all_outputs(STREAM_STDOUT, 0, limit=1) == set(("aaaa",))
+    assert sspace_fork5.get_outputs_count(STREAM_STDOUT, 0, 1) is None
+    assert sspace_fork5.get_outputs_count(STREAM_STDOUT, 0, 2) == 2
+    assert sspace_fork5.get_outputs_count(STREAM_STDOUT, 0, 3) == 2
+
+def test_outputs_cycle(sspace_cycle):
+    assert sspace_cycle.get_all_outputs(STREAM_STDOUT, 0) == set(("accc",))
+    assert sspace_cycle.get_all_outputs(STREAM_STDOUT, 1) == None
 
 def test_stream_of_node_empty(sspace_empty):
     node = sspace_empty.get_node_by_hash("#init#")

@@ -88,12 +88,24 @@ def parse_args():
                         default="capture",
                         help="")
 
+    parser.add_argument('--stdout-write',
+                        metavar="N",
+                        type=str,
+                        default="0",
+                        help="")
+
     parser.add_argument('--stderr',
                         metavar="MODE",
                         choices=["capture", "capture",
                                  "print", "drop", "stdout"],
                         default="capture",
                         help="")
+
+    parser.add_argument('--stderr-write',
+                        metavar="N",
+                        type=str,
+                        default="0",
+                        help="0")
 
     parser.add_argument("--search",
                         metavar="SEARCH",
@@ -137,6 +149,20 @@ def parse_args():
     else:
         print "Invalid verbose level (parameter --verbose)"
         sys.exit(1)
+
+    if args.stdout_write != "all":
+        if utils.is_integer(args.stdout_write):
+            args.stdout_write = int(args.stdout_write)
+        else:
+            sys.stderr.write("Invalid argument for --stdout-write\n")
+            sys.exit(1)
+
+    if args.stderr_write != "all":
+        if utils.is_integer(args.stderr_write):
+            args.stderr_write = int(args.stderr_write)
+        else:
+            sys.stderr.write("Invalid argument for --stderr-write\n")
+            sys.exit(1)
 
     logging.basicConfig(format="==AN== %(levelname)s: %(message)s",
                         level=level)
@@ -221,10 +247,10 @@ def main():
         logging.info("Statespace written into 'statespace.txt'")
 
     if args.output == "xml":
-        generator.create_report().write_xml("report.xml")
+        generator.create_report(args).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
     elif args.output == "html":
-        generator.create_report().write_html("report.html")
+        generator.create_report(args).write_html("report.html")
         logging.info("Report written into 'report.html'")
     if generator.error_messages:
         logging.info("%s error(s) found", len(generator.error_messages))

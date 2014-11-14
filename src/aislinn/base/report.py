@@ -19,6 +19,7 @@
 
 
 from tags import Tag, embed_img
+from stream import STREAM_STDOUT, STREAM_STDERR
 import xml.etree.ElementTree as xml
 
 plt = None
@@ -93,14 +94,56 @@ class EntryList:
     def add(self, name, value, description=None):
         self.entries.append(Entry(name, value, description))
 
+OUTPUTS_LIMIT = 10
 
 class Report:
 
-    def __init__(self, generator):
+    def __init__(self, generator, args):
         self.program_info = EntryList()
         self.analysis_info = EntryList()
         self.process_count = generator.process_count
         self.statistics = generator.get_statistics()
+
+        self.stdout_counts = None
+        self.stderr_counts = None
+
+        self.outputs = {}
+
+        if generator.stdout_mode == "capture" \
+                and generator.statespace.initial_node:
+            self.stdout_counts = \
+                    [ generator.statespace.get_outputs_count(
+                        STREAM_STDOUT, pid, OUTPUTS_LIMIT)
+                      for pid in xrange(generator.process_count) ]
+
+        if generator.stderr_mode == "capture" \
+                and generator.statespace.initial_node:
+            self.stderr_counts = \
+                    [ generator.statespace.get_outputs_count(
+                        STREAM_STDERR, pid, OUTPUTS_LIMIT)
+                      for pid in xrange(generator.process_count) ]
+
+        if args.stderr_write \
+                and generator.stderr_mode == "generator" \
+                and generator.statespace.initial_node:
+            if args.stderr_write == "all":
+                limit = None
+            else:
+                limit = args.stderr_write
+            self.outputs[STREAM_STDERR] = [
+                    generator.statespace.get_all_outputs(STREAM_STDERR, pid, limit)
+                    for pid in xrange(generator.process_count)]
+
+        if args.stdout_write \
+                and generator.stdout_mode == "capture" \
+                and generator.statespace.initial_node:
+            if args.stderr_write == "all":
+                limit = None
+            else:
+                limit = args.stderr_write
+            self.outputs[STREAM_STDOUT] = [
+                    generator.statespace.get_all_outputs(STREAM_STDOUT, pid, limit)
+                    for pid in xrange(generator.process_count)]
 
         self.program_info.add(
                 "program-args", " ".join(generator.args), "Program arguments")
@@ -145,7 +188,26 @@ class Report:
         sizes.sort()
         self.analysis_info.add("message-sizes",
                       sizes,
-                      "Sizes of unicast messages")
+                      "Sizes of unicast messages (bytes)")
+
+        def count_of_outputs((rank, count)):
+            if count == None:
+                return ">" + str(OUTPUTS_LIMIT)
+            else:
+                return str(count)
+
+        if self.stdout_counts:
+            self.analysis_info.add("stdout-outputs",
+                          ", ".join(map(count_of_outputs,
+                                       enumerate(self.stdout_counts))),
+                          "Numbers of different outputs on stdout (per rank)")
+
+        if self.stderr_counts:
+            self.analysis_info.add("stdout-outputs",
+                          ", ".join(map(count_of_outputs,
+                                       enumerate(self.stderr_counts))),
+                          "Numbers of different outputs on stderr (per rank)")
+
         self.error_messages = generator.error_messages
 
     def entries_to_xml(self, parent_name, entry_list):
@@ -178,6 +240,21 @@ class Report:
                     e.set("name", event.name)
                     e.set("pid", str(event.pid))
                     ev.append(e)
+        if self.outputs:
+            streams = xml.Element("streams")
+            root.append(streams)
+            for name, s in self.outputs.items():
+                stream = xml.Element("stream")
+                stream.set("name", name)
+                streams.append(stream)
+                for i, outputs in enumerate(s):
+                    process = xml.Element("process")
+                    process.set("pid", str(i))
+                    stream.append(process)
+                    for text in outputs:
+                        e = xml.Element("output")
+                        e.text = text
+                        process.append(e)
         return xml.ElementTree(root)
 
     def create_html_head(self, html):

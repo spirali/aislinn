@@ -6,7 +6,7 @@ from test_complex import *
 from test_mem import *
 from test_collective import *
 from test_comm import *
-#from test_misc import *
+from test_misc import *
 
 import unittest
 

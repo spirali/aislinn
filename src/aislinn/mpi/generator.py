@@ -879,7 +879,7 @@ class Generator:
                 result[1], result[2:], state, context, callback=True)
             result = self.controller.run_process()
 
-    def create_report(self):
+    def create_report(self, args):
         for error_message in self.error_messages:
             if error_message.node:
                 error_message.events = \
@@ -901,4 +901,4 @@ class Generator:
                                 STREAM_STDERR,
                                 pid)
                               for pid in xrange(self.process_count) ]
-        return Report(self)
+        return Report(self, args)

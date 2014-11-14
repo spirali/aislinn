@@ -19,90 +19,6 @@
 
 
 import itertools
-import os
-
-
-class StreamNode:
-
-    def __init__(self):
-        self.childs = []
-        self.end_of_path = False
-        self.node = None
-        self.cycle_arcs = None
-
-    def find_or_create_child(self, data):
-        if not data:
-            return self
-        for node_arc_data in self.childs:
-            node, arc_data = node_arc_data
-            if data[0] != arc_data[0]:
-                continue
-            if data == arc_data:
-                return node
-            prefix = os.path.commonprefix((arc_data, data))
-            if len(prefix) == len(arc_data):
-                return node.find_or_create_child(data[len(prefix):])
-            split_node = StreamNode()
-            node_arc_data[0] = split_node
-            node_arc_data[1] = prefix
-            split_node.childs.append([ node, arc_data[len(prefix):] ])
-            if len(prefix) == len(data):
-                return split_node
-            new_node = StreamNode()
-            split_node.childs.append([ new_node, data[len(prefix):] ])
-            return new_node
-        else:
-            new_node = StreamNode()
-            self.childs.append([new_node, data])
-            return new_node
-
-    def tree_reduce(self, reduce_op):
-        stack = [ (self, False) ]
-        visited = { self: None }
-        while stack:
-            snode, completed = stack.pop()
-            if completed:
-                visited[snode] = reduce_op(snode, (visited[s] for s, d in snode.childs))
-            elif not snode.childs:
-                visited[snode] = reduce_op(snode, ())
-            else:
-                stack.append((snode, True))
-                for s, d in snode.childs:
-                    if s not in visited:
-                        visited[s] = None
-                        stack.append((s, False))
-        return visited[self]
-
-    def tree_paths(self):
-        stack = [ self ]
-        childs = [ -1 ]
-
-        while stack:
-            s = stack[-1]
-            c = childs[-1] + 1
-            if len(s.childs) == c:
-                stack.pop()
-                childs.pop()
-                if s.end_of_path:
-                    yield stack, childs
-                continue
-            childs[-1] += 1
-            stack.append(s.childs[c][0])
-            childs.append(-1)
-
-    @property
-    def count_of_words(self):
-        return self.tree_reduce(lambda n, values: sum(values, 1 if n.end_of_path else 0))
-
-    @property
-    def all_outputs(self):
-        if not self.childs and self.end_of_path:
-            return [ "" ]
-        return ("".join(s.childs[i][1] for s, i in zip(stack, childs))
-                for stack, childs in self.tree_paths())
-
-    def __repr__(self):
-        return "<StreamNode {0:x} childs={1}>".format(id(self), len(self.childs))
 
 
 class StateSpace:
@@ -189,46 +105,117 @@ class StateSpace:
                            node, last_arc, stream_name, pid))
 
     def depth_first_search_with_arcs(self):
-        queue = [ [self.initial_node, False] ]
-        queue_set = set((self.initial_node,))
-        visited = set((self.initial_node,))
-        while queue:
-            node, completed = queue[-1]
-            if completed:
-                queue.pop()
-                queue_set.remove(node)
+        stack = [ self.initial_node ]
+        arcs = [ -1 ]
+        stack_set = set(stack)
+        visited = set(stack)
+
+        while stack:
+            s = stack[-1]
+            c = arcs[-1] + 1
+            if len(s.arcs) == c:
+                stack_set.remove(stack.pop())
+                arcs.pop()
                 continue
-            queue[-1][1] = True # completed = True
-            for arc in node.arcs:
-                if arc.node not in visited:
-                    yield node, arc, False
-                    visited.add(arc.node)
-                    queue.append([arc.node, False])
-                    queue_set.add(arc.node)
-                else:
-                    yield node, arc, arc.node in queue_set
+            arcs[-1] += 1
+            arc = s.arcs[c]
 
-    def get_stream_tree(self, stream_name, pid):
-        root = StreamNode()
-        mapping = { self.initial_node: root }
-
-        if not self.initial_node.arcs:
-            root.end_of_path = True
-            return root
-
-        for node, arc, is_cycle_arc in self.depth_first_search_with_arcs():
-            snode = mapping[node]
-            chunk = arc.get_stream_chunk(stream_name, pid)
-            if is_cycle_arc:
-                if snode == mapping[arc.node]:
-                    continue # It is invisible cycle, so it is ok
-                # TODO: Support for cyles
-                return None
+            node = arc.node
+            v = node in visited
+            if v:
+                is_cycle = node in stack_set
             else:
-                if chunk:
-                    snode = snode.find_or_create_child(chunk.data)
-                mapping[arc.node] = snode
-                if not arc.node.arcs:
-                    snode.node = arc.node
-                    snode.end_of_path = True
-        return root
+                is_cycle = False
+            yield s, arc, v, is_cycle
+            if not v:
+                visited.add(node)
+                stack.append(node)
+                stack_set.add(node)
+                arcs.append(-1)
+
+    def tree_reduce(self, reduce_op, arc_value, is_visible, leaf_value):
+        assert self.initial_node
+        stack = [ self.initial_node ]
+        stack_set = set(stack)
+        stack_arcs = [ 0 ]
+        visited = {}
+        while stack:
+            node = stack[-1]
+            a = stack_arcs[-1]
+            if a == len(node.arcs):
+                stack_set.remove(node)
+                stack.pop()
+                stack_arcs.pop()
+                if not node.arcs:
+                    visited[node] = leaf_value
+                else:
+                    visited[node] = reduce_op(arc_value(a, visited[a.node]) for a in node.arcs)
+            else:
+                stack_arcs[-1] += 1
+                arc = node.arcs[a]
+                if arc.node in stack_set:
+                    # Cycle detected
+                    if is_visible(arc):
+                        return None
+                    i = stack.index(arc.node)
+                    for n, j in zip(stack[i:], stack_arcs[i:]):
+                        if is_visible(n.arcs[j-1]):
+                            return None
+                    visited[arc.node] = frozenset()
+                    # Invisible cycle
+                elif arc.node not in visited:
+                    stack.append(arc.node)
+                    stack_set.add(arc.node)
+                    stack_arcs.append(0)
+        return visited[self.initial_node]
+
+    def get_all_outputs(self, stream_name, pid, limit=None):
+        def arc_value(arc, node_value):
+            chunk = arc.get_stream_chunk(stream_name, pid)
+            if not chunk or not chunk.data:
+                return node_value
+
+            return frozenset(chunk.data + value for value in node_value)
+
+        def is_visible(arc):
+            return bool(arc.get_stream_chunk(stream_name, pid))
+
+        def reduce_op(values):
+            result = frozenset.union(*values)
+            if limit is None or len(result) <= limit:
+                return result
+            else:
+                r = list(result)
+                r.sort()
+                return frozenset(r[:limit])
+        return self.tree_reduce(reduce_op,
+                                arc_value,
+                                is_visible,
+                                frozenset(("",)))
+
+    def get_outputs_count(self, stream_name, pid, upto):
+        class TooManyOutputs(Exception):
+            pass
+        def arc_value(arc, node_value):
+            chunk = arc.get_stream_chunk(stream_name, pid)
+            if not chunk or not chunk.data:
+                return node_value
+
+            return frozenset(chunk.data + value for value in node_value)
+
+        def is_visible(arc):
+            return bool(arc.get_stream_chunk(stream_name, pid))
+
+        def reduce_op(values):
+            result = frozenset.union(*values)
+            if len(result) <= upto:
+                return result
+            else:
+                raise TooManyOutputs()
+        try:
+            return len(self.tree_reduce(reduce_op,
+                                        arc_value,
+                                        is_visible,
+                                        frozenset(("",))))
+        except TooManyOutputs:
+            return None
