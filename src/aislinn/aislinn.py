@@ -88,6 +88,13 @@ def parse_args():
                         default="capture",
                         help="")
 
+    parser.add_argument('--stderr',
+                        metavar="MODE",
+                        choices=["capture", "capture",
+                                 "print", "drop", "stdout"],
+                        default="capture",
+                        help="")
+
     parser.add_argument("--search",
                         metavar="SEARCH",
                         type=str,
@@ -189,7 +196,7 @@ def main():
     logging.debug("Run args: %s", run_args)
     logging.debug("Valgrind args: %s", valgrind_args)
 
-    logging.info("stdout mode: %s, stderr mode: -", args.stdout)
+    logging.info("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
 
     if args.profile:
         import cProfile

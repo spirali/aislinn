@@ -113,6 +113,9 @@ class Report:
                               "Search strategy")
         self.program_info.add(
                 "stdout-mode", generator.stdout_mode, "Stdout mode")
+        self.program_info.add(
+                "stderr-mode", generator.stderr_mode, "Stderr mode")
+
 
         if generator.send_protocol == "threshold":
             self.program_info.add(
@@ -278,6 +281,12 @@ class Report:
                     for rank, stdout in enumerate(error.stdout):
                         self.export_stream("stdout for rank {0}".format(rank),
                                            stdout, div)
+                if error.stderr:
+                    div.child("h4", "Stderr")
+                    for rank, stderr in enumerate(error.stderr):
+                        self.export_stream("stderr for rank {0}".format(rank),
+                                           stderr, div)
+
         else:
             div.child("p", "No errors found")
 

@@ -22,7 +22,7 @@ from base.controller import Controller, UnexpectedOutput
 import errormsg
 from state import State
 from base.node import Node, Arc
-from base.stream import StreamChunk, STREAM_STDOUT
+from base.stream import StreamChunk, STREAM_STDOUT, STREAM_STDERR
 from base.statespace import StateSpace
 from collections import deque
 from globalstate import GlobalState
@@ -124,6 +124,7 @@ class Generator:
         self.max_states = aislinn_args.max_states
 
         self.stdout_mode = aislinn_args.stdout
+        self.stderr_mode = aislinn_args.stderr
 
         self.debug_state = aislinn_args.debug_state
         if aislinn_args.debug_compare_states:
@@ -762,7 +763,13 @@ class Generator:
     def process_syscall(self, pid, commands, context):
         if commands[1] == "write":
             fd, data_ptr, size = commands[2:]
-            if fd == "1":
+            if fd == "2" and self.stderr_mode != "stdout":
+                if self.stderr_mode == "capture":
+                    context.add_stream_chunk(STREAM_STDERR, pid,
+                                             self.controller.read_mem(data_ptr,
+                                                                      size))
+                return self.stderr_mode == "print"
+            if fd == "1" or (fd == "2" and self.stderr_mode == "stdout"):
                 if self.stdout_mode == "capture":
                     context.add_stream_chunk(STREAM_STDOUT, pid,
                                              self.controller.read_mem(data_ptr,
@@ -884,6 +891,14 @@ class Generator:
                                 error_message.node,
                                 error_message.last_arc,
                                 STREAM_STDOUT,
+                                pid)
+                              for pid in xrange(self.process_count) ]
+                if self.stderr_mode == "capture":
+                    error_message.stderr = \
+                            [ self.statespace.stream_to_node(
+                                error_message.node,
+                                error_message.last_arc,
+                                STREAM_STDERR,
                                 pid)
                               for pid in xrange(self.process_count) ]
         return Report(self)

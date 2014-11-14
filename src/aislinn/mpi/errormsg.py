@@ -39,6 +39,7 @@ class ErrorMessage:
 
     events = None
     stdout = None
+    stderr = None
 
     def __init__(self):
         pass
