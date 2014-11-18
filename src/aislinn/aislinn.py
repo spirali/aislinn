@@ -18,6 +18,7 @@
 #
 
 from mpi.generator import Generator
+from base.stream import STREAM_STDOUT, STREAM_STDERR
 import base.utils as utils
 import argparse
 import sys
@@ -201,7 +202,33 @@ def parse_args():
         args.send_protocol_eager_threshold = 0
         args.send_protocol_randezvous_threshold = None
 
+    if args.stdout_write and args.stdout != "capture":
+        logging.error("--stdout-write is used but "
+                      "stdout is not captured (--stdout option)")
+        sys.exit(1)
+
+    if args.stderr_write and args.stderr != "capture":
+        logging.error("--stderr-write is used but "
+                      "stderr is not captured (--stderr option)")
+        sys.exit(1)
+
     return args, valgrind_args
+
+def write_outputs(generator, stream_name, limit, file_prefix):
+    if limit == "all":
+        limit = None
+    else:
+        assert isinstance(limit, int)
+    statespace = generator.statespace
+    for pid in xrange(generator.process_count):
+        outputs = list(statespace.get_all_outputs(stream_name, pid, limit))
+        outputs.sort()
+        for i, output in enumerate(outputs):
+            with open("{0}-{1}-{2}".format(file_prefix, pid, i), "w") as f:
+                    f.write(output)
+        logging.info("{2} output(s) of pid {1} on {0} was written "
+                     "(files '{3}-{1}-X')" \
+                             .format(stream_name, pid, len(outputs), file_prefix))
 
 def main():
     args, valgrind_args = parse_args()
@@ -248,6 +275,10 @@ def main():
         generator.create_report(args).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
     elif args.report_type == "html":
+        if args.stdout_write:
+            write_outputs(generator, STREAM_STDOUT, args.stdout_write, "stdout")
+        if args.stderr_write:
+            write_outputs(generator, STREAM_STDERR, args.stderr_write, "stderr")
         generator.create_report(args).write_html("report.html")
         logging.info("Report written into 'report.html'")
     if generator.error_messages:

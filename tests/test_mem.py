@@ -31,6 +31,9 @@ class MemTests(TestCase):
         self.execute(1, "noinit", error="invalidwrite")
         self.execute(1, error="invalidwrite")
 
+    def test_redzones(self):
+        self.program("redzones")
+        self.execute(1, stdout="1")
 
 if __name__ == "__main__":
     unittest.main()

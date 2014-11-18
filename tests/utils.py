@@ -79,7 +79,6 @@ class TestCase(unittest.TestCase):
             ):
         aislinn_args = { "report-type" : "xml",
                          "verbose" : 0,
-                         "stdout-write" : "1000",
                          "stderr-write" : "1000" }
 
         if error:
@@ -97,6 +96,9 @@ class TestCase(unittest.TestCase):
         if stdout is not None:
             aislinn_args["stdout"] = "print"
             check_output = False
+
+        if aislinn_args.get("stdout") in (None, "capture"):
+            aislinn_args["stdout-write"] = "1000"
 
         if isinstance(args, str):
             args = args.split()
