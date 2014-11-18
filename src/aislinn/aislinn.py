@@ -72,11 +72,13 @@ def parse_args():
                         type=str,
                         help="Standard send protocol.",
                         default="full")
-    parser.add_argument("--output",
+
+    parser.add_argument("--report-type",
                         metavar="TYPE",
-                        type=str,
+                        choices=["html", "xml", "none"],
                         help="Output type: xml, html, none",
                         default="html")
+
     parser.add_argument("--max-states",
                        metavar="N",
                        type=int,
@@ -171,10 +173,6 @@ def parse_args():
         logging.error("Invalid number of processes (parameter -p)")
         sys.exit(1)
 
-    if args.output not in ("xml", "html", "none"):
-        logging.error("Invalid output type (parameter --output)")
-        sys.exit(1)
-
     if args.search != "bfs" and args.search != "dfs":
         logging.error("Invalid argument for --search")
         sys.exit(1)
@@ -246,10 +244,10 @@ def main():
         generator.statespace.write("statespace.txt")
         logging.info("Statespace written into 'statespace.txt'")
 
-    if args.output == "xml":
+    if args.report_type == "xml":
         generator.create_report(args).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
-    elif args.output == "html":
+    elif args.report_type == "html":
         generator.create_report(args).write_html("report.html")
         logging.info("Report written into 'report.html'")
     if generator.error_messages:

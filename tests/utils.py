@@ -77,7 +77,7 @@ class TestCase(unittest.TestCase):
             send_protocol=None,
             heapsize=None,
             ):
-        aislinn_args = { "output" : "xml",
+        aislinn_args = { "report-type" : "xml",
                          "verbose" : 0,
                          "stdout-write" : "1000",
                          "stderr-write" : "1000" }
