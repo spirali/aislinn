@@ -137,7 +137,8 @@ typedef
    } State;
 
 static int verbosity_level = 0;
-static UWord heap_max_size = 128 * 1024 * 1024; // Default: 128M
+static SizeT heap_max_size = 128 * 1024 * 1024; // Default: 128M
+static SizeT redzone_size = 16;
 
 static MemorySpace *current_memspace = NULL;
 static VgHashTable states_table;
@@ -298,6 +299,7 @@ static void memspace_sanity_check(void)
 static
 Addr memspace_alloc(SizeT alloc_size, SizeT allign)
 {
+   alloc_size += redzone_size;
    if (UNLIKELY(alloc_size == 0)) {
       alloc_size = 1;
    }
@@ -1779,7 +1781,11 @@ static Bool process_cmd_line_option(const HChar* arg)
       return True;
    }
 
-   if (VG_INT_CLO(arg, "--heapsize", heap_max_size)) {
+   if (VG_INT_CLO(arg, "--heap-size", heap_max_size)) {
+      return True;
+   }
+
+   if (VG_INT_CLO(arg, "--alloc-redzone-size", redzone_size)) {
       return True;
    }
 

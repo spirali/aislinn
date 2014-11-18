@@ -72,10 +72,12 @@ class TestCase(unittest.TestCase):
             args=(),
             error=None,
             vgv=None,
+            verbose=None,
             stdout=None,
             check_output=True,
             send_protocol=None,
-            heapsize=None,
+            heap_size=None,
+            redzone_size=None,
             ):
         aislinn_args = { "report-type" : "xml",
                          "verbose" : 0,
@@ -87,11 +89,17 @@ class TestCase(unittest.TestCase):
         if vgv:
             aislinn_args["vgv"] = vgv
 
+        if verbose:
+            aislinn_args["verbose"] = verbose
+
         if send_protocol:
             aislinn_args["send-protocol"] = send_protocol
 
-        if heapsize:
-            aislinn_args["heapsize"] = heapsize
+        if heap_size:
+            aislinn_args["heap-size"] = heap_size
+
+        if redzone_size:
+            aislinn_args["redzone-size"] = redzone_size
 
         if stdout is not None:
             aislinn_args["stdout"] = "print"
@@ -124,7 +132,10 @@ class TestCase(unittest.TestCase):
 
         # Stdout
         if stdout is not None:
-            self.assertEquals(result_stdout, stdout)
+            if callable(stdout):
+                self.assertTrue(stdout(result_stdout))
+            else:
+                self.assertEquals(result_stdout, stdout)
         else:
             self.assertEquals(result_stdout, "")
 

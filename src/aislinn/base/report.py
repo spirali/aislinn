@@ -159,6 +159,13 @@ class Report:
         self.program_info.add(
                 "stderr-mode", generator.stderr_mode, "Stderr mode")
 
+        if args.heap_size:
+            self.program_info.add(
+                "heap-size", args.heap_size, "Heap size")
+
+        if args.redzone_size:
+            self.program_info.add(
+                "redzone-size", args.redzone_size, "Redzone size")
 
         if generator.send_protocol == "threshold":
             self.program_info.add(

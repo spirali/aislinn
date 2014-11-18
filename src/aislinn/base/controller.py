@@ -22,6 +22,7 @@ import socket
 import subprocess
 import paths
 import time
+import logging
 
 class UnexpectedOutput(Exception):
 
@@ -266,6 +267,7 @@ class Controller:
                 "--smc-check=all-non-file",
                 "--run-libc-freeres=no") + extra + args
 
+        logging.debug("Starting valgrind with %s", args)
         self.process = subprocess.Popen(
             args, cwd=self.cwd, stdout=self.stdout_arg)
 

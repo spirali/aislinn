@@ -64,10 +64,14 @@ def parse_args():
                         type=int,
                         default=0,
                         help="Verbosity of valgrind tool")
-    parser.add_argument("--heapsize",
+    parser.add_argument("--heap-size",
                         metavar="SIZE",
                         type=str,
                         help="Maximal size of heap")
+    parser.add_argument("--redzone-size",
+                        metavar="SIZE",
+                        type=int,
+                        help="Allocation red zones")
     parser.add_argument("-S", "--send-protocol",
                         metavar="VALUE",
                         type=str,
@@ -180,12 +184,19 @@ def parse_args():
 
     valgrind_args = []
 
-    if args.heapsize:
-        size = utils.sizestr_to_int(args.heapsize)
+    if args.heap_size:
+        size = utils.sizestr_to_int(args.heap_size)
         if size is None or size < 1:
-            logging.error("Invalid heap size (parameter --heapsize)")
+            logging.error("Invalid heap size (parameter --heap-size)")
             sys.exit(1)
-        valgrind_args.append("--heapsize={0}".format(size))
+        valgrind_args.append("--heap-size={0}".format(size))
+
+    if args.redzone_size:
+        size = int(args.redzone_size)
+        if size < 0:
+            logging.error("Invalid redzone size")
+            sys.exit(1)
+        valgrind_args.append("--alloc-redzone-size={0}".format(size))
 
     if args.vgv:
         valgrind_args.append("--verbose={0}".format(args.vgv))
