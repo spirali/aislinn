@@ -1,0 +1,415 @@
+= Aislinn User Guide
+Stanislav Böhm <stanislav.bohm [at] vsb [dot] cz>
+
+.Overview
+****
+
+* _Aislinn_ is a dynamic verifier for MPI programs;
+    it can check all possible runs with respect to nondeterminism introduced
+    by MPI.
+
+* _Aislinn_ operates directly on an unmodified C/C++ code.
+
+* _Aislinn_ can detect problems like invalid memory writes, misuse of MPI,
+    and resource leaks.
+
+* _Aislinn_ is released under GPLv2.
+
+****
+
+== What kind of problems can Aislinn find?
+
+Let us assume the following MPI program (executed on 3 processes):
+
+[source, c, linenums]
+----
+#include <mpi.h>
+#include <stdlib.h>
+
+int main(int argc, char **argv) {
+	int rank;
+
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	if (rank == 0) {
+		int *mem1 = (int*) malloc(sizeof(int) * 2);
+		int *mem2 = (int*) malloc(sizeof(int) * 3);
+		int data;
+		MPI_Recv(&data, 1, MPI_INT, MPI_ANY_SOURCE, 1, 
+			MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		mem1[data] = 10;
+		MPI_Recv(&data, 1, MPI_INT, MPI_ANY_SOURCE, 1, 
+			MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		mem2[data] = 10;
+		free(mem1);
+		free(mem2);
+	}
+
+	if (rank == 1 || rank == 2) {
+		MPI_Send(&rank, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+	}
+
+	MPI_Finalize();
+	return 0;
+}
+----
+
+The program does the following: process 0 receives two messages from anyone and
+processes 1 and 2 send a message to process 0. If a message from process 1 is
+received first, then the run is valid. If a message from process 2 is received
+first, then invalid memory write occurs at line 16. If we are unlucky during
+testing, it may happen that we will see only the first valid case. Hence all
+our tests pass even there is a problem.
+
+Aislinn always finds the problem and reports an invalid memory write in this
+application. It is possible because it does not check only a single run, but
+all possible behavior of the application (with respect to nondetermism of
+MPI).
+
+The current version can find the following problems:
+
+* Invalid memory writes
+* Invalid arguments of MPI calls
+* Deadlocks
+* Non-unique write on standard output 
+  (If your program should always write the same thing in all runs)
+
+In the next versions it is planned to implement a detection of the following
+problems:
+
+* Invalid memory reads
+* Use of uninitialized memory
+* Memory leaks, resource leaks
+* Non-unique results in written files
+
+== What programs can be verified?
+
+* Aislinn verifies MPI program written in C/C++. 
+
+* The current version supports many commonly used calls from MPI-2 and MPI-3
+  related to point-to-point communication, collective communication, and 
+  communicator management.
+  Unfortunately, MPI-IO and one-side communication is not supported now.
+  One of the main goals of the further development is to support almost all MPI
+  calls.
+
+* Source codes that contain MPI have to be translated by Aislinn version of 
+  `mpicc`; other source files do not have to be compiled by Aislinn.
+
+* The program state has to be fully described by its memory content and state
+  of MPI, e. g. program cannot communicate in other way than MPI. Reading files
+  or writing files is ok, until the program does not writes something into a file
+  and then reads it back in a single run.
+
+* _(limitation of the current version)_
+  A verified program cannot call MPI communication routines between file manipulations.
+  But it is ok to read the input, make an MPI computation and then write results.
+
+* Aislinn does not support multi-threaded applications. Each MPI process has
+  to have a single thread.
+
+
+== Installation
+
+IMPORTANT: Aislinn works only on *Linux x86-64* in the current version.
+
+=== Requirements
+
+Aislinn depends on the following software:
+
+ * Valgrind (a modified version, described below)
+ * Python 2.6+
+ * Matplotlib (optional, not necessary for a normal usage)
+
+=== Installation steps
+
+The installation steps to install development version of Aislinn:
+
+Clone the repository with Aislinn:
+
+    $ git clone https://github.com/spirali/aislinn
+
+Go to the directory with Aislinn:
+
+    $ cd aislinn
+
+Clone the repository with a modified version of Valgrind:
+
+    $ git clone --recursive https://github.com/spirali/aislinn-valgrind valgrind
+
+Build Valgrind
+
+    $ cd valgrind
+    $ sh autogen.sh
+    $ ./configure
+    $ make
+    $ cd ..
+
+Build Aislinn
+
+    $ ./waf configure
+    $ ./waf
+
+That is all.
+
+The following text assumes that Aislinn's `bin` was added into system
+PATH like this:
+
+    $ export PATH=$PATH:/path/to/aislinn/bin/
+
+NOTE: If you later update a repository with Aislinn, do not forget to update
+also Valgrind repository and run `make` in it.
+
+== The first run
+
+Let assume that we have a source file `main.c` that contains our
+MPI application. First, it has to be compiled with Aislinn:
+
+    $ aislinn-cc -g main.c -o myprogram
+
+Script `aislinn-cc` just calls `gcc` with modified include paths.  The
+parameter `-g` is an option of `gcc` that adds debugging symbols. It allows to
+provide more precise error messages. Beside `aislinn-cc`, there is also
+`aislinn-c++` for C++ programs.
+
+NOTE: There are also symlinks  `mpicc` and `mpicxx` to `aislinn-cc` and
+`aislin-c++` in `bin` directory, hence Aislinn can directly serve as a
+replacement for an MPI implementation.
+
+NOTE: You have to compile only source files that contain MPI functions;
+other source files or libraries do not have to be compiled by Aislinn
+
+A compiled program can be verified by running `aislinn`:
+
+    $ aislinn -p=4 ./myprogram
+
+where **-p=4** says that an execution with four MPI processes are examined.
+When analysis is finished, it produces a report into file `report.html`.
+More options are described in Section <<_aislinn_options>>.
+
+== How Aislinn works?
+
+This section gives a brief overview how Aislinn internally works. 
+It should give a better understanding of some configuration options, some
+information in reports, and rationalization of some limitations.  I have tried
+to design the tool in a way, that the user does not need this knowledge and in
+most cases it should be sufficient to use the tool as it is described in
+Chapter <<_the_first_run>> without additional knowledge.
+
+Aislinn is based on state-space analysis, i. e. it builds a graph of all
+relevant behavior.  As an example we take the C program from the first chapter. 
+
+To make the explanation easier, two things are simplified:
+
+* We start to think about program when all processes already called
+`MPI_Init`. The situation before `MPI_Init` is treated in a slightly different
+way and it is not important for this explanation.
+* We assume that our send is synchronous to avoid explaining full semantics
+of `MPI_Send`.  (In other words, we have replaced `MPI_Send` by `MPI_SSend` in
+the example.)
+
+When a verification of a program is started, Aislinn starts to build a
+graph of relevant behaviors -- ``state space''. It is created by executing a
+program in a controlled environment. When there are more possibilities how a
+situation can be resolved, Aislinn repeatedly returns the program back to this state
+and systematically tries all variants.  The following state space is created for
+our example:
+
+image::statespace.png[]
+
+Nodes of the state space are global states of the verified application.  They
+can be seen as ``snapshots'' of a memory content and CPU registers of each
+process, together with a state of MPI, e.g. messages that are transported
+between processes.  An arc is a run of the program between two consecutive MPI
+calls that may have a global effect.
+
+The initial state is a state where all processes are in a situation directly
+after leaving of `MPI_Init` (line 7).  The first arc represents a computation
+in process 0, an execution of code between `MPI_Init` and the first `MPI_Recv`.
+The arc between states 2 and 3 is a computation in process 1 between `MPI_Init`
+and `MPI_Send`. The next arc between states 3 and 4 means the same for process
+2.  In state 4, there are two choices how can our program proceed; the message
+from process 1 is received (the arc between states 4 and 5) or the message from
+process 2 is received (the arc between states 4 and 6). When Aislinn
+discovers a state that was already processed, then an execution of this branch
+is terminated.
+
+Aislinn creates the whole state space by this approach.  During an execution
+of each arc, correctness is checked. Therefore the tool is able to discover
+the problem with an invalid memory write that happens during execution the arc
+between node 4 and 6.
+
+There is a natural question, why our state space does contain all executions.
+For example, process 0 could receive the message from process 1 before the
+process 2 sends its own message; it would spawn a new branch from state 3. Such
+execution is possible in our program, but it can be proven that it is not
+necessary to verify this path, because if there is an error then it will be
+discovered also in other paths.  Aislinn uses
+http://en.wikipedia.org/wiki/Partial_order_reduction[Partial order reduction]
+techniques. It is used to prove that some executions are ``covered'' by the
+rest of the state space.  It allows us to safely remove some paths from a state
+space (and speed up the verification) and still be able detect all errors.
+
+== Aislinn options
+
+=== Synopsis
+
+    aislinn [options] your-program [your-program-options]
+
+=== Main options
+
+**-p N**
+
+Specify a number of processes for which the program will be verified. (default: 1)
+
+**--heap-size=SIZE**
+
+Set maximal size of heap for the verified program in bytes. Suffixes K, M, and
+G can be used to specify the size in kilobytes, megabytes, and gigabytes, e.g.
+`--heap-size=50M`
+
+**--max-states=COUNT**
+
+Set a maximal number of states in a state space. (default: 9999999)
+
+**--redzone-size=SIZE**
+
+Set size of minimal memory padding that separates each allocation. 
+It allows to detect underrun and overrun up to SIZE bytes. (default: 16)
+
+**--report-type=TYPE**
+
+Set the output format for reports. Possible values are:
+
+* _html_ - A human readable report in html (default)
+* _xml_  - An XML report for additional processing
+* _none_ - No report is written
+
+**-S PROTOCOL**, **--send-protocol=PROTOCOL**
+
+Set the send protocol of standard sends. (default: _full_)
+
+* _full_ - The full semantics according MPI standard.
+
+* _eager_ - All standard sends are considered as buffered sends; it can speed up
+  the verification. All errors inside processes will be reported as for _full_
+  semantics, but it is possible that some deadlocks are missed.
+
+* _randezvous_ - All standard sends are considered as synchronous sends;
+  it can speed up the verification. You should see almost all deadlocks but it
+  is possible to miss some errors inside processes.
+
+* X (X is integer) - It allows to specify a behavior according to the size of the
+  message. If the size of a message is lower than X then a buffered send is
+  used, otherwise a synchronous send is used.
+
+* X:Y (X and Y are integers) - Similar to the previous option. If the size of
+  the message is lower than X then a buffered send is used, if the size is
+bigger than Y then a synchronous send is used, otherwise the full semantics are
+applied (i.e. both options are considered).
+
+Suffixes K, M, and G can be used to specify the size in kilobytes, megabytes,
+and gigabytes in the last two options.
+
+**--verbose=LEVEL**
+
+Set verbosity level. (default: 1)
+
+* 0 - show only errors
+* 1 - show INFO messages
+* 2 - show all messages including DEBUG messages
+
+=== Stream options
+
+**--stderr=MODE**
+
+Set how to treat standard error output of the verified application. Possible
+values: _capture_, _print_, _drop_, _stdout_ (default: capture). The first
+three options have the same meaning as in the case of **--stdout** option.  When
+mode _stdout_ is used then standard error output is redirected to standard
+output and then a mode of **--stdout** is applied.
+
+**--stderr-write=N**
+
+It is analogous to **--stdout-write** but for standard error output.
+Outputs are saved into files with names `stderr-<pid>-<x>`.
+
+**--stdout=MODE**
+
+Set how to treat standard output of the verified application. (default:
+capture)
+
+* _capture_ - Standard output is captured and processed by Aislinn as a part of
+  the state space, i.e. when an error occurs, Aislinn can show a corresponding
+  output of an invalid run.
+* _print_ - Standard output is ignored by Aislinn and it is normally processed 
+  by an application as usual. Note: During a state space analysis, parts of the
+  verified application can be run several times or run in different orders.
+  Therefore the output can be quite different from a normal output of the
+  application.
+* _drop_ - Standard output of the verified application is discarded.
+
+**--stdout-write=N**
+
+When used, it saves the first N possible outputs that may application write on
+standard output. N can be set to value "all" to obtain all outputs. 
+Outputs are saved into files with names `stdout-<pid>-<x>`.
+
+=== Semi-internal options
+
+These options allow to configure or get information about the verification
+process.  It may be useful to debug the verified application, but it also
+needs some insight into Aislinn.
+
+**--search=TYPE**
+
+Set a search algorithm to go through the state space. (default: bfs)
+
+* _bfs_ - Bread-first search
+* _dfs_ - Depth-first search
+
+**--stats=N**
+
+Memory-related statistics are saved every N discovered states. Results are
+written into the report.  (This option requires installed *matplotlib*)
+
+**--write-dot**
+
+Write a resulting state space into file `statespace.dot` (graphviz format).
+
+=== Internal options
+
+The following options are considered as internal and they are used for debugging
+Aislinn itself.
+
+**--profile**
+
+**--debug-under-valgrind**
+
+**--profile-under-valgrind**
+
+**--vgv=LEVEL**
+
+Set verbosity level of valgrind tool. (default: 0)
+
+**--debug-state=UID**
+
+**--debug-compare-states=STATE~STATE**
+
+**--debug-statespace**
+
+== Aislinn and PETSc
+
+If you want to verify a program that uses http://www.mcs.anl.gov/petsc/[_Portable, Extensible Toolkit for Scientific
+Computation_] (PETSc), proceed as follows:
+
+* Download and unpack a distribution tarball of PETSc.
+
+* Run the configure command; modify `path/to/aislinn` to your real path where Aislinn is installed.
+    
+    $ ./configure --with-mpi-dir=/path/to/aislinn --with-mpiuni-fortran-binding=false --with-shared-libraries=0 
+
+* Compile your program as usual against this version of PETSc.
+
+* Use `aislinn` instead of `mpirun`.
