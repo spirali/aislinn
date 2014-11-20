@@ -161,10 +161,10 @@ class TestCase(unittest.TestCase):
                                             set_to_sorted_list(program_outputs - expected_outputs),
                                             set_to_sorted_list(expected_outputs - program_outputs)))
 
-    def controller(self, verbose=False):
+    def controller(self, args=(), verbose=False):
         self.assertTrue(self.program_instance is not None)
         self.report = None
-        return self.program_instance.controller(verbose)
+        return self.program_instance.controller(args, verbose)
 
 
 def cleanup_build_dir():
@@ -260,8 +260,8 @@ class Program:
         return stdout, stderr
 
 
-    def controller(self, verbose):
-        controller = base.controller.Controller(("./a.out",), AISLINN_BUILD)
+    def controller(self, args, verbose):
+        controller = base.controller.Controller(("./a.out",) + args, AISLINN_BUILD)
         if verbose:
            controller.valgrind_args = ("--verbose=1",)
         return controller

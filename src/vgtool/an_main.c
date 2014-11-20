@@ -69,6 +69,10 @@
 #define VA_CHUNKS 65536
 #define PAGE_OFF(a) ((a) & PAGE_MASK)
 
+#define MEM_NOACCESS 0
+#define MEM_LOCKED 1
+#define MEM_DEFINED 2
+
 typedef
    struct {
       UChar vabits[VA_CHUNKS];
@@ -210,10 +214,16 @@ static NOINLINE void report_error(const char *code)
    tl_assert(0); // no return from process_commands
 }
 
-static NOINLINE void report_error_write(Addr addr, SizeT size)
+static NOINLINE void report_error_write(Addr addr, SizeT size, Bool locked)
 {
    char message[MAX_MESSAGE_BUFFER_LENGTH];
-   VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH, "invalidwrite 0x%lx %lu", addr, size);
+   if (!locked) {
+       VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
+                     "invalidwrite 0x%lx %lu", addr, size);
+   } else {
+       VG_(snprintf)(message, MAX_MESSAGE_BUFFER_LENGTH,
+                     "invalidwrite-locked 0x%lx %lu", addr, size);
+   }
    report_error(message);
 }
 
@@ -608,17 +618,18 @@ part2:
 
 static INLINE void make_mem_undefined(Addr a, SizeT len)
 {
-   set_address_range_perms(a, len, 1);
+   // Same as defined now, we do not support tracking undefined memory yet
+   set_address_range_perms(a, len, MEM_DEFINED);
 }
 
 static INLINE void make_mem_defined(Addr a, SizeT len)
 {
-   set_address_range_perms(a, len, 1);
+   set_address_range_perms(a, len, MEM_DEFINED);
 }
 
 static INLINE void make_mem_noaccess(Addr a, SizeT len)
 {
-   set_address_range_perms(a, len, 0);
+   set_address_range_perms(a, len, MEM_NOACCESS);
 }
 
 static void hash_to_string(MD5_Digest *digest, char *out);
@@ -637,7 +648,7 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
       UChar *b = base;
       Bool empty = True;
       for (i = 0; i < PAGE_SIZE; i++) {
-         if (page->va->vabits[i]) {
+         if (page->va->vabits[i] != MEM_NOACCESS) {
             if (s == 0) {
                b = base + i;
             }
@@ -709,7 +720,7 @@ static void memimage_save_page_content(Page *page)
    UChar *dst = page->data;
    VA *va = page->va;
    for (i = 0; i < PAGE_SIZE; i++) {
-      if (va->vabits[i]) {
+      if (va->vabits[i] != MEM_NOACCESS) {
          dst[i] = src[i];
          //c++;
       }
@@ -726,7 +737,7 @@ static void memimage_restore_page_content(Page *page)
    tl_assert(page->data);
    UChar *src = page->data;
    for (i = 0; i < PAGE_SIZE; i++) {
-      if (va->vabits[i]) {
+      if (va->vabits[i] != MEM_NOACCESS) {
           dst[i] = src[i];
       }
    }
@@ -909,7 +920,7 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
    //VG_(printf)("TRACE WRITE %lu %lu\n", addr, size);
    AuxMapEnt *ent = maybe_find_in_auxmap(addr);
    if (UNLIKELY(ent == NULL)) {
-        report_error_write(addr, size);
+        report_error_write(addr, size, False);
         tl_assert(0); // no return here
    }
    page_prepare_for_write(&ent->page);
@@ -918,9 +929,15 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
    SizeT i;
    //page_dump(page);
    for (i = 0; i < size; i++) {
-      //VG_(printf)("OFFSET %lu %i\n", offset + i, page->va->vabits[offset + i]);
-      if (UNLIKELY(offset + i < PAGE_SIZE && !page->va->vabits[offset + i])) {
-         report_error_write(addr, size);
+      if (UNLIKELY(offset + i >= PAGE_SIZE)) {
+           break;
+      }
+      if (UNLIKELY(page->va->vabits[offset + i] == MEM_NOACCESS)) {
+         report_error_write(addr, size, False);
+         tl_assert(0); // no return here
+      }
+      if (UNLIKELY(page->va->vabits[offset + i] == MEM_LOCKED)) {
+         report_error_write(addr, size, True);
          tl_assert(0); // no return here
       }
    }
@@ -1480,6 +1497,22 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          state_free(state);
          write_message("Ok\n");
          continue;
+      }
+
+      if (!VG_(strcmp)(cmd, "LOCK")) {
+          Addr addr = next_token_uword();
+          SizeT size = next_token_uword();
+          set_address_range_perms(addr, size, MEM_LOCKED);
+          write_message("Ok\n");
+          continue;
+      }
+
+      if (!VG_(strcmp)(cmd, "UNLOCK")) {
+          Addr addr = next_token_uword();
+          SizeT size = next_token_uword();
+          set_address_range_perms(addr, size, MEM_DEFINED);
+          write_message("Ok\n");
+          continue;
       }
 
       if (!VG_(strcmp)(cmd, "STATS")) {

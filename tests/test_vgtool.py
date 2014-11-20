@@ -173,6 +173,30 @@ class VgToolTests(TestCase):
         self.assertEquals(c.process.stdout.readline(), "Hello 2!\n")
         c.kill()
 
+    def test_access(self):
+        self.program("access")
+
+        c = self.controller(("10", "9"))
+        c.start()
+        self.assertEquals("EXIT 0", c.run_process())
+
+        c = self.controller(("9", "10"))
+        c.start()
+        self.assertTrue(c.run_process().startswith("REPORT invalidwrite "))
+
+        c = self.controller(("10", "9"))
+        ptr = self.get_call_1(c.start(), "init")
+        c.lock_memory(ptr, 40)
+        self.assertTrue(
+                c.run_process().startswith("REPORT invalidwrite-locked"))
+
+    def get_call_1(self, line, name):
+        args = line.split()
+        self.assertEquals(len(args), 3)
+        self.assertEquals(args[0], "CALL")
+        self.assertEquals(args[1], name)
+        return args[2]
+
 
 
 if __name__ == "__main__":

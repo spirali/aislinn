@@ -29,6 +29,9 @@ class UnexpectedOutput(Exception):
     def __init__(self, output):
         self.output = output
 
+    def __str__(self):
+        return self.output
+
 class Controller:
 
     FUNCTION_INT = 0
@@ -178,6 +181,12 @@ class Controller:
             name, value = entry.split()
             result[name] = int(value)
         return result
+
+    def lock_memory(self, addr, size):
+        self.send_and_receive_ok("LOCK {0} {1}\n".format(addr, size))
+
+    def unlock_memory(self, addr, size):
+        self.send_and_receive_ok("UNLOCK {0} {1}\n".format(addr, size))
 
     ### Semi-internal functions
 
