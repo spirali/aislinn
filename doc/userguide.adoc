@@ -284,6 +284,7 @@ Set the output format for reports. Possible values are:
 
 * _html_ - A human readable report in html (default)
 * _xml_  - An XML report for additional processing
+* _html+xml_ - Create both reports
 * _none_ - No report is written
 
 **-S PROTOCOL**, **--send-protocol=PROTOCOL**

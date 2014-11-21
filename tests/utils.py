@@ -8,11 +8,14 @@ import sys
 AISLINN_TESTS = os.path.dirname(os.path.abspath(__file__))
 AISLINN_ROOT = os.path.dirname(AISLINN_TESTS)
 AISLINN_BUILD = os.path.join(AISLINN_TESTS, "build")
+AISLINN_REPORT_GALLERY = os.path.join(AISLINN_TESTS, "reports")
 AISLINN_BIN = os.path.join(AISLINN_ROOT, "bin")
 
 AISLINN = os.path.join(AISLINN_BIN, "aislinn")
 AISLINN_CC = os.path.join(AISLINN_BIN, "aislinn-cc")
 AISLINN_CPP = os.path.join(AISLINN_BIN, "aislinn-c++")
+
+REPORT_GALLERY = False
 
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.controller
@@ -28,10 +31,12 @@ class TestCase(unittest.TestCase):
     category = None
 
     def setUp(self):
+        self.test_name = None
         self.report = None
         self.program_instance = None
         self.output_instance = None
         self.reset_output_on_change = True
+        self.counter = None
 
     def read_report(self):
         filename = os.path.join(AISLINN_BUILD, "report.xml")
@@ -51,6 +56,8 @@ class TestCase(unittest.TestCase):
         self.program_instance = Program(files, **kw)
         self.program_instance.build()
         self.reset_output_on_change = True
+        self.test_name = test_name
+        self.counter = 0
 
     def reset_output(self):
         self.output_instance = Output()
@@ -83,6 +90,9 @@ class TestCase(unittest.TestCase):
                          "verbose" : 0,
                          "stderr-write" : "1000" }
 
+        if REPORT_GALLERY and error:
+            aislinn_args["report-type"] = "html+xml"
+
         if error:
             check_output = False
 
@@ -114,6 +124,8 @@ class TestCase(unittest.TestCase):
         # Run ---------------------------
         result_stdout, result_stderr = \
                 self.program_instance.run(aislinn_args, processes, args)
+
+
         report = self.read_report()
         self.report = report
 
@@ -141,7 +153,15 @@ class TestCase(unittest.TestCase):
 
         if check_output:
             self.check_output(report, processes)
+
+        if REPORT_GALLERY and error:
+            filename = "{0.category}-{0.test_name}-{0.counter}-{1}.html" \
+                    .format(self, "_".join(error))
+            os.rename(os.path.join(AISLINN_BUILD, "report.html"),
+                      os.path.join(AISLINN_REPORT_GALLERY, filename))
+
         self.reset_output_on_change = True
+        self.counter += 1
 
     def check_output(self, report, processes):
         if self.output_instance is None:

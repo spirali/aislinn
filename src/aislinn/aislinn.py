@@ -80,7 +80,7 @@ def parse_args():
 
     parser.add_argument("--report-type",
                         metavar="TYPE",
-                        choices=["html", "xml", "none"],
+                        choices=["html", "xml", "none", "html+xml"],
                         help="Output type: xml, html, none",
                         default="html")
 
@@ -282,10 +282,10 @@ def main():
         generator.statespace.write("statespace.txt")
         logging.info("Statespace written into 'statespace.txt'")
 
-    if args.report_type == "xml":
+    if args.report_type == "xml" or args.report_type == "html+xml":
         generator.create_report(args).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
-    elif args.report_type == "html":
+    if args.report_type == "html" or args.report_type == "html+xml":
         if args.stdout_write:
             write_outputs(generator, STREAM_STDOUT, args.stdout_write, "stdout")
         if args.stderr_write:
