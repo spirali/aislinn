@@ -45,7 +45,8 @@ class MemTests(TestCase):
 
     def test_invaliddata(self):
         self.program("invaliddata")
-        self.execute(1, "recv")
+        self.execute(1, "recv", error="invalid-recv-buffer")
+        self.execute(1, "send", error="invalid-send-buffer")
 
 if __name__ == "__main__":
     unittest.main()

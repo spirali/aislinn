@@ -734,18 +734,27 @@ def get_send_type(generator, state, mode, datatype, count):
 def call_send(generator, args, state, context,
               blocking, mode, name, persistent=False):
     if blocking:
-        data_ptr, count, datatype, target, tag, comm = args
+        buf_ptr, count, datatype, target, tag, comm = args
     else:
-        data_ptr, count, datatype, target, tag, comm, request_ptr = args
+        buf_ptr, count, datatype, target, tag, comm, request_ptr = args
 
     check.check_rank(comm, target, 4, False, True)
+
+    r = generator.controller.check_is_readable(buf_ptr, count * datatype.size)
+    if r != "Ok":
+        e = errormsg.CallError()
+        e.name = "invalid-send-buffer"
+        e.short_description = "Invalid send buffer"
+        e.description = "Invalid receive buffer. " \
+                        "Address 0x{0:x} is not accessible.".format(int(r))
+        e.throw()
 
     send_type = get_send_type(generator, state, mode, datatype, count)
     if not persistent and target == consts.MPI_PROC_NULL:
         request_id = state.add_completed_request()
     else:
         request_id = state.add_send_request(comm.comm_id, target,
-                         tag, data_ptr, datatype, count, send_type)
+                         tag, buf_ptr, datatype, count, send_type)
         if not persistent:
             request = state.get_request(request_id)
             request.create_message(generator, state)
@@ -767,6 +776,15 @@ def call_recv(generator, args, state,
               context, blocking, name, persistent=False):
     buf_ptr, count, datatype, source, tag, comm, ptr = args
     check.check_rank(comm, source, 4, True, True)
+
+    r = generator.controller.check_is_writable(buf_ptr, count * datatype.size)
+    if r != "Ok":
+        e = errormsg.CallError()
+        e.name = "invalid-recv-buffer"
+        e.short_description = "Invalid receive buffer"
+        e.description = "Invalid receive buffer. " \
+                        "Address 0x{0:x} is not accessible.".format(int(r))
+        e.throw()
 
     if blocking:
         status_ptr = ptr
