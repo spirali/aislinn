@@ -182,6 +182,12 @@ class Controller:
             result[name] = int(value)
         return result
 
+    def check_is_writable(self, addr, size):
+        return self.send_and_receive("CHECK write {0} {1}\n".format(addr, size))
+
+    def check_is_readable(self, addr, size):
+        return self.send_and_receive("CHECK read {0} {1}\n".format(addr, size))
+
     def lock_memory(self, addr, size):
         self.send_and_receive_ok("LOCK {0} {1}\n".format(addr, size))
 

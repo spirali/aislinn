@@ -43,5 +43,9 @@ class MemTests(TestCase):
         self.execute(1, stdout=lambda data: check_stdout(data, 100), redzone_size=100)
         self.execute(1, stdout=lambda data: check_stdout(data, 6000), redzone_size=6000)
 
+    def test_invaliddata(self):
+        self.program("invaliddata")
+        self.execute(1, "recv")
+
 if __name__ == "__main__":
     unittest.main()

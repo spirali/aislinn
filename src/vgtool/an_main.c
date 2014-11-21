@@ -555,6 +555,191 @@ static INLINE Page** get_page_ptr (Addr a)
    return &find_or_alloc_in_auxmap(a)->page;
 }
 
+// same as get_page_ptr, but do not create one if it cannot be found
+static INLINE Page** get_page_ptr_or_null(Addr a)
+{
+    AuxMapEnt *res = maybe_find_in_auxmap(a);
+    if (UNLIKELY(!res)) {
+        return NULL;
+    }
+    return &res->page;
+}
+
+
+static
+Bool check_address_range_perms (
+                Addr a, SizeT lenT, UChar perm, Addr *first_invalid_mem)
+{
+   VA* va;
+   Page **page_ptr;
+   UWord pg_off;
+
+   UWord aNext = start_of_this_page(a) + PAGE_SIZE;
+   UWord len_to_next_secmap = aNext - a;
+   UWord lenA, lenB;
+
+   // lenT = lenA + lenB (lenA upto first page, lenB is rest)
+   if (is_start_of_page(a)) {
+      lenA = 0;
+      lenB = lenT;
+      goto part2;
+   } else if ( lenT <= len_to_next_secmap ) {
+      lenA = lenT;
+      lenB = 0;
+   } else {
+      lenA = len_to_next_secmap;
+      lenB = lenT - lenA;
+   }
+
+   page_ptr = get_page_ptr_or_null(a);
+   if (!page_ptr) {
+        *first_invalid_mem = a;
+       return False;
+   }
+   va = (*page_ptr)->va;
+   pg_off = PAGE_OFF(a);
+   while (lenA > 0) {
+      if (UNLIKELY(va->vabits[pg_off] != perm)) {
+          *first_invalid_mem = start_of_this_page(a) + pg_off;
+          return False;
+      }
+      pg_off++;
+      lenA--;
+   }
+
+   a = start_of_this_page (a) + PAGE_SIZE;
+
+part2:
+   while (lenB >= PAGE_SIZE) {
+      page_ptr = get_page_ptr_or_null(a);
+      if (!page_ptr) {
+           *first_invalid_mem = a;
+          return False;
+      }
+      va = (*page_ptr)->va;
+
+      for (pg_off = 0; pg_off < PAGE_SIZE; pg_off++) {
+         if (UNLIKELY(va->vabits[pg_off] != perm)) {
+             *first_invalid_mem = start_of_this_page(a) + pg_off;
+             return False;
+         }
+      }
+      lenB -= PAGE_SIZE;
+      a += PAGE_SIZE;
+   }
+
+   tl_assert(lenB < PAGE_SIZE);
+
+   page_ptr = get_page_ptr_or_null(a);
+   if (!page_ptr) {
+        *first_invalid_mem = a;
+       return False;
+   }
+   va = (*page_ptr)->va;
+   pg_off = 0;
+   while (lenB > 0) {
+      if (UNLIKELY(va->vabits[pg_off] != perm)) {
+           *first_invalid_mem = start_of_this_page(a) + pg_off;
+           return False;
+      }
+      pg_off++;
+      lenB--;
+   }
+   return True;
+}
+
+static
+Bool check_address_range_perms_not (
+                Addr a, SizeT lenT, UChar perm, Addr *first_invalid_mem)
+{
+   VA* va;
+   Page **page_ptr;
+   UWord pg_off;
+
+   UWord aNext = start_of_this_page(a) + PAGE_SIZE;
+   UWord len_to_next_secmap = aNext - a;
+   UWord lenA, lenB;
+
+   // lenT = lenA + lenB (lenA upto first page, lenB is rest)
+   if (is_start_of_page(a)) {
+      lenA = 0;
+      lenB = lenT;
+      goto part2;
+   } else if ( lenT <= len_to_next_secmap ) {
+      lenA = lenT;
+      lenB = 0;
+   } else {
+      lenA = len_to_next_secmap;
+      lenB = lenT - lenA;
+   }
+
+   page_ptr = get_page_ptr_or_null(a);
+   if (!page_ptr) {
+        *first_invalid_mem = a;
+       return False;
+   }
+   va = (*page_ptr)->va;
+   pg_off = PAGE_OFF(a);
+   while (lenA > 0) {
+      if (UNLIKELY(va->vabits[pg_off] == perm)) {
+          *first_invalid_mem = start_of_this_page(a) + pg_off;
+          return False;
+      }
+      pg_off++;
+      lenA--;
+   }
+
+   a = start_of_this_page (a) + PAGE_SIZE;
+
+part2:
+   while (lenB >= PAGE_SIZE) {
+      page_ptr = get_page_ptr_or_null(a);
+      if (!page_ptr) {
+           *first_invalid_mem = a;
+          return False;
+      }
+      va = (*page_ptr)->va;
+
+      for (pg_off = 0; pg_off < PAGE_SIZE; pg_off++) {
+         if (UNLIKELY(va->vabits[pg_off] == perm)) {
+             *first_invalid_mem = start_of_this_page(a) + pg_off;
+             return False;
+         }
+      }
+      lenB -= PAGE_SIZE;
+      a += PAGE_SIZE;
+   }
+
+   tl_assert(lenB < PAGE_SIZE);
+
+   page_ptr = get_page_ptr_or_null(a);
+   if (!page_ptr) {
+        *first_invalid_mem = a;
+       return False;
+   }
+   va = (*page_ptr)->va;
+   pg_off = 0;
+   while (lenB > 0) {
+      if (UNLIKELY(va->vabits[pg_off] == perm)) {
+           *first_invalid_mem = start_of_this_page(a) + pg_off;
+           return False;
+      }
+      pg_off++;
+      lenB--;
+   }
+   return True;
+}
+
+static Bool check_is_writable(Addr addr, SizeT size, Addr *first_invalid_addr)
+{
+    return check_address_range_perms(addr, size, MEM_DEFINED, first_invalid_addr);
+}
+
+static Bool check_is_readable(Addr addr, SizeT size, Addr *first_invalid_addr)
+{
+    return check_address_range_perms_not(addr, size, MEM_NOACCESS, first_invalid_addr);
+}
+
 static
 void set_address_range_perms (
                 Addr a, SizeT lenT, UChar perm)
@@ -1497,6 +1682,31 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          state_free(state);
          write_message("Ok\n");
          continue;
+      }
+
+      if (!VG_(strcmp)(cmd, "CHECK")) {
+          char *type = next_token();
+          Addr addr = next_token_uword();
+          SizeT size = next_token_uword();
+          Bool result;
+          Addr first_invalid_addr;
+          if (!VG_(strcmp)(type, "write")) {
+              result = check_is_writable(addr, size, &first_invalid_addr);
+          } else if (!VG_(strcmp)(type, "read")) {
+              result = check_is_readable(addr, size, &first_invalid_addr);
+          } else {
+              write_message("Error: Invalid argument\n");
+              VG_(exit)(1);
+          }
+
+          if (result) {
+               write_message("Ok\n");
+          } else {
+              VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
+                           "%lu\n", first_invalid_addr));
+              write_message(command);
+          }
+          continue;
       }
 
       if (!VG_(strcmp)(cmd, "LOCK")) {

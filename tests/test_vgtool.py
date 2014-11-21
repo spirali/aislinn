@@ -174,10 +174,15 @@ class VgToolTests(TestCase):
         c.kill()
 
     def test_access(self):
+        INT_SIZE = 4
         self.program("access")
 
         c = self.controller(("10", "9"))
-        c.start()
+        ptr = self.get_call_1(c.start(), "init")
+        self.assertEquals("Ok", c.check_is_writable(ptr, 10 * INT_SIZE))
+        self.assertEquals(ptr + 10 * INT_SIZE, int(c.check_is_writable(ptr, 11 * INT_SIZE)))
+        self.assertEquals("Ok", c.check_is_readable(ptr, 10 * INT_SIZE))
+        self.assertEquals(ptr + 10 * INT_SIZE, int(c.check_is_readable(ptr, 11 * INT_SIZE)))
         self.assertEquals("EXIT 0", c.run_process())
 
         c = self.controller(("9", "10"))
@@ -186,16 +191,45 @@ class VgToolTests(TestCase):
 
         c = self.controller(("10", "9"))
         ptr = self.get_call_1(c.start(), "init")
-        c.lock_memory(ptr, 40)
+        p2 = ptr + 6 * INT_SIZE
+        c.lock_memory(p2, 4 * INT_SIZE)
+        self.assertEquals("Ok", c.check_is_writable(ptr, INT_SIZE))
+        self.assertEquals("Ok", c.check_is_readable(ptr, INT_SIZE))
+        self.assertEquals(p2, int(c.check_is_writable(p2, INT_SIZE)))
+        self.assertEquals("Ok", c.check_is_readable(p2, INT_SIZE))
+        c.unlock_memory(p2, 4 * INT_SIZE)
+        self.assertEquals("Ok", c.check_is_writable(p2, INT_SIZE))
+        self.assertEquals("Ok", c.check_is_readable(p2, INT_SIZE))
+        self.assertEquals("EXIT 0", c.run_process())
+
+        c = self.controller(("10", "9"))
+        ptr = self.get_call_1(c.start(), "init")
+        c.lock_memory(ptr, 10 * INT_SIZE)
+        self.assertEquals(int(ptr), int(c.check_is_writable(ptr, 11 * INT_SIZE)))
+        self.assertEquals("Ok", c.check_is_readable(ptr, 10 * INT_SIZE))
         self.assertTrue(
                 c.run_process().startswith("REPORT invalidwrite-locked"))
 
+        s = 1000000 * INT_SIZE # 1M integers
+        c = self.controller((str(s), "9"))
+        ptr = self.get_call_1(c.start(), "init")
+        self.assertEquals("Ok", c.check_is_writable(ptr, s))
+        self.assertEquals("Ok", c.check_is_readable(ptr, s))
+        p2 = ptr + 500000 * INT_SIZE
+        c.lock_memory(p2, 1)
+        self.assertEquals(p2, int(c.check_is_writable(ptr, s)))
+        self.assertEquals("Ok", c.check_is_readable(ptr, s))
+        c.unlock_memory(p2, 1)
+        self.assertEquals("Ok", c.check_is_writable(ptr, s))
+        self.assertEquals("Ok", c.check_is_readable(ptr, s))
+        self.assertEquals("EXIT 0", c.run_process())
+
     def get_call_1(self, line, name):
         args = line.split()
-        self.assertEquals(len(args), 3)
+        self.assertEquals(len(args), 3, "Invalid output:" + line)
         self.assertEquals(args[0], "CALL")
         self.assertEquals(args[1], name)
-        return args[2]
+        return int(args[2])
 
 
 
