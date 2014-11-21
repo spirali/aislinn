@@ -170,19 +170,39 @@ class Generator:
         raise Exception("Invalid const id")
 
     def initial_execution(self, result):
+        def set_error_msg(msg):
+            context.add_error_message(msg)
+            node = Node("fail", None)
+            node.prev = initial_node
+            new_chunks = context.get_compact_stream_chunks()
+            a = Arc(node, streams=new_chunks)
+            initial_node.add_arc(a)
+            for e in context.error_messages:
+                e.node = node
+                e.pid = 0
+            self.add_error_messages(context.error_messages)
+
+        initial_node = Node("init", None)
+        self.statespace.add_node(initial_node)
+        self.statespace.initial_node = initial_node
+
         context = ExecutionContext()
         while True:
             result = result.split()
             if result[0] == "EXIT":
-                e = errormsg.ErrorMessage()
-                e.name = "nompicall"
-                e.short_description = "No MPI routine"
-                e.description = "Program terminated without calling MPI_Init"
-                self.add_error_message(e)
+                exitcode = convert_type(result[1], "int")
+                if exitcode != 0:
+                    set_error_msg(errormsg.NonzeroExitCode(exitcode))
+                else:
+                    e = errormsg.ErrorMessage()
+                    e.name = "nompicall"
+                    e.short_description = "No MPI routine"
+                    e.description = "Program terminated without calling MPI_Init"
+                    set_error_msg(e)
                 return True
             elif result[0] == "REPORT":
                 e = self.make_error_message_from_report(result)
-                self.add_error_message(e)
+                set_error_msg(e)
                 return True
             elif result[0] == "SYSCALL":
                 if self.process_syscall(0, result, context):
@@ -201,7 +221,7 @@ class Generator:
                     e.name = "nompiinit"
                     e.short_description = "MPI is not initialized"
                     e.description = "{0} was called without MPI_Init".format(result[1])
-                    self.add_error_message(e)
+                    set_error_msg(e)
                     return True
                 break
             else:
@@ -242,9 +262,6 @@ class Generator:
         vg_state.dec_ref()
         assert vg_state.ref_count == self.process_count
 
-        initial_node = Node("init", None)
-        self.statespace.add_node(initial_node)
-        self.statespace.initial_node = initial_node
         chunks = context.get_compact_stream_chunks()
         new_chunks = []
         if chunks is not None:
