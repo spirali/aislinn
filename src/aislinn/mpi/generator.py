@@ -350,10 +350,11 @@ class Generator:
         gstate2 = self.debug_captured_states[1]
 
         for i, (s1, s2) in enumerate(zip(gstate1.states, gstate2.states)):
-            if s1.vg_state.id == s2.vg_state.id:
-                logging.info("States of rank %s are the same", i)
-                continue
-            self.controller.debug_compare(s1.vg_state.id, s2.vg_state.id)
+            if s1.vg_state and s2.vg_state:
+                if s1.vg_state.id == s2.vg_state.id:
+                    logging.info("States of rank %s are the same", i)
+                    continue
+                self.controller.debug_compare(s1.vg_state.id, s2.vg_state.id)
 
         for gstate in self.debug_captured_states:
             gstate.dispose()
