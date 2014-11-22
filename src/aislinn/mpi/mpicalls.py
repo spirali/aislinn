@@ -750,23 +750,23 @@ def call_send(generator, args, state, context,
         e.throw()
 
     send_type = get_send_type(generator, state, mode, datatype, count)
-    if not persistent and target == consts.MPI_PROC_NULL:
-        request_id = state.add_completed_request()
+    request_id = state.add_send_request(comm.comm_id, target,
+                     tag, buf_ptr, datatype, count, send_type)
+    if not persistent:
+        request = state.get_request(request_id)
+        request.create_message(generator, state)
+
+        if send_type == SendRequest.Buffered or target == consts.MPI_PROC_NULL:
+            state.set_request_as_completed(request)
     else:
-        request_id = state.add_send_request(comm.comm_id, target,
-                         tag, buf_ptr, datatype, count, send_type)
-        if not persistent:
-            request = state.get_request(request_id)
-            request.create_message(generator, state)
-            if send_type == SendRequest.Buffered:
-                state.set_request_as_completed(request)
-        else:
-            assert not blocking
-            state.make_request_persistent(request_id)
+        assert not blocking
+        state.make_request_persistent(request_id)
 
     if blocking:
-        state.set_wait((request_id,))
+        state.set_wait((request_id,), immediate=True)
     else:
+        if not persistent:
+            generator.controller.lock_memory(buf_ptr, count * datatype.size)
         generator.controller.write_int(request_ptr, request_id)
 
     # TODO: Optimization : If message use eager protocol then nonblock

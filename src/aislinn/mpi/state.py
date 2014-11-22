@@ -65,6 +65,7 @@ class State:
         self.cc_id_counters = None
         self.probe_data = None
         self.finalized = False
+        self.immediate_wait = False
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
@@ -422,6 +423,9 @@ class State:
         request = request.original_request
         if request is None:
             return
+        if request.is_send() and not self.immediate_wait:
+            generator.controller.unlock_memory(request.data_ptr,
+                                               request.datatype.size * request.count)
         if self.active_request_pointer is not None and \
                 self.get_persistent_request(request.id) is None:
             generator.controller.write_int(
@@ -467,6 +471,7 @@ class State:
         self.flag_ptr = None
         self.index_ptr = None
         self.probe_data = None
+        self.immediate_wait = False
 
     def set_ready(self):
         self.reset_state()
@@ -482,8 +487,12 @@ class State:
                  request_ptr=None,
                  status_ptr=None,
                  wait_any=False,
-                 index_ptr=None):
+                 index_ptr=None,
+                 immediate=False):
         self.reset_state()
+        # This wait was called immediately after creating request,
+        # hence buffers are not locked
+        self.immediate_wait = immediate
         if wait_any:
             self.status = self.StatusWaitAny
             self.index_ptr = index_ptr

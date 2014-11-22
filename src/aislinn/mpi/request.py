@@ -67,10 +67,14 @@ class SendRequest(Request):
 
     def create_message(self, generator, state):
         assert self.message is None
+        if self.target == consts.MPI_PROC_NULL:
+            return
         sz = self.count * self.datatype.size
         vg_buffer = generator.new_buffer_and_pack(self.datatype,
                                                   self.count,
                                                   self.data_ptr)
+
+
         comm = state.get_comm(self.comm_id)
         target_pid = comm.group.rank_to_pid(self.target)
         message = Message(comm.comm_id, state.get_rank(comm),

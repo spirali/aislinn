@@ -729,9 +729,13 @@ class Generator:
 
     def make_error_message_from_report(self, parts):
         assert parts[0] == "REPORT"
-        e = errormsg.make_runtime_err(parts[1], parts[2:])
-        e.stacktrace = self.controller.get_stacktrace()
-        return e
+        name = parts[1]
+        for error in errormsg.runtime_errors:
+            if error.name == name:
+                e = error(None, *parts[2:])
+                e.stacktrace = self.controller.get_stacktrace()
+                return e
+        raise Exception("Unknown runtime error: " + name)
 
     def unexpected_output_error_message(self, output):
         return self.make_error_message_from_report(output.split())

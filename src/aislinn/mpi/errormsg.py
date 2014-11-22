@@ -115,12 +115,12 @@ class InvalidArgument(CallError):
 
 
 class RuntimeErr(ErrorMessage):
-
-    def __init__(self, args):
-        ErrorMessage.__init__(self)
-
+    pass
 
 class HeapExhausted(RuntimeErr):
+
+    def __init__(self, state):
+        pass
 
     name = "heaperror"
     short_description = "Heap exhausted"
@@ -133,11 +133,9 @@ class InvalidWrite(RuntimeErr):
     name = "invalidwrite"
     short_description = "Invalid write"
 
-    def __init__(self, args):
-        RuntimeErr.__init__(self, args)
-        assert len(args) == 2
-        self.addr = int(args[0], 16)
-        self.size = int(args[1])
+    def __init__(self, state, addr, size):
+        self.addr = int(addr, 16)
+        self.size = int(size)
 
     @property
     def description(self):
@@ -145,12 +143,22 @@ class InvalidWrite(RuntimeErr):
                "0x{0.addr:08X}".format(self)
 
 
-def make_runtime_err(code, args):
-    runtime_errors = [ HeapExhausted,
-                       InvalidWrite ]
-    for e in runtime_errors:
-        if e.name == code:
-            return e(args)
-    e = RuntimeErr()
-    e.name = code
-    return e
+class InvalidWriteLocked(InvalidWrite):
+
+    name = "invalidwrite-locked"
+    short_description = "Invalid write into locked memory"
+
+    def __init__(self, state, addr, size):
+        self.addr = int(addr, 16)
+        self.size = int(size)
+
+    @property
+    def description(self):
+        return "Invalid write of size {0.size} at address " \
+               "0x{0.addr:08X}. The memory is locked by MPI.".format(self)
+
+
+runtime_errors = [ HeapExhausted,
+                   InvalidWrite,
+                   InvalidWriteLocked,
+                 ]
