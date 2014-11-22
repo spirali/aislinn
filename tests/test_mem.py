@@ -51,6 +51,7 @@ class MemTests(TestCase):
     def test_lockedmem(self):
         self.program("lockedmem")
         self.execute(2, "1", error="invalidwrite-locked")
+        self.execute(2, "2", error="invalidwrite-locked")
 
 if __name__ == "__main__":
     unittest.main()

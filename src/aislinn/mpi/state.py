@@ -348,14 +348,6 @@ class State:
                       self.pid, request_id)
         return request_id
 
-    def add_completed_request(self):
-        request_id = self._new_request_id()
-        request = CompletedRequest(request_id, None)
-        self.add_request(request)
-        logging.debug("New completed request pid=%s request_id=%s",
-                      self.pid, request_id)
-        return request_id
-
     def get_request(self, request_id):
         for request in self.requests:
             if request.id == request_id:
@@ -421,11 +413,10 @@ class State:
         assert request.is_completed()
         message = request.message
         request = request.original_request
-        if request is None:
-            return
-        if request.is_send() and not self.immediate_wait:
+        if not self.immediate_wait and (request.is_send() or request.is_receive()):
             generator.controller.unlock_memory(request.data_ptr,
                                                request.datatype.size * request.count)
+
         if self.active_request_pointer is not None and \
                 self.get_persistent_request(request.id) is None:
             generator.controller.write_int(

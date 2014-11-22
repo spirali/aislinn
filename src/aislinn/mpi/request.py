@@ -124,7 +124,7 @@ class ReceiveRequest(Request):
         return self.source != consts.MPI_ANY_SOURCE
 
     def __repr__(self):
-        return "<RecvRqst {1:x} id={0.id} source={0.source}, tag={0.tag}>" \
+        return "<RecvRqst {1:x} id={0.id} source={0.source}, tag={0.tag}, data_ptr={0.data_ptr:x}>" \
                 .format(self, id(self))
 
 

@@ -125,14 +125,6 @@ class VgToolTests(TestCase):
         self.assertEquals(c.run_process(), "FUNCTION_FINISH")
         c.kill()
 
-    def test_invalid_extern_write(self):
-        self.program("simple")
-        c = self.controller()
-        c.start()
-        self.assertRaises(base.controller.UnexpectedOutput,
-                          c.write_int, 0x0, 0)
-        c.kill()
-
     def test_syscall(self):
         self.program("syscall")
         c = self.controller()

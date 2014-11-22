@@ -857,6 +857,7 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
         page->status = EMPTY;
         return;
       }
+      AN_(MD5_Update)(&ctx2, page->va->vabits, VA_CHUNKS);
       AN_(MD5_Final)(&page->hash, &ctx2);
       page->status = VALID_HASH;
    }
@@ -1095,6 +1096,20 @@ static void state_restore(State *state)
    memimage_restore(&state->memimage);
 }
 
+static void prepare_for_write(Addr addr, SizeT size)
+{
+    if (size == 0) {
+        return;
+    }
+    Addr last_page = start_of_this_page(addr + size - 1);
+    addr = start_of_this_page(addr);
+    while (addr <= last_page) {
+        AuxMapEnt *ent = maybe_find_in_auxmap(addr);
+        tl_assert(ent != NULL);
+        page_prepare_for_write(&ent->page);
+        addr += PAGE_SIZE;
+    }
+}
 
 /* --------------------------------------------------------
  *  Events
@@ -1102,7 +1117,6 @@ static void state_restore(State *state)
 
 static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 {
-   //VG_(printf)("TRACE WRITE %lu %lu\n", addr, size);
    AuxMapEnt *ent = maybe_find_in_auxmap(addr);
    if (UNLIKELY(ent == NULL)) {
         report_error_write(addr, size, False);
@@ -1137,7 +1151,7 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 // This function should be called when write from controller occurs ("WRITE" commands)
 static void extern_write(Addr addr, SizeT size)
 {
-   trace_write(addr, size);
+    prepare_for_write(addr, size);
 }
 
 

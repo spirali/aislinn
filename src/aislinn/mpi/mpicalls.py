@@ -807,8 +807,10 @@ def call_recv(generator, args, state,
        state.make_request_persistent(request_id)
 
     if blocking:
-        state.set_wait((request_id,), None, status_ptr)
+        state.set_wait((request_id,), None, status_ptr, immediate=True)
     else:
+        if not persistent:
+            generator.controller.lock_memory(buf_ptr, count * datatype.size)
         generator.controller.write_int(request_ptr, request_id)
 
     # TODO: Optimization : If message is already here,

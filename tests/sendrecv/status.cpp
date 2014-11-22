@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 	int rank;
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	int d;
+	int d, d2;
 	MPI_Request r;
 	if (rank == 1) {
 		if (!strcmp(argv[1], "wait")) {
@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 			MPI_Status s[2];
 			MPI_Request rs[2];
 			MPI_Irecv(&d, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &rs[0]);
-			MPI_Irecv(&d, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &rs[1]);
+			MPI_Irecv(&d2, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &rs[1]);
 			MPI_Waitall(2, rs, s);
 			printf("%i %i\n", s[0].MPI_SOURCE, s[0].MPI_TAG);
 			printf("%i %i\n", s[1].MPI_SOURCE, s[1].MPI_TAG);
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 			MPI_Status s;
 			MPI_Recv(&d, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
 			printf("%i %i\n", s.MPI_SOURCE, s.MPI_TAG);
-			MPI_Recv(&d, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
+			MPI_Recv(&d2, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &s);
 			printf("%i %i\n", s.MPI_SOURCE, s.MPI_TAG);
 		} else if (!strcmp(argv[1], "probe")) {
 			MPI_Status s;

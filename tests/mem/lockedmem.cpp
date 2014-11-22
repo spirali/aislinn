@@ -21,6 +21,9 @@ int main(int argc, char **argv) {
 
 	if (rank == 0) {
 		MPI_Irecv(buffer, 10, MPI_INT, 1, 10, MPI_COMM_WORLD, &r);
+		if (touch == 2) {
+			buffer[3] = 10;
+		}
 		MPI_Wait(&r, MPI_STATUS_IGNORE);
 		MPI_Send(buffer, 10, MPI_INT, 1, 10, MPI_COMM_WORLD);
 	}
