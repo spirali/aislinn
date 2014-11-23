@@ -24,6 +24,8 @@ from message import Message
 
 class Request(EqMixin):
 
+    stacktrace = None
+
     def __init__(self, request_id):
         self.id = request_id
 
@@ -95,6 +97,10 @@ class SendRequest(Request):
         if self.message:
             self.message.compute_hash(hashthread)
 
+    def is_data_addr(self, addr):
+        sz = self.count * self.datatype.size
+        return addr >= self.data_ptr and addr < self.data_ptr + sz
+
     def __repr__(self):
         return "<SendRqst id={0} type={1} target={2} tag={3}>" \
                 .format(self.id, self.send_type, self.target, self.tag)
@@ -102,7 +108,8 @@ class SendRequest(Request):
 
 class ReceiveRequest(Request):
 
-    def __init__(self, request_id, comm_id, source, tag, data_ptr, datatype, count):
+    def __init__(self, request_id, comm_id, source, tag,
+                 data_ptr, datatype, count):
         Request.__init__(self, request_id)
         self.comm_id = comm_id
         self.source = source
@@ -123,8 +130,13 @@ class ReceiveRequest(Request):
     def is_deterministic(self):
         return self.source != consts.MPI_ANY_SOURCE
 
+    def is_data_addr(self, addr):
+        sz = self.count * self.datatype.size
+        return addr >= self.data_ptr and addr < self.data_ptr + sz
+
     def __repr__(self):
-        return "<RecvRqst {1:x} id={0.id} source={0.source}, tag={0.tag}, data_ptr={0.data_ptr:x}>" \
+        return "<RecvRqst {1:x} id={0.id} source={0.source}, " \
+               "tag={0.tag}, data_ptr={0.data_ptr:x}>" \
                 .format(self, id(self))
 
 
@@ -132,8 +144,11 @@ class CompletedRequest(Request):
 
     def __init__(self, request_id, original_request, message=None):
         Request.__init__(self, request_id)
+        assert not original_request.is_completed()
         self.original_request = original_request
         self.message = message
+        if original_request.stacktrace:
+            self.stacktrace = original_request.stacktrace
 
     def compute_hash(self, hashthread):
         Request.compute_hash(self, hashthread)
@@ -141,6 +156,9 @@ class CompletedRequest(Request):
 
     def is_completed(self):
         return True
+
+    def is_data_addr(self, addr):
+        return self.original_request.is_data_addr(addr)
 
     def __repr__(self):
         return "<CompleteRqst {0:x} {1} {2}>" \
@@ -160,6 +178,10 @@ class CollectiveRequest(Request):
     def compute_hash(self, hashthread):
         Request.compute_hash(self, hashthread)
         hashthread.update("CR {0} {0}".format(self.comm_id, self.cc_id))
+
+    def is_data_addr(self, addr):
+        # TODO: Implement this method
+        return False
 
     def __repr__(self):
         return "<CCRqst comm_id={0.comm_id} cc_id={0.cc_id}>".format(self)

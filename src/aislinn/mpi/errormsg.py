@@ -41,6 +41,8 @@ class ErrorMessage:
     stdout = None
     stderr = None
 
+    other_stacktraces = ()
+
     def __init__(self):
         pass
 
@@ -137,6 +139,12 @@ class InvalidWrite(RuntimeErr):
         self.addr = int(addr, 16)
         self.size = int(size)
 
+        if state:
+            stacktrace = state.get_locked_memory_stacktrace(self.addr)
+            if stacktrace:
+                self.other_stacktraces = \
+                        (("MPI call that locked the memory", stacktrace),)
+
     @property
     def description(self):
         return "Invalid write of size {0.size} at address " \
@@ -151,6 +159,13 @@ class InvalidWriteLocked(InvalidWrite):
     def __init__(self, state, addr, size):
         self.addr = int(addr, 16)
         self.size = int(size)
+
+        if state:
+            stacktrace = state.get_locked_memory_stacktrace(self.addr)
+            if stacktrace:
+                self.other_stacktraces = \
+                        (("MPI call that locked the memory", stacktrace),)
+
 
     @property
     def description(self):

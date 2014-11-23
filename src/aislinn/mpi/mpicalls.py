@@ -750,24 +750,24 @@ def call_send(generator, args, state, context,
         e.throw()
 
     send_type = get_send_type(generator, state, mode, datatype, count)
-    request_id = state.add_send_request(comm.comm_id, target,
-                     tag, buf_ptr, datatype, count, send_type)
+    request = state.add_send_request(comm.comm_id, target,
+                                     tag, buf_ptr, datatype, count, send_type)
     if not persistent:
-        request = state.get_request(request_id)
         request.create_message(generator, state)
 
         if send_type == SendRequest.Buffered or target == consts.MPI_PROC_NULL:
             state.set_request_as_completed(request)
     else:
         assert not blocking
-        state.make_request_persistent(request_id)
+        state.make_request_persistent(request.id)
 
     if blocking:
-        state.set_wait((request_id,), immediate=True)
+        state.set_wait((request.id,), immediate=True)
     else:
         if not persistent:
+            request.stacktrace = generator.controller.get_stacktrace()
             generator.controller.lock_memory(buf_ptr, count * datatype.size)
-        generator.controller.write_int(request_ptr, request_id)
+        generator.controller.write_int(request_ptr, request.id)
 
     # TODO: Optimization : If message use eager protocol then nonblock
     return blocking
@@ -799,19 +799,20 @@ def call_recv(generator, args, state,
                                    0)
         return False
 
-    request_id = state.add_recv_request(
-            comm.comm_id, source, tag, buf_ptr, datatype, count)
+    request = state.add_recv_request(
+                           comm.comm_id, source, tag, buf_ptr, datatype, count)
 
     if persistent:
        assert not blocking
-       state.make_request_persistent(request_id)
+       state.make_request_persistent(request.id)
 
     if blocking:
-        state.set_wait((request_id,), None, status_ptr, immediate=True)
+        state.set_wait((request.id,), None, status_ptr, immediate=True)
     else:
         if not persistent:
+            request.stacktrace = generator.controller.get_stacktrace()
             generator.controller.lock_memory(buf_ptr, count * datatype.size)
-        generator.controller.write_int(request_ptr, request_id)
+        generator.controller.write_int(request_ptr, request.id)
 
     # TODO: Optimization : If message is already here,
     # then non block and continue

@@ -346,7 +346,7 @@ class State:
         self.add_request(request)
         logging.debug("New send request pid=%s request_id=%s",
                       self.pid, request_id)
-        return request_id
+        return request
 
     def get_request(self, request_id):
         for request in self.requests:
@@ -375,7 +375,7 @@ class State:
         self.add_request(request)
         logging.debug("New recv request pid=%s request_id=%s",
                       self.pid, request_id)
-        return request_id
+        return request
 
     def make_request_persistent(self, request_id):
         request = self.get_request(request_id)
@@ -722,6 +722,11 @@ class State:
 
     def get_rank(self, comm):
         return comm.group.pid_to_rank(self.pid)
+
+    def get_locked_memory_stacktrace(self, addr):
+        for request in self.requests:
+            if request.is_data_addr(addr):
+                return request.stacktrace
 
     def _new_request_id(self):
         i = 10

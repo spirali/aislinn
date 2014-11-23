@@ -201,7 +201,7 @@ class Generator:
                     set_error_msg(e)
                 return True
             elif result[0] == "REPORT":
-                e = self.make_error_message_from_report(result)
+                e = self.make_error_message_from_report(None, result)
                 set_error_msg(e)
                 return True
             elif result[0] == "SYSCALL":
@@ -314,7 +314,7 @@ class Generator:
             self.is_full_statespace = True
         except UnexpectedOutput as e:
             logging.debug("UnexpectedOutput catched")
-            error_message = self.unexpected_output_error_message(e.output)
+            error_message = self.unexpected_output_error_message(None, e.output)
             self.add_error_message(error_message)
         except errormsg.ExecutionError as e:
             logging.debug("ExecutionError catched")
@@ -413,7 +413,7 @@ class Generator:
                                                              request.cc_id)
                     op.complete(self, state)
         except UnexpectedOutput as e:
-            error_message = self.unexpected_output_error_message(e.output)
+            error_message = self.unexpected_output_error_message(state, e.output)
             error_message.node = node
             error_message.throw()
         except errormsg.ExecutionError as e:
@@ -729,18 +729,18 @@ class Generator:
         self.vg_state_cache[hash] = vg_state
         return vg_state
 
-    def make_error_message_from_report(self, parts):
+    def make_error_message_from_report(self, state, parts):
         assert parts[0] == "REPORT"
         name = parts[1]
         for error in errormsg.runtime_errors:
             if error.name == name:
-                e = error(None, *parts[2:])
+                e = error(state, *parts[2:])
                 e.stacktrace = self.controller.get_stacktrace()
                 return e
         raise Exception("Unknown runtime error: " + name)
 
-    def unexpected_output_error_message(self, output):
-        return self.make_error_message_from_report(output.split())
+    def unexpected_output_error_message(self, state, output):
+        return self.make_error_message_from_report(state, output.split())
 
     def process_call(self, name, args, state, context, callback=False):
         try:
@@ -761,7 +761,7 @@ class Generator:
             else:
                 raise Exception("Unkown function call: {0} {1}".format(name, repr(args)))
         except UnexpectedOutput as e:
-            error_message = self.unexpected_output_error_message(e.output)
+            error_message = self.unexpected_output_error_message(state, e.output)
             if callback:
                 error_message.throw()
             else:
@@ -833,7 +833,7 @@ class Generator:
                 return context
             if result[0] == "REPORT":
                 context.add_error_message(
-                        self.make_error_message_from_report(result))
+                        self.make_error_message_from_report(state, result))
                 return context
             raise Exception("Invalid command " + result[0])
         state.vg_state = self.save_state(True)

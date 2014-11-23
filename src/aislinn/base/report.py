@@ -357,6 +357,12 @@ class Report:
                     div.child("h4", "Stacktrace")
                     div.child("pre", "{0}" \
                             .format(error.stacktrace.replace("|", "<br>")))
+
+                for title, stacktrace in error.other_stacktraces:
+                    div.child("h4", title)
+                    div.child("pre", "{0}" \
+                            .format(stacktrace.replace("|", "<br>")))
+
                 if error.events:
                     div.child("h4", "Events")
                     self.export_events(error.events, div)
