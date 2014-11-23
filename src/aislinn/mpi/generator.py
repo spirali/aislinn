@@ -80,8 +80,8 @@ class StopSearchException(Exception):
 class Generator:
 
     # TODO: Universal architecture detection
-    POINTER_SIZE = 8
-    INT_SIZE = 4
+    POINTER_SIZE = Controller.POINTER_SIZE
+    INT_SIZE = Controller.INT_SIZE
     STATUS_SIZE = 3 * INT_SIZE
     REQUEST_SIZE = INT_SIZE
 
@@ -405,7 +405,8 @@ class Generator:
                     request.datatype.unpack(self.controller,
                                             message.vg_buffer,
                                             count,
-                                            request.data_ptr)
+                                            request.data_ptr,
+                                            check=False)
                     state.remove_message(message)
                 if request.is_collective():
                     op = state.gstate.get_operation_by_cc_id(request.comm_id,

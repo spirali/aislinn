@@ -32,7 +32,16 @@ class UnexpectedOutput(Exception):
     def __str__(self):
         return self.output
 
+def check_str(value):
+    if value:
+        return "check"
+    else:
+        return "unsafe"
+
 class Controller:
+
+    POINTER_SIZE = 8
+    INT_SIZE = 4
 
     FUNCTION_INT = 0
     FUNCTION_4_POINTER = 1
@@ -110,37 +119,41 @@ class Controller:
         return self.send_and_receive_int(
                 "CLIENT_MALLOC_FROM_BUFFER {0}\n".format(buffer_id))
 
-    def memcpy(self, addr, source, size):
-        self.send_and_receive_ok("WRITE {0} addr {1} {2}\n" \
-                .format(addr, source, size))
-
-    def write_buffer(self, addr, buffer_addr, index=None, size=None):
-        if index is None or size is None:
-            self.send_and_receive_ok("WRITE {0} buffer {1}\n" \
-                    .format(addr, buffer_addr))
-        else:
-            assert size is not None
-            if size == 0:
-                return
-            self.send_and_receive_ok("WRITE {0} buffer-part {1} {2} {3}\n" \
-                    .format(addr, buffer_addr, index, size))
+    def memcpy(self, addr, source, size, check=True):
+        self.send_and_receive_ok("WRITE {0} {1} addr {2} {3}\n" \
+                .format(check_str(check), addr, source, size))
 
     def write_into_buffer(self, buffer_addr, index, addr, size):
         self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n" \
                     .format(buffer_addr, index, addr, size))
 
-    def write_int(self, addr, value):
-        self.send_and_receive_ok("WRITE {0} int {1}\n".format(addr, value))
+    def write_buffer(self, addr, buffer_addr,
+                     index=None, size=None, check=True):
+        if index is None or size is None:
+            self.send_and_receive_ok("WRITE {0} {1} buffer {2}\n" \
+                    .format(check_str(check), addr, buffer_addr))
+        else:
+            assert size is not None
+            if size == 0:
+                return
+            self.send_and_receive_ok("WRITE {0} {1} buffer-part {2} {3} {4}\n" \
+                    .format(check_str(check), addr, buffer_addr, index, size))
 
-    def write_pointer(self, addr, value):
-        self.send_and_receive_ok("WRITE {0} pointer {1}\n".format(addr, value))
+    def write_int(self, addr, value, check=True):
+        self.send_and_receive_ok("WRITE {0} {1} int {2}\n" \
+                .format(check_str(check), addr, value))
 
-    def write_ints(self, addr, values):
-        self.send_and_receive_ok("WRITE {0} ints {1} {2}\n" \
-                .format(addr, len(values), " ".join(map(str, values))))
+    def write_pointer(self, addr, value, check=True):
+        self.send_and_receive_ok("WRITE {0} {1} pointer {2}\n" \
+                .format(check_str(check), addr, value))
+
+    def write_ints(self, addr, values, check=True):
+        self.send_and_receive_ok("WRITE {0} {1} ints {2} {3}\n" \
+                .format(check_str(check), addr, len(values), " ".join(map(str, values))))
 
     def read_mem(self, addr, size):
-        return self.send_and_receive_data("READ {0} mem {1}\n".format(addr, size))
+        return self.send_and_receive_data("READ {0} mem {1}\n" \
+                .format(addr, size))
 
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))
@@ -182,10 +195,10 @@ class Controller:
             result[name] = int(value)
         return result
 
-    def check_is_writable(self, addr, size):
+    def is_writable(self, addr, size):
         return self.send_and_receive("CHECK write {0} {1}\n".format(addr, size))
 
-    def check_is_readable(self, addr, size):
+    def is_readable(self, addr, size):
         return self.send_and_receive("CHECK read {0} {1}\n".format(addr, size))
 
     def lock_memory(self, addr, size):

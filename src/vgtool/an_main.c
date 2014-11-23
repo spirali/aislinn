@@ -593,14 +593,18 @@ Bool check_address_range_perms (
 
    page_ptr = get_page_ptr_or_null(a);
    if (!page_ptr) {
-        *first_invalid_mem = a;
+       if (first_invalid_mem) {
+            *first_invalid_mem = a;
+       }
        return False;
    }
    va = (*page_ptr)->va;
    pg_off = PAGE_OFF(a);
    while (lenA > 0) {
       if (UNLIKELY(va->vabits[pg_off] != perm)) {
-          *first_invalid_mem = start_of_this_page(a) + pg_off;
+          if (first_invalid_mem) {
+            *first_invalid_mem = start_of_this_page(a) + pg_off;
+          }
           return False;
       }
       pg_off++;
@@ -613,14 +617,18 @@ part2:
    while (lenB >= PAGE_SIZE) {
       page_ptr = get_page_ptr_or_null(a);
       if (!page_ptr) {
-           *first_invalid_mem = a;
+          if (first_invalid_mem) {
+               *first_invalid_mem = a;
+          }
           return False;
       }
       va = (*page_ptr)->va;
 
       for (pg_off = 0; pg_off < PAGE_SIZE; pg_off++) {
          if (UNLIKELY(va->vabits[pg_off] != perm)) {
-             *first_invalid_mem = start_of_this_page(a) + pg_off;
+             if (first_invalid_mem) {
+               *first_invalid_mem = start_of_this_page(a) + pg_off;
+             }
              return False;
          }
       }
@@ -632,15 +640,19 @@ part2:
 
    page_ptr = get_page_ptr_or_null(a);
    if (!page_ptr) {
-        *first_invalid_mem = a;
+       if (first_invalid_mem) {
+            *first_invalid_mem = a;
+       }
        return False;
    }
    va = (*page_ptr)->va;
    pg_off = 0;
    while (lenB > 0) {
       if (UNLIKELY(va->vabits[pg_off] != perm)) {
-           *first_invalid_mem = start_of_this_page(a) + pg_off;
-           return False;
+          if (first_invalid_mem) {
+            *first_invalid_mem = start_of_this_page(a) + pg_off;
+          }
+          return False;
       }
       pg_off++;
       lenB--;
@@ -1149,8 +1161,12 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 }
 
 // This function should be called when write from controller occurs ("WRITE" commands)
-static void extern_write(Addr addr, SizeT size)
+static void extern_write(Addr addr, SizeT size, Bool check)
 {
+    if (check && !check_is_writable(addr, size, NULL)) {
+              report_error_write(addr, size, False);
+              tl_assert(0);
+    }
     prepare_for_write(addr, size);
 }
 
@@ -1483,38 +1499,39 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp)(cmd, "WRITE")) {
-         void *addr = (void*) next_token_uword();
+         Bool check = !VG_(strcmp)("check", next_token());
+         Addr addr = next_token_uword();
          char *param = next_token();
          if (!VG_(strcmp)(param, "int")) {
-            extern_write((Addr)addr, sizeof(int));
+            extern_write((Addr)addr, sizeof(int), check);
             *((Int*) addr) = next_token_int();
          } else if (!VG_(strcmp)(param, "ints")) {
                SizeT i, s = next_token_uword();
-               extern_write((Addr)addr, s * sizeof(int));
+               extern_write(addr, s * sizeof(int), check);
                Int *a = (Int *) addr;
                for (i = 0; i < s; i++) {
                   *a = next_token_int();
                   a++;
                }
          } else if (!VG_(strcmp)(param, "pointer")) {
-               extern_write((Addr)addr, sizeof(Addr));
-               *((Addr*) addr) = next_token_uword();
+             extern_write(addr, sizeof(Addr), check);
+             *((Addr*) addr) = next_token_uword();
          } else if (!VG_(strcmp(param, "buffer"))) {
             UWord *buffer = (UWord*) next_token_uword();
             UWord size = *buffer;
-            extern_write((Addr)addr, size);
-            VG_(memcpy(addr, buffer + 1, size));
+            extern_write((Addr)addr, size, check);
+            VG_(memcpy((void*) addr, buffer + 1, size));
          } else if (!VG_(strcmp(param, "buffer-part"))) {
             Addr buffer = (Addr) next_token_uword();
             UWord index = (UWord) next_token_uword();
             UWord size = (UWord) next_token_uword();
-            extern_write((Addr)addr, size);
-            VG_(memcpy(addr, (void*) (buffer + sizeof(UWord) + index), size));
+            extern_write((Addr)addr, size, check);
+            VG_(memcpy((void*) addr, (void*) (buffer + sizeof(UWord) + index), size));
          } else if (!VG_(strcmp(param, "addr"))) {
             Addr source = (Addr) next_token_uword();
             UWord size = (UWord) next_token_uword();
-            extern_write((Addr)addr, size);
-            VG_(memcpy(addr, (void*) source, size));
+            extern_write((Addr)addr, size, check);
+            VG_(memcpy((void*) addr, (void*) source, size));
          } else {
             write_message("Error: Invalid argument\n");
             VG_(exit)(1);
@@ -1765,7 +1782,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          UWord *buffer = (UWord*) next_token_uword();
          UWord size = *buffer;
          void *mem = client_malloc(0, size);
-         extern_write((Addr)mem, size);
+         extern_write((Addr)mem, size, False);
          VG_(memcpy(mem, buffer + 1, size));
          VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
                       "%lu\n", (UWord) mem));

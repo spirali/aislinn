@@ -47,6 +47,8 @@ class MemTests(TestCase):
         self.program("invaliddata")
         self.execute(1, "recv", error="invalid-recv-buffer")
         self.execute(1, "send", error="invalid-send-buffer")
+        self.execute(1, "recv-lock", error="invalid-recv-buffer")
+        self.execute(1, "send-lock", error="invalid-send-buffer")
 
     def test_lockedmem(self):
         self.program("lockedmem")

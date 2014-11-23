@@ -1,7 +1,6 @@
 
 from utils import TestCase
 import unittest
-import base.controller
 import os
 import subprocess
 
@@ -171,10 +170,10 @@ class VgToolTests(TestCase):
 
         c = self.controller(("10", "9"))
         ptr = self.get_call_1(c.start(), "init")
-        self.assertEquals("Ok", c.check_is_writable(ptr, 10 * INT_SIZE))
-        self.assertEquals(ptr + 10 * INT_SIZE, int(c.check_is_writable(ptr, 11 * INT_SIZE)))
-        self.assertEquals("Ok", c.check_is_readable(ptr, 10 * INT_SIZE))
-        self.assertEquals(ptr + 10 * INT_SIZE, int(c.check_is_readable(ptr, 11 * INT_SIZE)))
+        self.assertEquals("Ok", c.is_writable(ptr, 10 * INT_SIZE))
+        self.assertEquals(ptr + 10 * INT_SIZE, int(c.is_writable(ptr, 11 * INT_SIZE)))
+        self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
+        self.assertEquals(ptr + 10 * INT_SIZE, int(c.is_readable(ptr, 11 * INT_SIZE)))
         self.assertEquals("EXIT 0", c.run_process())
 
         c = self.controller(("9", "10"))
@@ -185,35 +184,35 @@ class VgToolTests(TestCase):
         ptr = self.get_call_1(c.start(), "init")
         p2 = ptr + 6 * INT_SIZE
         c.lock_memory(p2, 4 * INT_SIZE)
-        self.assertEquals("Ok", c.check_is_writable(ptr, INT_SIZE))
-        self.assertEquals("Ok", c.check_is_readable(ptr, INT_SIZE))
-        self.assertEquals(p2, int(c.check_is_writable(p2, INT_SIZE)))
-        self.assertEquals("Ok", c.check_is_readable(p2, INT_SIZE))
+        self.assertEquals("Ok", c.is_writable(ptr, INT_SIZE))
+        self.assertEquals("Ok", c.is_readable(ptr, INT_SIZE))
+        self.assertEquals(p2, int(c.is_writable(p2, INT_SIZE)))
+        self.assertEquals("Ok", c.is_readable(p2, INT_SIZE))
         c.unlock_memory(p2, 4 * INT_SIZE)
-        self.assertEquals("Ok", c.check_is_writable(p2, INT_SIZE))
-        self.assertEquals("Ok", c.check_is_readable(p2, INT_SIZE))
+        self.assertEquals("Ok", c.is_writable(p2, INT_SIZE))
+        self.assertEquals("Ok", c.is_readable(p2, INT_SIZE))
         self.assertEquals("EXIT 0", c.run_process())
 
         c = self.controller(("10", "9"))
         ptr = self.get_call_1(c.start(), "init")
         c.lock_memory(ptr, 10 * INT_SIZE)
-        self.assertEquals(int(ptr), int(c.check_is_writable(ptr, 11 * INT_SIZE)))
-        self.assertEquals("Ok", c.check_is_readable(ptr, 10 * INT_SIZE))
+        self.assertEquals(int(ptr), int(c.is_writable(ptr, 11 * INT_SIZE)))
+        self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
         self.assertTrue(
                 c.run_process().startswith("REPORT invalidwrite-locked"))
 
         s = 1000000 * INT_SIZE # 1M integers
         c = self.controller((str(s), "9"))
         ptr = self.get_call_1(c.start(), "init")
-        self.assertEquals("Ok", c.check_is_writable(ptr, s))
-        self.assertEquals("Ok", c.check_is_readable(ptr, s))
+        self.assertEquals("Ok", c.is_writable(ptr, s))
+        self.assertEquals("Ok", c.is_readable(ptr, s))
         p2 = ptr + 500000 * INT_SIZE
         c.lock_memory(p2, 1)
-        self.assertEquals(p2, int(c.check_is_writable(ptr, s)))
-        self.assertEquals("Ok", c.check_is_readable(ptr, s))
+        self.assertEquals(p2, int(c.is_writable(ptr, s)))
+        self.assertEquals("Ok", c.is_readable(ptr, s))
         c.unlock_memory(p2, 1)
-        self.assertEquals("Ok", c.check_is_writable(ptr, s))
-        self.assertEquals("Ok", c.check_is_readable(ptr, s))
+        self.assertEquals("Ok", c.is_writable(ptr, s))
+        self.assertEquals("Ok", c.is_readable(ptr, s))
         self.assertEquals("EXIT 0", c.run_process())
 
     def get_call_1(self, line, name):

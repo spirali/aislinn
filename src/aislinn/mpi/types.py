@@ -20,6 +20,7 @@ class Datatype(object):
     def is_buildin(self):
         return False
 
+
 class BuildinType(Datatype):
 
     def __init__(self, type_id, name, size):
@@ -38,8 +39,10 @@ class BuildinType(Datatype):
                                      pointer,
                                      self.size * count)
 
-    def unpack(self, controller, vg_buffer, count, pointer, index=0):
-        controller.write_buffer(pointer, vg_buffer.id, index, self.size * count)
+    def unpack(self, controller, vg_buffer, count,
+               pointer, index=0, check=True):
+        controller.write_buffer(
+               pointer, vg_buffer.id, index, self.size * count, check)
 
 
 class ContiguousType(Datatype):
@@ -54,9 +57,11 @@ class ContiguousType(Datatype):
         self.datatype.pack(
                 controller, pointer, vg_buffer, count * self.count, index)
 
-    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+    def unpack(self, controller, vg_buffer, count,
+               pointer, index=0, check=True):
         self.datatype.unpack(
-                controller, vg_buffer, count * self.count, pointer, index)
+                controller, vg_buffer, count * self.count,
+                pointer, index, check)
 
 
 class VectorType(Datatype):
@@ -84,12 +89,14 @@ class VectorType(Datatype):
             pointer -= self.stride
             pointer += step_index
 
-    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+    def unpack(self, controller, vg_buffer, count,
+               pointer, index=0, check=True):
         step_index = self.datatype.size * self.blocksize
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.unpack(
-                        controller, vg_buffer, self.blocksize, pointer, index)
+                        controller, vg_buffer, self.blocksize,
+                        pointer, index, check)
                 pointer += self.stride
                 index += step_index
             pointer -= self.stride
@@ -124,7 +131,8 @@ class IndexedType(Datatype):
                 index += self.sizes[j] * self.datatype.size
             pointer += self.unpack_size
 
-    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+    def unpack(self, controller, vg_buffer, count,
+               pointer, index=0, check=True):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.unpack(
@@ -132,7 +140,8 @@ class IndexedType(Datatype):
                         vg_buffer,
                         self.sizes[j],
                         pointer + self.displs[j],
-                        index)
+                        index,
+                        check)
                 index += self.sizes[j] * self.datatype.size
             pointer += self.unpack_size
 
@@ -164,7 +173,8 @@ class StructType(Datatype):
                     index += c * datatype.size
             pointer += self.unpack_size
 
-    def unpack(self, controller, vg_buffer, count, pointer, index=0):
+    def unpack(self, controller, vg_buffer, count,
+               pointer, index=0, check=True):
         for i in xrange(count):
             for datatype, c, displ in \
                 zip(self.datatypes, self.counts, self.displs):
@@ -173,7 +183,8 @@ class StructType(Datatype):
                             vg_buffer,
                             count,
                             pointer + displ,
-                            index)
+                            index,
+                            check)
                     index += c * datatype.size
             pointer += self.unpack_size
 

@@ -24,5 +24,18 @@ int main(int argc, char **argv) {
 	if (!strcmp(argv[1], "send")) {
 		MPI_Send(buffer, 128, MPI_INT, 0, 10, MPI_COMM_WORLD);
 	}
+
+	if (!strcmp(argv[1], "recv-lock")) {
+		MPI_Request r;
+		MPI_Irecv(buffer, 10, MPI_INT, 0, 10, MPI_COMM_WORLD, &r);
+		MPI_Recv(buffer, 128, MPI_INT, 0, 10, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
+	}
+
+	if (!strcmp(argv[1], "send-lock")) {
+		MPI_Request r;
+		MPI_Irecv(buffer, 10, MPI_INT, 0, 10, MPI_COMM_WORLD, &r);
+		MPI_Send(buffer, 128, MPI_INT, 0, 10, MPI_COMM_WORLD);
+	}
+
 	return 0;
 }
