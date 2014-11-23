@@ -23,6 +23,7 @@ from request import \
     ReceiveRequest, \
     CompletedRequest, \
     CollectiveRequest
+import errormsg
 
 import consts
 import copy
@@ -390,8 +391,9 @@ class State:
 
     def start_persistent_request(self, generator, state, request):
         assert self.get_request(request.id) is None
+        request = copy.copy(request)
+        request.stacktrace = generator.controller.get_stacktrace()
         if request.is_send():
-            request = copy.copy(request)
             self.add_request(request)
             if request.target == consts.MPI_PROC_NULL:
                 state.set_request_as_completed(request)
@@ -399,8 +401,34 @@ class State:
                 request.create_message(generator, state)
                 if request.send_type == SendRequest.Buffered:
                     state.set_request_as_completed(request)
-        else:
+
+            sz = request.count * request.datatype.size
+            r = generator.controller.is_writable(request.data_ptr, sz)
+            if r != "Ok":
+                e = errormsg.CallError()
+                e.name = "invalid-send-buffer"
+                e.short_description = "Invalid send buffer"
+                e.description = "Invalid receive buffer. " \
+                                "Address 0x{0:x} is not accessible.".format(int(r))
+                e.throw()
+            generator.controller.lock_memory(request.data_ptr, sz)
+
+        elif request.is_receive():
+            sz = request.count * request.datatype.size
+            r = generator.controller.is_writable(request.data_ptr, sz)
+            if r != "Ok":
+                e = errormsg.CallError()
+                e.name = "invalid-recv-buffer"
+                e.short_description = "Invalid receive buffer"
+                e.description = "Invalid receive buffer. " \
+                                "Address 0x{0:x} is not accessible.".format(int(r))
+                e.throw()
+            generator.controller.lock_memory(
+                    request.data_ptr,
+                    request.count * request.datatype.size)
             self.add_request(request)
+        else:
+            Exception("Invalid request")
 
     def add_collective_request(self, comm_id, cc_id):
         request_id = self._new_request_id()

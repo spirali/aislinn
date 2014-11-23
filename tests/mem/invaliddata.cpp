@@ -37,5 +37,18 @@ int main(int argc, char **argv) {
 		MPI_Send(buffer, 128, MPI_INT, 0, 10, MPI_COMM_WORLD);
 	}
 
+	if (!strcmp(argv[1], "persistent-recv")) {
+		MPI_Request r;
+		MPI_Recv_init(buffer, 10, MPI_INT, 0, 10, MPI_COMM_WORLD, &r);
+		free(buffer);
+		MPI_Start(&r);
+	}
+
+	if (!strcmp(argv[1], "persistent-send")) {
+		MPI_Request r;
+		MPI_Send_init(buffer, 10, MPI_INT, 0, 10, MPI_COMM_WORLD, &r);
+		free(buffer);
+		MPI_Start(&r);
+	}
 	return 0;
 }
