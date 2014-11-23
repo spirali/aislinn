@@ -60,8 +60,9 @@ void aislinn_call(const char *name,
 	memset(&answer, 0, sizeof(Vg_AislinnCallAnswer));
 	if (VALGRIND_DO_CLIENT_REQUEST_EXPR( \
 		1, VG_USERREQ__AISLINN_CALL, name, args, args_count, &answer, 0)) {
-		fprintf(stderr, "This application was compiled with Aislinn.\n"
-			"It cannot be directly run.\n");
+		fprintf(stderr, "This application was compiled by Aislinn.\n"
+			"It cannot be run directly.\n");
+		exit(1);
 	}
 	while (answer.function) {
 		aislinn_function_call(&answer);
