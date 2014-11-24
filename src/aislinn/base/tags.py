@@ -17,6 +17,7 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+
 import base64
 
 class Tag:
