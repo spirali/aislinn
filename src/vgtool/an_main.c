@@ -2030,6 +2030,12 @@ IRSB* an_instrument ( VgCallbackClosure* closure,
             addStmtToIRSB(sb_out, st);
             break;
          }
+
+         case Ist_StoreG: {
+            VG_(printf)("Ist_StoreG not implemented yet\n");
+            VG_(exit)(0);
+         }
+
          default:
             addStmtToIRSB(sb_out, st);
             break;
