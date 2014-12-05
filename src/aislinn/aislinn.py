@@ -201,17 +201,17 @@ def parse_args():
     if args.vgv:
         valgrind_args.append("--verbose={0}".format(args.vgv))
 
-    if args.send_protocol not in ("full", "eager", "randezvous", "dynamic"):
+    if args.send_protocol not in ("full", "eager", "rendezvous", "dynamic"):
         threshold = parse_threshold(args.send_protocol)
         if threshold is None:
             logging.error("Invalid send protocol (parameter -S or --send-protocol)")
             sys.exit(1)
         args.send_protocol = "threshold"
         args.send_protocol_eager_threshold = threshold[0]
-        args.send_protocol_randezvous_threshold = threshold[1]
+        args.send_protocol_rendezvous_threshold = threshold[1]
     else:
         args.send_protocol_eager_threshold = 0
-        args.send_protocol_randezvous_threshold = None
+        args.send_protocol_rendezvous_threshold = None
 
     if args.stdout_write and args.stdout != "capture":
         logging.error("--stdout-write is used but "

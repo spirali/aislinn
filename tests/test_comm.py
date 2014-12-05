@@ -16,7 +16,7 @@ class CommTests(TestCase):
     def test_selfsend(self):
         self.program("selfsend")
         self.output(1, "100 100 123\n")
-        self.execute(2, send_protocol="randezvous")
+        self.execute(2, send_protocol="rendezvous")
 
     def test_selfgather(self):
         self.program("selfgather")

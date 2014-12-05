@@ -704,18 +704,18 @@ def call_collective_operation(generator,
 
 def get_send_type(generator, state, mode, datatype, count):
     if mode == "Ssend" \
-       or (mode == "Send" and generator.send_protocol == "randezvous"):
+       or (mode == "Send" and generator.send_protocol == "rendezvous"):
         return SendRequest.Synchronous
     elif mode == "Bsend" \
        or (mode == "Send" and generator.send_protocol == "eager"):
         return SendRequest.Buffered
     elif generator.send_protocol == "dynamic":
         size = datatype.size * count
-        eager_threshold, randezvous_threshold = \
+        eager_threshold, rendezvous_threshold = \
                 state.gstate.send_protocol_thresholds
         if size < eager_threshold:
             return SendRequest.Buffered
-        elif size >= randezvous_threshold:
+        elif size >= rendezvous_threshold:
             return SendRequest.Synchronous
         else:
             return SendRequest.Standard
@@ -723,7 +723,7 @@ def get_send_type(generator, state, mode, datatype, count):
         size = datatype.size * count
         if size < generator.send_protocol_eager_threshold:
             return SendRequest.Buffered
-        elif size >= generator.send_protocol_randezvous_threshold:
+        elif size >= generator.send_protocol_rendezvous_threshold:
             return SendRequest.Synchronous
         else:
             return SendRequest.Standard

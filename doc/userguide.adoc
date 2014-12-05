@@ -297,7 +297,7 @@ Set the send protocol of standard sends. (default: _full_)
   the verification. All errors inside processes will be reported as for _full_
   semantics, but it is possible that some deadlocks are missed.
 
-* _randezvous_ - All standard sends are considered as synchronous sends;
+* _rendezvous_ - All standard sends are considered as synchronous sends;
   it can speed up the verification. You should see almost all deadlocks but it
   is possible to miss some errors inside processes.
 

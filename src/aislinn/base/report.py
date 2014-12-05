@@ -172,7 +172,7 @@ class Report:
                     "send-protocol-thresholds",
                     "{0}:{1}".format(
                         generator.send_protocol_eager_threshold,
-                        generator.send_protocol_randezvous_threshold),
+                        generator.send_protocol_rendezvous_threshold),
                     "Threshold values")
         self.analysis_info.add("nodes",
                       generator.statespace.nodes_count,

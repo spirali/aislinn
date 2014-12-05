@@ -77,11 +77,11 @@ class SendRecvTests(TestCase):
         self.output(1, "103 101 203 201\n")
         self.output(1, "103 203 101 201\n")
 
-        self.execute(3, ("a",), send_protocol="randezvous")
+        self.execute(3, ("a",), send_protocol="rendezvous")
         self.execute(3, ("a",))
-        self.execute(3, ("b",), send_protocol="randezvous")
+        self.execute(3, ("b",), send_protocol="rendezvous")
         self.execute(3, ("b",))
-        self.execute(3, ("c",), send_protocol="randezvous")
+        self.execute(3, ("c",), send_protocol="rendezvous")
         self.execute(3, ("c",))
 
     def test_waitany(self):
@@ -102,8 +102,8 @@ class SendRecvTests(TestCase):
         self.output(1, "103 101 203 201\nSTATUS 2 5\n")
         self.output(1, "103 203 101 201\nSTATUS 2 5\n")
 
-        self.execute(3, ("a",), send_protocol="randezvous")
-        self.execute(3, ("b",), send_protocol="randezvous")
+        self.execute(3, ("a",), send_protocol="rendezvous")
+        self.execute(3, ("b",), send_protocol="rendezvous")
 
     def test_waitany2(self):
         self.program("waitany2")
@@ -111,8 +111,8 @@ class SendRecvTests(TestCase):
         self.output(1, "101 201 103 203\nSTATUS 0 5\n")
         self.output(1, "101 201 103 203\nSTATUS 2 5\n")
 
-        self.execute(3, ("a",), send_protocol="randezvous")
-        self.execute(3, ("b",), send_protocol="randezvous")
+        self.execute(3, ("a",), send_protocol="rendezvous")
+        self.execute(3, ("b",), send_protocol="rendezvous")
 
     def test_waitany3(self):
         self.program("waitany3")
@@ -121,7 +121,7 @@ class SendRecvTests(TestCase):
     def test_send_protocol(self):
         self.program("deadlock1")
         self.execute(3, send_protocol="eager")
-        self.execute(3, send_protocol="randezvous")
+        self.execute(3, send_protocol="rendezvous")
         self.execute(3, send_protocol="3")
         self.execute(3, send_protocol="1M")
         self.execute(3, send_protocol="5", error="deadlock")
@@ -131,12 +131,12 @@ class SendRecvTests(TestCase):
     def test_cross_send1(self):
         self.program("cross1")
         self.execute(2, send_protocol="eager")
-        self.execute(2, send_protocol="randezvous", error="deadlock")
+        self.execute(2, send_protocol="rendezvous", error="deadlock")
 
     def test_cross_send2(self):
         self.program("cross2")
         self.execute(2, send_protocol="eager")
-        self.execute(2, send_protocol="randezvous")
+        self.execute(2, send_protocol="rendezvous")
         self.execute(2)
 
     def test_types(self):
@@ -151,17 +151,17 @@ class SendRecvTests(TestCase):
 
         self.output(1, "0 111\n2 333\n")
         self.output(1, "2 333\n0 111\n")
-        self.execute(3, "wait", send_protocol="randezvous")
-        self.execute(3, "waitall", send_protocol="randezvous")
-        self.execute(3, "recv", send_protocol="randezvous")
+        self.execute(3, "wait", send_protocol="rendezvous")
+        self.execute(3, "waitall", send_protocol="rendezvous")
+        self.execute(3, "recv", send_protocol="rendezvous")
 
         self.reset_output()
         self.output(1, "First1 0 111\nFirst2 0 111 1\n"
                            "First3 0 111\nSecond 2 333\n")
         self.output(1, "First1 2 333\nFirst2 2 333 1\n"
                            "First3 2 333\nSecond 0 111\n")
-        self.execute(3, "probe", send_protocol="randezvous")
-        self.execute(3, "iprobe", send_protocol="randezvous")
+        self.execute(3, "probe", send_protocol="rendezvous")
+        self.execute(3, "iprobe", send_protocol="rendezvous")
 
     def test_tag(self):
         self.program("tag")

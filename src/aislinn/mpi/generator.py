@@ -107,8 +107,8 @@ class Generator:
         self.send_protocol = aislinn_args.send_protocol
         self.send_protocol_eager_threshold = \
                 aislinn_args.send_protocol_eager_threshold
-        self.send_protocol_randezvous_threshold = \
-                aislinn_args.send_protocol_randezvous_threshold
+        self.send_protocol_rendezvous_threshold = \
+                aislinn_args.send_protocol_rendezvous_threshold
 
         self.init_time = None
         self.end_time = None
@@ -508,9 +508,9 @@ class Generator:
                 logging.debug("Forking because of standard send {0}", requests)
                 for buffered, synchronous in requests:
                     if self.send_protocol == "dynamic":
-                       eager_threshold, randezvous_threshold = \
+                       eager_threshold, rendezvous_threshold = \
                                gstate.send_protocol_thresholds
-                       assert eager_threshold <= randezvous_threshold
+                       assert eager_threshold <= rendezvous_threshold
                        if buffered:
                            buffered_size = \
                                max(max(r.message.size for r in buffered),
@@ -521,11 +521,11 @@ class Generator:
                        if synchronous:
                            synchronous_size = \
                                min(min(r.message.size for r in synchronous),
-                                   randezvous_threshold)
+                                   rendezvous_threshold)
                        else:
-                           synchronous_size = randezvous_threshold
+                           synchronous_size = rendezvous_threshold
 
-                       if buffered_size >= randezvous_threshold or \
+                       if buffered_size >= rendezvous_threshold or \
                                synchronous_size < eager_threshold:
                            continue
 
