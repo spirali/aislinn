@@ -173,6 +173,13 @@ class BaseTests(TestCase):
         self.output(0, "abcd" * (1024 * 1024 * 10 // 4) + "\n")
         self.execute(1)
 
+    def test_processor_name(self):
+        self.program("processor_name")
+        self.output(0, "Processor-0\n")
+        self.output(1, "Processor-1\n")
+        self.execute(2, "1000")
+        # Test buffer smaller than MPI_MAX_PROCESSOR_NAME
+        self.execute(2, "100", error="invalid-name-buffer")
 
 if __name__ == "__main__":
     unittest.main()

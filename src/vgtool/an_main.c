@@ -1532,6 +1532,10 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
             UWord size = (UWord) next_token_uword();
             extern_write((Addr)addr, size, check);
             VG_(memcpy((void*) addr, (void*) source, size));
+         } else if (!VG_(strcmp)(param, "string")) {
+             char *s = next_token();
+             extern_write(addr, VG_(strlen)(s) + 1, check);
+             VG_(strcpy)((void*)addr, s);
          } else {
             write_message("Error: Invalid argument\n");
             VG_(exit)(1);

@@ -502,6 +502,27 @@ def MPI_Get_count(generator, args, state, context):
     generator.controller.write_int(count_ptr, result)
     return False
 
+def MPI_Get_processor_name(generator, args, state, context):
+    name_ptr, len_ptr = args
+
+    if "Ok" != generator.controller.is_writable(
+            name_ptr, consts.MPI_MAX_PROCESSOR_NAME):
+        e = errormsg.CallError()
+        e.name = "invalid-name-buffer"
+        e.short_description = "Invalid buffer for processor name"
+        e.description = "Invalid buffer for processor name"
+        e.throw()
+
+    name = "Processor-{0}".format(state.pid)
+
+    assert len(name) < consts.MPI_MAX_PROCESSOR_NAME - 1
+
+    # Memory do not have to be checked again
+    generator.controller.write_string(name_ptr, name, check=False)
+    generator.controller.write_int(len_ptr, len(name))
+    return False
+
+
 def MPI_Type_contiguous(generator, args, state, context):
     count, datatype, newtype_ptr = args
     newtype = types.ContiguousType(datatype, count)
@@ -964,6 +985,7 @@ calls_non_communicating = dict((c.name, c) for c in [
      Call(MPI_Type_struct, (at.Count, at.Pointer, at.Pointer,
                             at.Pointer, at.Pointer)),
      Call(MPI_Get_count, (at.Pointer, at.Datatype, at.Pointer)),
+     Call(MPI_Get_processor_name, (at.Pointer, at.Pointer)),
      Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
      Call(MPI_Dims_create, (at.Int, at.Int, at.Pointer)),
      Call(MPI_Comm_set_errhandler, (at.Comm, at.Pointer)),

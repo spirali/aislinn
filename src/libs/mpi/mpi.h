@@ -131,6 +131,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_CONGRUENT 2
 #define MPI_IDENT     3
 
+#define MPI_MAX_PROCESSOR_NAME 128
+
 /* Functions prototypes */
 typedef void (MPI_Comm_errhandler_function)(MPI_Comm *, int *, ...);
 typedef void (MPI_Handler_function) (MPI_Comm *, int *, ... );
@@ -477,6 +479,8 @@ int MPI_Errhandler_get(MPI_Comm comm, MPI_Errhandler *errhandler);
 int MPI_Errhandler_free(MPI_Errhandler *errhandler);
 
 int MPI_Cancel(MPI_Request *request);
+
+int MPI_Get_processor_name(char *name, int *resultlen);
 
 /* ----------------------------------------------------------------------------
 /  DUMMY FUNCTIONS

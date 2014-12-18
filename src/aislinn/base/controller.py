@@ -143,6 +143,11 @@ class Controller:
         self.send_and_receive_ok("WRITE {0} {1} int {2}\n" \
                 .format(check_str(check), addr, value))
 
+    def write_string(self, addr, value, check=True):
+        self.send_and_receive_ok("WRITE {0} {1} string {2}\n" \
+                .format(check_str(check), addr, value))
+
+
     def write_pointer(self, addr, value, check=True):
         self.send_and_receive_ok("WRITE {0} {1} pointer {2}\n" \
                 .format(check_str(check), addr, value))
