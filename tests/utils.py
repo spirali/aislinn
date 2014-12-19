@@ -317,6 +317,11 @@ class Report:
     def number_of_nodes(self):
         return int(self.root.find("analysis-info").find("nodes").text)
 
+    @property
+    def determinisic_nonfreed_memory(self):
+        return int(self.root.find("analysis-info") \
+                .find("deterministic-non-freed-memory").text)
+
     def get_stream(self, name):
         for stream in self.root.find("streams").findall("stream"):
             if stream.get("name") == name:

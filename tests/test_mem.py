@@ -18,9 +18,12 @@ class MemTests(TestCase):
         self.program("malloc")
 
         self.execute(1, "100")
+        self.assertEquals(self.report.determinisic_nonfreed_memory, 100)
         self.execute(1, "100", heap_size="1M")
+        self.assertEquals(self.report.determinisic_nonfreed_memory, 100)
         self.execute(1, "10000000", heap_size="1M", error="heaperror")
         self.execute(1, ("10000000",), heap_size="100M")
+        self.assertEquals(self.report.determinisic_nonfreed_memory, 10000000)
 
     def test_leak(self):
         self.program("leak")

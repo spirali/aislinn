@@ -113,6 +113,7 @@ typedef
    struct {
       Addr address;
       AllocationBlockType type;
+      SizeT requested_size;
    } AllocationBlock;
 
 typedef
@@ -309,6 +310,7 @@ static void memspace_sanity_check(void)
 static
 Addr memspace_alloc(SizeT alloc_size, SizeT allign)
 {
+   SizeT requested_size = alloc_size;
    alloc_size += redzone_size;
    if (UNLIKELY(alloc_size == 0)) {
       alloc_size = 1;
@@ -330,6 +332,7 @@ Addr memspace_alloc(SizeT alloc_size, SizeT allign)
             SizeT padding = address - block->address;
             if (s >= alloc_size + padding) {
                 block->type = BLOCK_USED;
+                block->requested_size = requested_size;
                 if (padding > 0) {
                     block->address = address;
                     AllocationBlock new_block;
@@ -363,13 +366,16 @@ Addr memspace_alloc(SizeT alloc_size, SizeT allign)
        AllocationBlock new_block;
        new_block.type = BLOCK_USED;
        new_block.address = address;
+       new_block.requested_size = requested_size;
        VG_(addToXA)(a, &new_block);
    } else {
-        block->type = BLOCK_USED;
+       block->type = BLOCK_USED;
+       block->requested_size = requested_size;
    }
 
    AllocationBlock new_block;
    new_block.type = BLOCK_END;
+   new_block.requested_size = requested_size;
    new_block.address = address + alloc_size;
 
    if (UNLIKELY(new_block.address - \
@@ -1458,9 +1464,8 @@ static void write_allocations(void)
     for (i = 0; i < size; i++) {
         AllocationBlock *block = VG_(indexXA)(a, i);
         if (block->type == BLOCK_USED) {
-            AllocationBlock *next = VG_(indexXA)(a, i + 1);
-            SizeT s = next->address - block->address;
-            VG_(snprintf(output, MAX_MESSAGE_BUFFER_LENGTH, "%lu %lu\n", block->address, s));
+            VG_(snprintf(output, MAX_MESSAGE_BUFFER_LENGTH,
+                         "%lu %lu\n", block->address, block->requested_size));
             write_message(output);
         }
     }
