@@ -1449,6 +1449,24 @@ static void debug_compare(UWord state_id1, UWord state_id2)
     VG_(printf)("------ End of comparison -----------\n");
 }
 
+static void write_allocations(void)
+{
+    char output[MAX_MESSAGE_BUFFER_LENGTH];
+    XArray *a = current_memspace->allocation_blocks;
+    SizeT size = VG_(sizeXA)(a) - 1;
+    SizeT i;
+    for (i = 0; i < size; i++) {
+        AllocationBlock *block = VG_(indexXA)(a, i);
+        if (block->type == BLOCK_USED) {
+            AllocationBlock *next = VG_(indexXA)(a, i + 1);
+            SizeT s = next->address - block->address;
+            VG_(snprintf(output, MAX_MESSAGE_BUFFER_LENGTH, "%lu %lu\n", block->address, s));
+            write_message(output);
+        }
+    }
+    write_message("Ok\n");
+}
+
 static Bool set_capture_syscalls_by_name(const char *name, Bool value)
 {
     if (!VG_(strcmp)(name, "write")) {
@@ -1770,6 +1788,11 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                         VG_(OSetGen_Size)(current_memspace->auxmap),
                         stats.buffers_size);
           write_message(command);
+          continue;
+      }
+
+      if (!VG_(strcmp)(cmd, "ALLOCATIONS")) {
+          write_allocations();
           continue;
       }
 

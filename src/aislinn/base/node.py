@@ -44,6 +44,8 @@ class Arc:
 
 class Node:
 
+    allocations = None
+
     def __init__(self, uid, hash):
         self.uid = uid
         self.hash = hash

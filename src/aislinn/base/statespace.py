@@ -45,6 +45,11 @@ class StateSpace:
         return itertools.chain(self.nodes_without_hash,
                                self.nodes_with_hash.values())
 
+    def all_final_nodes(self):
+        for node in self.all_nodes():
+            if not node.arcs:
+                yield node
+
     def write_dot(self, filename):
         def _write_node(node):
             i = id(node)

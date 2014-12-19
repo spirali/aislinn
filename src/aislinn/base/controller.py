@@ -212,6 +212,14 @@ class Controller:
     def unlock_memory(self, addr, size):
         self.send_and_receive_ok("UNLOCK {0} {1}\n".format(addr, size))
 
+    def get_allocations(self):
+        self.send_command("ALLOCATIONS\n");
+        result = []
+        for line in self.receive_until_ok():
+            addr, size = line.split()
+            result.append((int(addr), int(size)))
+        return result
+
     ### Semi-internal functions
 
     def receive_line(self):
@@ -266,6 +274,14 @@ class Controller:
         r = self.receive_line()
         if r != "Ok":
             raise UnexpectedOutput(r)
+
+    def receive_until_ok(self):
+        result = []
+        line = self.receive_line()
+        while line != "Ok":
+            result.append(line)
+            line = self.receive_line()
+        return result
 
     def send_and_receive_int(self, command):
         return int(self.send_and_receive(command))

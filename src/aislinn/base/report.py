@@ -197,6 +197,12 @@ class Report:
                       sizes,
                       "Sizes of unicast messages (bytes)")
 
+        if generator.deterministic_unallocated_memory is not None:
+            self.analysis_info.add("deterministic-non-freed-memory",
+                          generator.deterministic_unallocated_memory,
+                          "Size of determinitically unallocated memory "
+                          "at the end of program (bytes)")
+
         def count_of_outputs((rank, count)):
             if count == None:
                 return ">" + str(OUTPUTS_LIMIT)

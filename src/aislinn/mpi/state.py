@@ -42,6 +42,9 @@ class State:
     StatusTest = 4
     StatusProbe = 5
 
+    # Used only for final state, list of non-freed-memory
+    allocations = None
+
     def __init__(self, gstate, pid, vg_state):
         assert vg_state is not None
         self.gstate = gstate
@@ -284,6 +287,9 @@ class State:
         if self.status != State.StatusFinished:
             # If we are finished, we do not care about exact state
             hashthread.update(self.vg_state.hash)
+        else:
+            for a in self.allocations:
+                a.compute_hash(hashthread)
         hashthread.update(str(self.pid))
         hashthread.update(str(self.status))
         hashthread.update(str(self.cc_id_counters))

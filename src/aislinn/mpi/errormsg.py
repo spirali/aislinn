@@ -88,6 +88,22 @@ class Deadlock(ErrorMessage):
     name = "deadlock"
     short_description = "Deadlock"
 
+
+class NotFreedMemory(ErrorMessage):
+
+    name = "not-freed-memory"
+    short_description = "Nondeterministic memory leak"
+
+    def __init__(self, addr, size):
+        ErrorMessage.__init__(self)
+        self.addr = addr
+        self.size = size
+
+    @property
+    def description(self):
+        return "Memory at 0x{0:x} of size {1} was not freed.".format(self.addr, self.size)
+
+
 class CallError(ErrorMessage):
     name = "callerror"
 
@@ -118,6 +134,7 @@ class InvalidArgument(CallError):
 
 class RuntimeErr(ErrorMessage):
     pass
+
 
 class HeapExhausted(RuntimeErr):
 

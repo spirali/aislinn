@@ -22,6 +22,11 @@ class MemTests(TestCase):
         self.execute(1, "10000000", heap_size="1M", error="heaperror")
         self.execute(1, ("10000000",), heap_size="100M")
 
+    def test_leak(self):
+        self.program("leak")
+        self.execute(2, "100")
+        self.execute(3, "100", error="not-freed-memory")
+
     def test_malloc_free(self):
         self.program("mallocfree")
         self.execute(1)

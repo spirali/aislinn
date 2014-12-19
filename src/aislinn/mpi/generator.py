@@ -73,6 +73,18 @@ class ExecutionContext:
         self.error_messages.append(error_message)
 
 
+class Allocation:
+
+    def __init__(self, pid, addr, size):
+        self.pid = pid
+        self.addr = addr
+        self.size = size
+
+    def compute_hash(self, hashthread):
+        hashthread.update("{} {} {}".format(self.pid, self.addr, self.size))
+
+
+
 class StopSearchException(Exception):
     pass
 
@@ -112,6 +124,7 @@ class Generator:
 
         self.init_time = None
         self.end_time = None
+        self.deterministic_unallocated_memory = None
 
         if aislinn_args.stats:
             self.statistics_tick = aislinn_args.stats
@@ -309,7 +322,7 @@ class Generator:
                     if self.debug_compare_states is not None:
                         self.debug_compare()
                     return True
-
+            self.memory_leak_check()
             self.final_check()
             self.is_full_statespace = True
         except UnexpectedOutput as e:
@@ -325,6 +338,20 @@ class Generator:
             self.controller.kill()
             self.end_time = datetime.datetime.now()
         return True
+
+    def memory_leak_check(self):
+        allocations = [ frozenset(node.allocations)
+                        if node.allocations else frozenset()
+                        for node in self.statespace.all_final_nodes() ]
+        all_allocations = frozenset.union(*allocations)
+        deterministic = frozenset.intersection(*allocations)
+        for a in sorted(all_allocations - deterministic):
+            m = errormsg.NotFreedMemory(a.addr, a.size)
+            self.add_error_message(m)
+
+        self.deterministic_unallocated_memory = 0
+        for a in deterministic:
+            self.deterministic_unallocated_memory += a.size
 
     def final_check(self):
         if self.debug_compare_states is not None:
@@ -578,13 +605,15 @@ class Generator:
             else:
                 raise Exception("Unknown status")
 
-        if not node.arcs and \
-                any(state.status != State.StatusFinished
-                    for state in gstate.states):
-            message = errormsg.Deadlock()
-            message.node = node
-            self.add_error_message(message)
-
+        if not node.arcs:
+            if any(state.status != State.StatusFinished
+                   for state in gstate.states):
+                message = errormsg.Deadlock()
+                message.node = node
+                self.add_error_message(message)
+            else:
+                node.allocations = sum((state.allocations
+                                        for state in gstate.states), [])
         gstate.dispose()
 
     def restore_state(self, state):
@@ -830,6 +859,9 @@ class Generator:
                 if exitcode != 0:
                     context.add_error_message(
                             errormsg.NonzeroExitCode(exitcode))
+                state.allocations = [ Allocation(state.pid, addr, size)
+                                      for addr, size
+                                      in self.controller.get_allocations() ]
                 return context
             if result[0] == "REPORT":
                 context.add_error_message(
