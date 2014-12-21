@@ -124,6 +124,7 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_COMBINER_CONTIGUOUS 0x09000101
 
 #define MPI_TAG_UB 0x02200101
+#define MPI_IN_PLACE ((void *) -1)
 
 /* Constants for MPI_Comm_compare */
 #define MPI_UNEQUAL   0

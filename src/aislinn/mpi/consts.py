@@ -93,6 +93,8 @@ MPI_IDENT     = 3
 
 MPI_TAG_UB = 0x02200101
 
-# ---- Special attributes -------------------------------------
+MPI_IN_PLACE = 0xffffffffffffffff # (void*) -1
+
+# ---- Others  -------------------------------------
 
 MPI_MAX_PROCESSOR_NAME = 128

@@ -24,6 +24,13 @@ import check
 import consts
 import comm
 
+class InvalidInPlace(errormsg.CallError):
+
+    name = "invalid-in-place"
+    short_description = "Invalid use of MPI_IN_PLACE"
+    description = "Invalid use of MPI_IN_PLACE"
+
+
 class CollectiveOperation:
 
     def __init__(self, gstate, comm, blocking, cc_id):
@@ -297,8 +304,13 @@ class Gather(OperationWithBuffers):
         self.sendcount = sendcount
 
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
+
+        if sendbuf == consts.MPI_IN_PLACE:
+            if rank != root:
+                InvalidInPlace().throw()
+        else:
+            self.buffers[rank] = generator.new_buffer_and_pack(
+                    sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
@@ -308,11 +320,12 @@ class Gather(OperationWithBuffers):
         if state.pid == self.root_pid:
             controller = generator.controller
             for i, vg_buffer in enumerate(self.buffers):
-                self.recvtype.unpack(controller,
-                                     vg_buffer,
-                                     self.recvcount,
-                                     self.recvbuf + i * self.recvtype.size
-                                                      * self.recvcount)
+                if vg_buffer: # if vg_buffer is None, then MPI_IN_PLACE was used
+                    self.recvtype.unpack(controller,
+                                         vg_buffer,
+                                         self.recvcount,
+                                         self.recvbuf + i * self.recvtype.size
+                                                          * self.recvcount)
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
@@ -527,6 +540,7 @@ class Scatter(OperationWithSingleBuffer):
         self.recvbufs[rank] = recvbuf
         self.recvtypes[rank] = recvtype
         self.recvcounts[rank] = recvcount
+
         if self.root == rank:
             check.check_count(sendcount, 2)
             sendtype = check.check_datatype(state, sendtype, 3)
@@ -535,6 +549,8 @@ class Scatter(OperationWithSingleBuffer):
             assert self.buffer is None
             self.buffer = generator.new_buffer_and_pack(
                     sendtype, sendcount * self.process_count, sendbuf)
+        elif recvbuf == consts.MPI_IN_PLACE:
+            InvalidInPlace().throw()
 
     def can_be_completed(self, state):
         return self.buffer is not None
@@ -542,11 +558,13 @@ class Scatter(OperationWithSingleBuffer):
     def complete_main(self, generator, state, comm):
         rank = state.get_rank(comm)
         index = rank * self.sendtype.size * self.sendcount
-        self.recvtypes[rank].unpack(generator.controller,
-                                    self.buffer,
-                                    self.recvcounts[rank],
-                                    self.recvbufs[rank],
-                                    index)
+        recvbuf = self.recvbufs[rank]
+        if recvbuf != consts.MPI_IN_PLACE:
+            self.recvtypes[rank].unpack(generator.controller,
+                                        self.buffer,
+                                        self.recvcounts[rank],
+                                        self.recvbufs[rank],
+                                        index)
 
     def compute_hash_data(self, hashthread):
         OperationWithSingleBuffer.compute_hash_data(self, hashthread)

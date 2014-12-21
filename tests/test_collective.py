@@ -188,6 +188,13 @@ class CollectiveTests(TestCase):
         self.output(2, output)
         self.execute(3, "2")
 
+    def test_scattergather_in_place(self):
+        output = "OUT: 110 210 310 410 520 620 720 820 " \
+                 "90300 100300 110300 120300 1340 1440 1540 1640\n"
+        self.program("scattergather_in_place")
+        self.output(2, output)
+        self.execute(4, "2")
+
     def test_allgather(self):
         output = "OUT: 100 200 300 400 101 202 303 404 102 204 306 408\n"
         self.program("allgather")
