@@ -642,6 +642,10 @@ part2:
       a += PAGE_SIZE;
    }
 
+   if (lenB == 0) {
+      return True;
+   }
+
    tl_assert(lenB < PAGE_SIZE);
 
    page_ptr = get_page_ptr_or_null(a);
@@ -726,6 +730,10 @@ part2:
       }
       lenB -= PAGE_SIZE;
       a += PAGE_SIZE;
+   }
+
+   if (lenB == 0) {
+      return True;
    }
 
    tl_assert(lenB < PAGE_SIZE);
