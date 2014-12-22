@@ -283,7 +283,7 @@ class Program:
     def controller(self, args, verbose):
         controller = base.controller.Controller(("./a.out",) + args, AISLINN_BUILD)
         if verbose:
-           controller.valgrind_args = ("--verbose=1",)
+           controller.valgrind_args = ("--verbose={0}".format(verbose),)
         return controller
 
 
