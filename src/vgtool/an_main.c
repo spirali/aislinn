@@ -1973,7 +1973,7 @@ static void new_mem_stack (Addr a, SizeT len)
    /* When undefined memory trackig will work, then hashing will ignore these values
     * now we reset new stack content to zero to have more deterministic memory
     * and therefore more equivalent states will have same hash */
-   VG_(memset)((void*) (a - VG_STACK_REDZONE_SZB), 0, len);
+   //VG_(memset)((void*) (a - VG_STACK_REDZONE_SZB), 0, len);
    make_mem_undefined(a - VG_STACK_REDZONE_SZB, len);
 }
 
