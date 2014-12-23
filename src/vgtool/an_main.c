@@ -1297,7 +1297,8 @@ struct BufferCtrl {
 static void write_stacktrace_helper(UInt n, Addr ip, void *opaque)
 {
    struct BufferCtrl *bc = opaque;
-   VG_(describe_IP)(ip, bc->buffer, bc->size - 1);
+   tl_assert(bc->size > 1);
+   VG_(describe_IP)(ip, bc->buffer, bc->size - 1, NULL);
    SizeT s = VG_(strlen)(bc->buffer);
    bc->buffer[s] = '|';
    s += 1;
