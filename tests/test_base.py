@@ -186,5 +186,10 @@ class BaseTests(TestCase):
         self.execute(1, "send", error="not-freed-request")
         self.execute(1, "recv", error="not-freed-request")
 
+    def test_message_leak(self):
+        self.program("message_leak")
+        self.execute(2, error="not-received-message")
+
+
 if __name__ == "__main__":
     unittest.main()

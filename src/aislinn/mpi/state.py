@@ -771,7 +771,12 @@ class State:
         return result
 
     def message_leak_check(self):
-        return []
+        result = []
+        for message in self.messages:
+            message = errormsg.NotReceivedMessage(message)
+            message.pid = self.pid
+            result.append(message)
+        return result
 
     def _new_request_id(self):
         i = 10

@@ -118,6 +118,21 @@ class NotFreedRequest(ErrorMessage):
         return "A {0.name} request was not finished.".format(self.request)
 
 
+class NotReceivedMessage(ErrorMessage):
+
+    name = "not-received-message"
+    short_description = "Not received message"
+
+    def __init__(self, message):
+        ErrorMessage.__init__(self)
+        self.request = message
+
+    @property
+    def description(self):
+        return "A message from rank {0.source} to rank {0.target} " \
+               "(tag={0.tag}) was not received. ".format(self.request)
+
+
 class CallError(ErrorMessage):
     name = "callerror"
 
