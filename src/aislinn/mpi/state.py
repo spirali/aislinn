@@ -762,6 +762,17 @@ class State:
             if request.is_data_addr(addr):
                 return request.stacktrace
 
+    def request_leak_check(self):
+        result = []
+        for request in self.requests:
+            message = errormsg.NotFreedRequest(request)
+            message.pid = self.pid
+            result.append(message)
+        return result
+
+    def message_leak_check(self):
+        return []
+
     def _new_request_id(self):
         i = 10
         while True:

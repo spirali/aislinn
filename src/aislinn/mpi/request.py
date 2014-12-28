@@ -54,6 +54,8 @@ class SendRequest(Request):
     Synchronous = 1
     Buffered = 2
 
+    name = "send"
+
     def __init__(self, request_id, send_type,
                  comm_id, target, tag, data_ptr, datatype, count):
         assert send_type >= 0 and send_type <= 2
@@ -108,6 +110,8 @@ class SendRequest(Request):
 
 class ReceiveRequest(Request):
 
+    name = "receive"
+
     def __init__(self, request_id, comm_id, source, tag,
                  data_ptr, datatype, count):
         Request.__init__(self, request_id)
@@ -142,6 +146,8 @@ class ReceiveRequest(Request):
 
 class CompletedRequest(Request):
 
+    name = "completed"
+
     def __init__(self, request_id, original_request, message=None):
         Request.__init__(self, request_id)
         assert not original_request.is_completed()
@@ -166,6 +172,8 @@ class CompletedRequest(Request):
 
 
 class CollectiveRequest(Request):
+
+    name = "collective"
 
     def __init__(self, request_id, comm_id, cc_id):
         Request.__init__(self, request_id)

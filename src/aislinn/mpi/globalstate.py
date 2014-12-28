@@ -138,3 +138,17 @@ class GlobalState(EqMixin):
         if self.collective_operations is not None:
             for op in self.collective_operations:
                 op.sanity_check()
+
+    def mpi_leak_check(self):
+        result = []
+
+        for state in self.states:
+            result += state.request_leak_check()
+
+        if result:
+            return result
+
+        for state in self.states:
+            result += state.message_leak_check()
+
+        return result

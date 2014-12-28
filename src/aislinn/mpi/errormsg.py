@@ -104,6 +104,20 @@ class NotFreedMemory(ErrorMessage):
         return "Memory at 0x{0:x} of size {1} was not freed.".format(self.addr, self.size)
 
 
+class NotFreedRequest(ErrorMessage):
+
+    name = "not-freed-request"
+    short_description = "Pending request"
+
+    def __init__(self, request):
+        ErrorMessage.__init__(self)
+        self.request = request
+
+    @property
+    def description(self):
+        return "A {0.name} request was not finished.".format(self.request)
+
+
 class CallError(ErrorMessage):
     name = "callerror"
 

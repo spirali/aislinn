@@ -181,5 +181,10 @@ class BaseTests(TestCase):
         # Test buffer smaller than MPI_MAX_PROCESSOR_NAME
         self.execute(2, "100", error="invalid-name-buffer")
 
+    def test_request_leak(self):
+        self.program("request_leak")
+        self.execute(1, "send", error="not-freed-request")
+        self.execute(1, "recv", error="not-freed-request")
+
 if __name__ == "__main__":
     unittest.main()

@@ -612,6 +612,9 @@ class Generator:
                 message.node = node
                 self.add_error_message(message)
             else:
+                for message in gstate.mpi_leak_check():
+                    message.node = node
+                    self.add_error_message(message)
                 node.allocations = sum((state.allocations
                                         for state in gstate.states), [])
         gstate.dispose()
