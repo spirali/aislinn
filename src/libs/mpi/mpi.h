@@ -20,6 +20,7 @@ typedef
 		int MPI_SOURCE;
 		int MPI_TAG;
 		int size;
+		int MPI_ERROR;
 	} MPI_Status;
 
 typedef int MPI_Datatype;
@@ -32,8 +33,20 @@ typedef int MPI_Group;
 typedef unsigned long MPI_Aint;
 
 /* Constants */
-static const int MPI_SUCCESS = 0;
-static const int MPI_UNDEFINED = -0x0BEFBEEF;
+#define MPI_UNDEFINED     -0x0BEFBEEF
+#define MPI_SUCCESS       0
+#define MPI_ERR_BUFFER    1
+#define MPI_ERR_COUNT     2
+#define MPI_ERR_TYPE      3
+#define MPI_ERR_TAG       4
+#define MPI_ERR_COMM      5
+#define MPI_ERR_RANK      6
+#define MPI_ERR_ROOT      7
+#define MPI_ERR_GROUP     8
+#define MPI_ERR_OP        9
+#define MPI_ERR_REQUEST   19
+#define MPI_ERR_IN_STATUS 17
+#define MPI_ERR_PENDING   18
 
 #define MPI_DATATYPE_NULL (MPI_Datatype) 0xFF00100
 #define MPI_PACKED (MPI_Datatype) 0xFF00101

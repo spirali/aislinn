@@ -94,7 +94,7 @@ class Generator:
     # TODO: Universal architecture detection
     POINTER_SIZE = Controller.POINTER_SIZE
     INT_SIZE = Controller.INT_SIZE
-    STATUS_SIZE = 3 * INT_SIZE
+    STATUS_SIZE = 4 * INT_SIZE
     REQUEST_SIZE = INT_SIZE
 
     def __init__(self, args, valgrind_args, aislinn_args):
