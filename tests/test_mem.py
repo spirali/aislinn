@@ -34,6 +34,10 @@ class MemTests(TestCase):
         self.program("mallocfree")
         self.execute(1)
 
+    def test_realloc(self):
+        self.program("realloc")
+        self.execute(1)
+
     def test_invalid_mem(self):
         self.program("invalidmem")
         self.execute(1, "noinit", error="invalidwrite")

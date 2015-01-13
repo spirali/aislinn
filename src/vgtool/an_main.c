@@ -388,6 +388,23 @@ Addr memspace_alloc(SizeT alloc_size, SizeT allign)
    return address;
 }
 
+static SizeT memspace_block_size(Addr address)
+{
+    XArray *a = current_memspace->allocation_blocks;
+    Word i, s = VG_(sizeXA)(a);
+    AllocationBlock *block = NULL, *next;
+    for (i = 0; i < s; i++) {
+        block = VG_(indexXA)(a, i);
+        if (block->address == address) {
+            break;
+        }
+    }
+    tl_assert(block && block->type == BLOCK_USED);
+    next = VG_(indexXA)(a, i + 1);
+    SizeT size = next->address - address;
+    return size;
+}
+
 static
 SizeT memspace_free(Addr address)
 {
@@ -2161,7 +2178,19 @@ void* user_calloc (ThreadId tid, SizeT nmemb, SizeT size1)
 static
 void* user_realloc(ThreadId tid, void* p_old, SizeT new_szB)
 {
-    VG_(tool_panic)("user_realloc: Not implemented");
+    Addr addr = memspace_alloc(new_szB, 1);
+    make_mem_undefined(addr, new_szB);
+    VPRINT(2, "client_realloc address=%lx size=%lu\n", addr, new_szB);
+    if (p_old == NULL) {
+        VG_(memset)((void*)addr, 0, new_szB);
+        return (void*) addr;
+    }
+    SizeT s = memspace_block_size((Addr) p_old);
+    VG_(memcpy)((void*)addr, p_old, s);
+    if (new_szB > s) {
+        VG_(memset)((void*)(addr + s), 0, new_szB - s);
+    }
+    return (void*) addr;
 }
 
 static
