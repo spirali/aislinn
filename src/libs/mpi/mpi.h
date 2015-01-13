@@ -35,18 +35,6 @@ typedef unsigned long MPI_Aint;
 /* Constants */
 #define MPI_UNDEFINED     -0x0BEFBEEF
 #define MPI_SUCCESS       0
-#define MPI_ERR_BUFFER    1
-#define MPI_ERR_COUNT     2
-#define MPI_ERR_TYPE      3
-#define MPI_ERR_TAG       4
-#define MPI_ERR_COMM      5
-#define MPI_ERR_RANK      6
-#define MPI_ERR_ROOT      7
-#define MPI_ERR_GROUP     8
-#define MPI_ERR_OP        9
-#define MPI_ERR_REQUEST   19
-#define MPI_ERR_IN_STATUS 17
-#define MPI_ERR_PENDING   18
 
 #define MPI_DATATYPE_NULL (MPI_Datatype) 0xFF00100
 #define MPI_PACKED (MPI_Datatype) 0xFF00101
@@ -62,6 +50,7 @@ typedef unsigned long MPI_Aint;
 #define MPI_LONG (MPI_Datatype) 0xFF0010B
 #define MPI_UNSIGNED_LONG (MPI_Datatype) 0xFF0010C
 #define MPI_LONG_LONG_INT (MPI_Datatype) 0xFF0010D
+#define MPI_LONG_LONG (MPI_Datatype) 0xFF0010D // Synonym to MPI_LONG_LONG_INT
 #define MPI_UNSIGNED_LONG_LONG (MPI_Datatype) 0xFF0010E
 #define MPI_FLOAT (MPI_Datatype) 0xFF0010F
 #define MPI_DOUBLE (MPI_Datatype) 0xFF00110
@@ -97,6 +86,18 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 
 #define MPI_BOTTOM         ((void*) 0)
 
+#define MPI_ERR_BUFFER    1
+#define MPI_ERR_COUNT     2
+#define MPI_ERR_TYPE      3
+#define MPI_ERR_TAG       4
+#define MPI_ERR_COMM      5
+#define MPI_ERR_RANK      6
+#define MPI_ERR_ROOT      7
+#define MPI_ERR_GROUP     8
+#define MPI_ERR_OP        9
+#define MPI_ERR_REQUEST   19
+#define MPI_ERR_IN_STATUS 17
+#define MPI_ERR_PENDING   18
 #define MPI_ERR_FILE        0x00001001
 #define MPI_ERR_ACCESS      0x00001002
 #define MPI_ERR_AMODE       0x00001003
@@ -110,6 +111,8 @@ static const MPI_Op MPI_MAXLOC = 0xDD0010D;
 #define MPI_ERR_CONVERSION  0x0000100B
 #define MPI_ERR_DUP_DATAREP 0x0000100C
 #define MPI_ERR_UNSUPPORTED_DATAREP   0x0000100D
+
+#define MPI_MAX_ERROR_STRING   512
 
 #define MPI_INFO_NULL ((MPI_Info)0x99000000)
 #define MPI_INFO_ENV ((MPI_Info)0x99000001)
@@ -552,6 +555,8 @@ int MPI_Type_struct(int count,
 	const MPI_Aint *array_of_displacements,
 	const MPI_Datatype *array_of_types,
 	MPI_Datatype *newtype);
+
+int MPI_Error_string(int errorcode, char *string, int *resultlen);
 
 #ifdef __cplusplus
 }
