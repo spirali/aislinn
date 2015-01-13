@@ -304,6 +304,13 @@ int MPI_Reduce(const void *sendbuf,
 		int root,
 		MPI_Comm comm);
 
+int MPI_Reduce_scatter(const void *sendbuf,
+		       void *recvbuf,
+		       const int *recvcnts,
+		       MPI_Datatype datatype,
+		       MPI_Op op,
+		       MPI_Comm comm);
+
 int MPI_Allreduce(void *sendbuf, void *recvbuf, int count,
     MPI_Datatype datatype, MPI_Op op, MPI_Comm comm);
 

@@ -628,8 +628,9 @@ class Bcast(OperationWithSingleBuffer):
         hashthread.update(str([t.type_id if t else None
                                for t in self.datatypes]))
 
+
 def execute_reduce_op(generator, state, comm, rank, ccop,
-                      recvbuf, buffers, scan=False):
+                      recvbuf, buffers, count, scan=False):
 
     # This is hack to get execution context,
     # By this approach we lost events from reduce function
@@ -641,10 +642,12 @@ def execute_reduce_op(generator, state, comm, rank, ccop,
     context = ExecutionContext()
 
     controller = generator.controller
+    # We have to use malloc because operation runs in client context
+    # and buffers are not visible for code in client
     tmp = controller.client_malloc(generator.INT_SIZE * 2)
     len_ptr = tmp
     datatype_ptr = tmp + generator.INT_SIZE
-    controller.write_int(len_ptr, ccop.count)
+    controller.write_int(len_ptr, count)
     controller.write_int(datatype_ptr, ccop.datatype.type_id)
 
     generator.controller.write_buffer(recvbuf, buffers[0].id)
@@ -663,6 +666,7 @@ def execute_reduce_op(generator, state, comm, rank, ccop,
                 buffer_mem, recvbuf, len_ptr, datatype_ptr)
         controller.client_free(buffer_mem)
     controller.client_free(tmp)
+
 
 class Reduce(OperationWithBuffers):
 
@@ -711,7 +715,7 @@ class Reduce(OperationWithBuffers):
         if state.pid == self.root_pid:
             rank = state.get_rank(comm)
             execute_reduce_op(generator, state, comm, rank,
-                              self, self.recvbuf, self.buffers)
+                              self, self.recvbuf, self.buffers, self.count)
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
@@ -767,7 +771,7 @@ class AllReduce(OperationWithBuffers):
     def complete_main(self, generator, state, comm):
         rank = state.get_rank(comm)
         execute_reduce_op(generator, state, comm, rank,
-                          self, self.recvbufs[rank], self.buffers)
+                          self, self.recvbufs[rank], self.buffers, self.count)
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
@@ -775,6 +779,96 @@ class AllReduce(OperationWithBuffers):
         hashthread.update(str(self.datatype.type_id))
         hashthread.update(str(self.count))
         hashthread.update(str(self.op))
+
+class ReduceScatter(OperationWithBuffers):
+
+    name = "reduce_scatter"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
+        self.recvbufs = [ None ] * self.process_count
+        self.datatype = None
+        self.counts = None
+        self.op = None
+        self.final_buffer = None
+
+    def after_copy(self):
+        OperationWithBuffers.after_copy(self)
+        self.recvbufs = copy.copy(self.recvbufs)
+        if self.final_buffer:
+            self.final_buffer.inc_ref()
+
+    def enter_main(self,
+                   generator,
+                   state,
+                   context,
+                   comm,
+                   args):
+
+        sendbuf, recvbuf, counts_ptr, datatype, op = args
+
+        counts = generator.controller.read_ints(counts_ptr, comm.group.size)
+
+        if self.counts is None:
+            self.counts = counts
+        elif self.counts != counts:
+            e = errormsg.CallError()
+            e.name = "counts-mismatch"
+            e.short_description = "Counts mismatch"
+            e.description = "{0} != {1}".format(repr(self.counts), repr(counts))
+            e.throw()
+
+        total_count = sum(counts)
+
+        if self.op is None:
+            self.op = op
+            self.datatype = datatype
+        else:
+            assert (self.op.fn_ptr == self.op.fn_ptr and
+                    self.datatype == datatype)
+
+        rank = state.get_rank(comm)
+        self.recvbufs[rank] = recvbuf
+        assert self.buffers[rank] is None
+        self.buffers[rank] = generator.new_buffer_and_pack(
+                datatype, total_count, sendbuf)
+
+        if self.remaining_processes_enter == 0:
+            tmp = generator.controller.client_malloc(datatype.size * total_count)
+            execute_reduce_op(generator, state, comm, rank,
+                              self, tmp, self.buffers, total_count)
+            for vg_buffer in self.buffers:
+                if vg_buffer:
+                    vg_buffer.dec_ref()
+            self.final_buffer = generator.new_buffer_and_pack(
+                                    datatype, total_count, tmp)
+            generator.controller.client_free(tmp)
+            self.buffers = []
+
+    def can_be_completed(self, state):
+        return self.remaining_processes_enter == 0
+
+    def complete_main(self, generator, state, comm):
+        rank = state.get_rank(comm)
+        count = self.counts[rank]
+        index = sum(self.counts[:rank]) * self.datatype.size
+        self.datatype.unpack(generator.controller,
+                             self.final_buffer,
+                             count,
+                             self.recvbufs[rank],
+                             index)
+
+    def compute_hash_data(self, hashthread):
+        OperationWithBuffers.compute_hash_data(self, hashthread)
+        hashthread.update(str(self.recvbufs))
+        hashthread.update(str(self.datatype.type_id))
+        hashthread.update(str(self.counts))
+        hashthread.update(str(self.op))
+
+    def dispose(self):
+        OperationWithBuffers.dispose(self)
+        if self.final_buffer:
+            self.final_buffer.dec_ref()
 
 
 class Scan(AllReduce):
@@ -784,7 +878,8 @@ class Scan(AllReduce):
     def complete_main(self, generator, state, comm):
         rank = state.get_rank(comm)
         execute_reduce_op(generator, state, comm, rank,
-                          self, self.recvbufs[rank], self.buffers, scan=True)
+                          self, self.recvbufs[rank],
+                          self.buffers, self.count, scan=True)
 
 
 class CommSplit(CollectiveOperation):

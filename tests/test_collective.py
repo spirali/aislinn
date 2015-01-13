@@ -165,6 +165,18 @@ class CollectiveTests(TestCase):
         self.execute(3, "allreduce")
         self.execute(3, "iallreduce")
 
+    def test_reduce_scatter(self):
+        self.program("reduce_scatter")
+        self.output(0, "0 1000\n")
+        self.output(1, "1 1004\n1 1008\n")
+        self.output(2, "2 1012\n2 1016\n2 1020\n")
+        self.output(3, "3 1024\n")
+        self.execute(4)
+
+    def test_reduce_scatter2(self):
+        self.program("reduce_scatter2")
+        self.execute(4, error="counts-mismatch")
+
     def test_loc(self):
         output = "int: (100, 1) (100, 1)\n" \
                  "int: (100, 3) (300, 30)\n" \

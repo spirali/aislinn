@@ -348,6 +348,14 @@ def MPI_Reduce(generator, args, state, context):
                                      True,
                                      args)
 
+def MPI_Reduce_scatter(generator, args, state, context):
+    return call_collective_operation(generator,
+                                     state,
+                                     context,
+                                     collectives.ReduceScatter,
+                                     True,
+                                     args)
+
 def MPI_Allreduce(generator, args, state, context):
     return call_collective_operation(generator,
                                      state,
@@ -927,6 +935,8 @@ calls_communicating = dict((c.name, c) for c in [
      Call(MPI_Reduce, (at.Pointer, at.Pointer, at.Count,
                        at.Datatype, at.Op, at.Int,
                        at.Comm)),
+     Call(MPI_Reduce_scatter, (at.Pointer, at.Pointer, at.Pointer,
+                       at.Datatype, at.Op, at.Comm)),
      Call(MPI_Allreduce, (at.Pointer, at.Pointer, at.Count,
                           at.Datatype, at.Op, at.Comm)),
      Call(MPI_Scan, (at.Pointer, at.Pointer, at.Count,
