@@ -36,6 +36,7 @@ typedef unsigned long MPI_Aint;
 #define MPI_UNDEFINED     -0x0BEFBEEF
 #define MPI_SUCCESS       0
 
+#define MPI_UB (MPI_Datatype) 0xFF00099
 #define MPI_DATATYPE_NULL (MPI_Datatype) 0xFF00100
 #define MPI_PACKED (MPI_Datatype) 0xFF00101
 #define MPI_BYTE (MPI_Datatype) 0xFF00102
@@ -225,6 +226,19 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype,
 
 int MPI_Irecv(void *buf, int count, MPI_Datatype datatype,
 	int source, int tag, MPI_Comm comm, MPI_Request *request);
+
+int MPI_Sendrecv(void *sendbuf,
+		 int sendcount,
+		 MPI_Datatype sendtype,
+		 int dest,
+		 int sendtag,
+		 void *recvbuf,
+		 int recvcount,
+		 MPI_Datatype recvtype,
+		 int source,
+		 int recvtag,
+		 MPI_Comm comm,
+		 MPI_Status *status);
 
 int MPI_Recv_init(void *buf, int count, MPI_Datatype datatype, int source,
 	int tag, MPI_Comm comm, MPI_Request *request);

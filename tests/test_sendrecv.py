@@ -6,8 +6,8 @@ class SendRecvTests(TestCase):
 
     category = "sendrecv"
 
-    def test_sendrecv(self):
-        self.program("sendrecv")
+    def test_send_and_receive(self):
+        self.program("send_and_receive")
         self.execute(2, "1 ssend", stdout="Receive\nSend\n")
         self.execute(2, "1 bsend", stdout="Send\nReceive\n")
         self.execute(2, "0 bsend", error="deadlock")
@@ -36,6 +36,14 @@ class SendRecvTests(TestCase):
         # When Rsend is fully implemented, this should cause an error
         # self.execute(2, "1 rsend-err")
 
+    def test_sendrecv(self):
+        self.program("sendrecv")
+        self.output(0, "0 2 3\n")
+        self.output(1, "1 0 1\n")
+        self.output(2, "2 1 2\n")
+        self.execute(3)
+        self.output(0, "0 0 1\n")
+        self.execute(1)
 
     def test_persistent(self):
         self.program("persistent")

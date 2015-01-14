@@ -150,6 +150,20 @@ def MPI_Ibsend(generator, args, state, context):
 def MPI_Irecv(generator, args, state, context):
     return call_recv(generator, args, state, context, False, "Irecv")
 
+def MPI_Sendrecv(generator, args, state, context):
+    send_args = args[:5]
+    send_args.append(args[-2]) # Add communicator
+    recv_args = args[5:]
+    send_request = call_send(generator, send_args, state, context,
+                             True, "Send", "Send", return_request=True)
+    recv_request = call_recv(generator, recv_args, state, context,
+                             True, "Recv", return_request=True)
+    state.set_wait((send_request.id, recv_request.id),
+                   None, # request pointer
+                   args[-1], # status pointer
+                   immediate=True)
+    return True
+
 def MPI_Recv_init(generator, args, state, context):
     return call_recv(generator, args, state,
                      context, False, "MPI_Recv_init", True)
@@ -761,7 +775,7 @@ def get_send_type(generator, state, mode, datatype, count):
         return SendRequest.Standard
 
 def call_send(generator, args, state, context,
-              blocking, mode, name, persistent=False):
+              blocking, mode, name, persistent=False, return_request=False):
     if blocking:
         buf_ptr, count, datatype, target, tag, comm = args
     else:
@@ -790,6 +804,9 @@ def call_send(generator, args, state, context,
         assert not blocking
         state.make_request_persistent(request.id)
 
+    if return_request:
+        return request
+
     if blocking:
         state.set_wait((request.id,), immediate=True)
     else:
@@ -802,7 +819,7 @@ def call_send(generator, args, state, context,
     return blocking
 
 def call_recv(generator, args, state,
-              context, blocking, name, persistent=False):
+              context, blocking, name, persistent=False, return_request=False):
     buf_ptr, count, datatype, source, tag, comm, ptr = args
     check.check_rank(comm, source, 4, True, True)
 
@@ -834,6 +851,9 @@ def call_recv(generator, args, state,
     if persistent:
        assert not blocking
        state.make_request_persistent(request.id)
+
+    if return_request:
+        return request
 
     if blocking:
         state.set_wait((request.id,), None, status_ptr, immediate=True)
@@ -892,6 +912,9 @@ calls_communicating = dict((c.name, c) for c in [
                      at.Rank, at.TagAT, at.Comm, at.StatusPtr)),
      Call(MPI_Irecv, (at.Pointer, at.Count, at.Datatype,
                       at.Rank, at.TagAT, at.Comm, at.Pointer)),
+     Call(MPI_Sendrecv, (at.Pointer, at.Count, at.Datatype, at.Rank, at.Tag,
+                         at.Pointer, at.Count, at.Datatype, at.Rank, at.TagAT,
+                         at.Comm, at.StatusPtr)),
      Call(MPI_Recv_init, (at.Pointer, at.Count, at.Datatype,
                           at.Rank, at.TagAT, at.Comm, at.Pointer)),
      Call(MPI_Send_init, (at.Pointer, at.Count, at.Datatype,
