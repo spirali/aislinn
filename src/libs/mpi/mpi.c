@@ -169,3 +169,8 @@ double MPI_Wtime()
 {
 	return 0.0;
 }
+
+double MPI_Wtick()
+{
+	return 10e-3;
+}

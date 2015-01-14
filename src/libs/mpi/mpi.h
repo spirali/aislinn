@@ -530,6 +530,7 @@ int MPI_Get_processor_name(char *name, int *resultlen);
 /  --------------------------------------------------------------------------*/
 
 double MPI_Wtime();
+double MPI_Wtick();
 
 /* ----------------------------------------------------------------------------
 /  DEPRECATED INTERFACE
