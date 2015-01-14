@@ -63,6 +63,11 @@ typedef unsigned long MPI_Aint;
 #define MPI_SHORT_INT (MPI_Datatype) 0xFF00116
 #define MPI_LONG_DOUBLE_INT (MPI_Datatype) 0xFF00117
 
+/* If I am right, MPI_DOUBLE_PRECISION
+ * does not have to be defined in C version
+ * of MPI implemenation, but some libraries use it .. */
+#define MPI_DOUBLE_PRECISION MPI_DOUBLE
+
 static const MPI_Op MPI_OP_NULL = 0xDD00100;
 static const MPI_Op MPI_MAX = 0xDD00101;
 static const MPI_Op MPI_MIN = 0xDD00102;
