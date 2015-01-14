@@ -275,6 +275,8 @@ def MPI_Test(generator, args, state, context):
 
 def MPI_Waitall(generator, args, state, context):
     count, requests_ptr, status_ptr = args
+    if count == 0:
+        return False
     request_ids = generator.controller.read_ints(requests_ptr, count)
     check.check_request_ids(state, request_ids)
     values = []
@@ -302,7 +304,26 @@ def MPI_Waitany(generator, args, state, context):
         generator.controller.write_int(index_ptr, consts.MPI_UNDEFINED)
         return False
     state.set_wait(request_ids, requests_ptr, status_ptr,
-                   wait_any=True, index_ptr=index_ptr)
+                   status=state.StatusWaitAny, index_ptr=index_ptr)
+    return True
+
+def MPI_Waitsome(generator, args, state, context):
+    count, requests_ptr, outcount_ptr, indices_ptr, status_ptr = args
+    request_ids = generator.controller.read_ints(requests_ptr, count)
+
+    for i, request_id in enumerate(request_ids):
+        if request_id == consts.MPI_REQUEST_NULL:
+            continue
+        if state.get_persistent_request(request_id) is None:
+            check.check_request_id(state, request_id)
+        elif not state.get_request(request_id):
+            request_ids[i] = consts.MPI_REQUEST_NULL
+    if all(id == consts.MPI_REQUEST_NULL for id in request_ids):
+        generator.controller.write_int(outcount_ptr, consts.MPI_UNDEFINED)
+        return False
+    state.set_wait(request_ids, requests_ptr, status_ptr,
+                   status=state.StatusWaitSome,
+                   index_ptr=(indices_ptr, outcount_ptr))
     return True
 
 def MPI_Testall(generator, args, state, context):
@@ -947,6 +968,7 @@ calls_communicating = dict((c.name, c) for c in [
      Call(MPI_Wait, (at.Pointer, at.StatusPtr)),
      Call(MPI_Waitall, (at.Count, at.Pointer, at.StatusesPtr)),
      Call(MPI_Waitany, (at.Count, at.Pointer, at.Pointer, at.StatusPtr)),
+     Call(MPI_Waitsome, (at.Count, at.Pointer, at.Pointer, at.Pointer, at.StatusesPtr)),
      Call(MPI_Test, (at.Pointer, at.Pointer, at.StatusPtr)),
      Call(MPI_Testall, (at.Count, at.Pointer, at.Pointer, at.StatusesPtr)),
      Call(MPI_Barrier, (at.Comm,)),

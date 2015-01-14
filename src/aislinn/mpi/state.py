@@ -39,8 +39,9 @@ class State:
     StatusFinished = 1
     StatusWaitAll = 2
     StatusWaitAny = 3
-    StatusTest = 4
-    StatusProbe = 5
+    StatusWaitSome = 4
+    StatusTest = 5
+    StatusProbe = 6
 
     # Used only for final state, list of non-freed-memory
     allocations = None
@@ -61,7 +62,7 @@ class State:
         self.active_request_pointer = None
         self.active_request_status_ptr = None
         self.flag_ptr = None
-        self.index_ptr = None # Used for Waitany
+        self.index_ptr = None # Used for Waitany and WaitSome
         self.user_defined_types = [] # <-- Copy on write!
         self.user_defined_ops = [] # <-- Copy on write!
         self.keyvals = [] # <-- Copy on write!
@@ -457,6 +458,7 @@ class State:
                     self.active_request_pointer + \
                     generator.REQUEST_SIZE * index_pointer,
                     consts.MPI_REQUEST_NULL)
+
         if self.active_request_status_ptr is not None and request.is_receive():
             status_ptr = self.active_request_status_ptr + \
                          generator.STATUS_SIZE * index_status
@@ -471,22 +473,25 @@ class State:
                           message.tag,
                           message.size)
 
-    def finish_active_requests(self, generator):
+    def finish_all_active_requests(self, generator):
         logging.debug("Removing active requests")
-        self.requests = copy.copy(self.requests)
-        for index, request_id in enumerate(self.active_request_ids):
-            request = self.get_request(request_id)
-            self._finish_request(generator, request, index, index)
-            self.requests.remove(request)
-        self.active_request_ids = None
+        self.finish_active_requests(generator,
+                                    range(len(self.active_request_ids)))
 
     def finish_active_request(self, generator, request):
         index = self.active_request_ids.index(request.id)
         self._finish_request(generator, request, index, 0)
         self.requests = copy.copy(self.requests)
         self.requests.remove(request)
-        self.active_request_ids = copy.copy(self.active_request_ids)
-        del self.active_request_ids[index]
+        self.active_request_ids = None
+
+    def finish_active_requests(self, generator, indices):
+        self.requests = copy.copy(self.requests)
+        for i, index in enumerate(indices):
+            request = self.get_request(self.active_request_ids[index])
+            self._finish_request(generator, request, index, i)
+            self.requests.remove(request)
+        self.active_request_ids = None
 
     def reset_state(self):
         self.status = None
@@ -511,18 +516,20 @@ class State:
                  request_ids,
                  request_ptr=None,
                  status_ptr=None,
-                 wait_any=False,
+                 status=None,
                  index_ptr=None,
                  immediate=False):
         self.reset_state()
         # This wait was called immediately after creating request,
         # hence buffers are not locked
         self.immediate_wait = immediate
-        if wait_any:
-            self.status = self.StatusWaitAny
-            self.index_ptr = index_ptr
+        if status:
+            self.status = status
         else:
             self.status = self.StatusWaitAll
+        if index_ptr:
+            self.index_ptr = index_ptr
+        assert request_ids
         self.active_request_ids = request_ids
         self.active_request_pointer = request_ptr
         self.active_request_status_ptr = status_ptr

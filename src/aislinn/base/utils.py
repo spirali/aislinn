@@ -64,3 +64,16 @@ def convert_type(value, target_type):
 def convert_types(values, target_types):
     assert len(values) == len(target_types)
     return [ convert_type(v, t) for v, t in zip(values, target_types) ]
+
+# Returns powerset of "items"
+def power_set(items):
+    if len(items) == 1:
+        yield items
+        yield []
+    else:
+        first = items[0]
+        for i in power_set(items[1:]):
+            lst = [ first ]
+            lst.extend(i)
+            yield lst
+            yield i

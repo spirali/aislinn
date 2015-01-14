@@ -92,6 +92,42 @@ class SendRecvTests(TestCase):
         self.execute(3, ("c",), send_protocol="rendezvous")
         self.execute(3, ("c",))
 
+    def test_waitsome(self):
+        self.program("waitsome")
+        for output in ['1\n0 10 0 10\n3\n',
+                       '1\n1 30 2 30\n3\n',
+                       '1\n3 11 0 11\n3\n',
+                       '1\n3 31 2 31\n3\n',
+                       '1\n4 11 0 11\n3\n',
+                       '1\n4 31 2 31\n3\n',
+                       '2\n0 10 0 10\n1 30 2 30\n2\n',
+                       '2\n0 10 0 10\n3 11 0 11\n2\n',
+                       '2\n0 10 0 10\n3 31 2 31\n2\n',
+                       '2\n0 10 0 10\n4 11 0 11\n2\n',
+                       '2\n0 10 0 10\n4 31 2 31\n2\n',
+                       '2\n1 30 2 30\n3 11 0 11\n2\n',
+                       '2\n1 30 2 30\n3 31 2 31\n2\n',
+                       '2\n1 30 2 30\n4 11 0 11\n2\n',
+                       '2\n1 30 2 30\n4 31 2 31\n2\n',
+                       '2\n3 11 0 11\n4 31 2 31\n2\n',
+                       '2\n3 31 2 31\n4 11 0 11\n2\n',
+                       '3\n0 10 0 10\n1 30 2 30\n3 11 0 11\n1\n',
+                       '3\n0 10 0 10\n1 30 2 30\n3 31 2 31\n1\n',
+                       '3\n0 10 0 10\n1 30 2 30\n4 11 0 11\n1\n',
+                       '3\n0 10 0 10\n1 30 2 30\n4 31 2 31\n1\n',
+                       '3\n0 10 0 10\n3 11 0 11\n4 31 2 31\n1\n',
+                       '3\n0 10 0 10\n3 31 2 31\n4 11 0 11\n1\n',
+                       '3\n1 30 2 30\n3 11 0 11\n4 31 2 31\n1\n',
+                       '3\n1 30 2 30\n3 31 2 31\n4 11 0 11\n1\n',
+                       '4\n0 10 0 10\n1 30 2 30\n3 11 0 11\n4 31 2 31\n0\n',
+                       '4\n0 10 0 10\n1 30 2 30\n3 31 2 31\n4 11 0 11\n0\n']:
+            self.output(1, output)
+        self.execute(3)
+
+    def test_waitsome2(self):
+        self.program("waitsome2")
+        self.execute(2)
+
     def test_waitany(self):
         self.program("waitany")
 

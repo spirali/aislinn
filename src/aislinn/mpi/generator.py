@@ -27,7 +27,7 @@ from base.statespace import StateSpace
 from collections import deque
 from globalstate import GlobalState
 from base.report import Report
-from base.utils import convert_type
+from base.utils import convert_type, power_set
 import consts
 import mpicalls
 import event
@@ -478,7 +478,8 @@ class Generator:
         partial_found = False
         for state in gstate.states:
             if state.status == State.StatusWaitAll or \
-                    state.status == State.StatusWaitAny:
+                    state.status == State.StatusWaitAny or \
+                    state.status == State.StatusWaitSome:
                 if not state.are_requests_deterministic():
                     continue
                 matches = state.check_requests(upto_active=True)
@@ -488,11 +489,12 @@ class Generator:
                    partial_found = True
                    continue
 
-                if state.status == State.StatusWaitAny:
+                if state.status == State.StatusWaitAny \
+                        or state.status == State.StatusWaitSome:
                     count = len(state.active_request_ids) - \
                                 state.active_request_ids.count(consts.MPI_COMM_NULL)
                     if count > 1:
-                        # We cannot continue because we need branch,
+                        # We cannot continue because we need branching,
                         # so the best we can hope
                         # for is "partial_found"
                         continue
@@ -509,8 +511,18 @@ class Generator:
                     else:
                         raise Exception("Internal error")
 
+                if state.status == State.StatusWaitSome:
+                    for i, request_id in enumerate(state.active_request_ids):
+                        if request_id != consts.MPI_REQUEST_NULL:
+                            index_ptr, outcounts_ptr = state.index_ptr
+                            self.controller.write_int(index_ptr, i)
+                            self.controller.write_int(outcounts_ptr, 1)
+                            break
+                    else:
+                        raise Exception("Internal error")
+
                 self.apply_matching(node, state, matches[0])
-                state.finish_active_requests(self)
+                state.finish_all_active_requests(self)
                 self.execute_state_and_add_node(node, state)
                 return True
 
@@ -596,6 +608,8 @@ class Generator:
                 self.process_wait_or_test_all(node, state, False)
             elif state.status == State.StatusWaitAny:
                 self.process_wait_or_test_any(node, state, False)
+            elif state.status == State.StatusWaitSome:
+                self.process_wait_or_test_some(node, state, False)
             elif state.status == State.StatusTest:
                 self.process_wait_or_test_all(node, state, True)
             elif state.status == State.StatusProbe:
@@ -692,7 +706,7 @@ class Generator:
                 new_node = self.add_node(node, new_gstate)
                 node.add_arc(Arc(new_node))
                 return
-            new_state.finish_active_requests(self)
+            new_state.finish_all_active_requests(self)
             if test:
                 self.controller.write_int(state.flag_ptr, 1)
             self.execute_state_and_add_node(node, new_state)
@@ -727,6 +741,39 @@ class Generator:
                 #    self.controller.write_int(state.flag_ptr, 1)
                 self.execute_state_and_add_node(node, new_state)
 
+    def process_wait_or_test_some(self, node, state, test):
+        #if test:
+        #    new_gstate = state.gstate.copy()
+        #    new_state = new_gstate.get_state(state.pid)
+        #    new_state.reinit_active_requests()
+        #    self.controller.restore_state(new_state.vg_state.id)
+        #    self.controller.write_int(state.flag_ptr, 0)
+        #    self.execute_state_and_add_node(node, new_state)
+
+        matches = state.check_requests()
+        logging.debug("Wait or test any: state=%s matches=%s", state, matches)
+        for matching in matches:
+            for requests in \
+                power_set(state.active_requests_covered_by_matching(matching)):
+
+                if not requests:
+                    continue
+
+                logging.debug("Wait some choice: request=%s", requests)
+                new_gstate = state.gstate.copy()
+                new_state = new_gstate.get_state(state.pid)
+                self.controller.restore_state(new_state.vg_state.id)
+
+                self.apply_matching(node, new_state, matching)
+                index_ptr, outcounts_ptr = new_state.index_ptr
+                self.controller.write_int(outcounts_ptr, len(requests))
+                indices = [ i for i, request in requests ]
+                self.controller.write_ints(index_ptr, indices)
+                # We need to refresh request, from new state
+                new_state.finish_active_requests(self, indices)
+                #if test:
+                #    self.controller.write_int(state.flag_ptr, 1)
+                self.execute_state_and_add_node(node, new_state)
 
     def execute_state_and_add_node(self, node, state):
         context = self.execute_state(state)

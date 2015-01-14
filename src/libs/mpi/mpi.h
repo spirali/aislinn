@@ -273,6 +273,10 @@ int MPI_Waitall(int count, MPI_Request array_of_requests[],
 int MPI_Waitany(int count, MPI_Request array_of_requests[], int *index,
 	MPI_Status *status);
 
+int MPI_Waitsome(int incount, MPI_Request array_of_requests[],
+                int *outcount, int array_of_indices[],
+                MPI_Status array_of_statuses[]);
+
 int MPI_Test(MPI_Request *request, int *flag, MPI_Status *status);
 
 int MPI_Testall(int count, MPI_Request array_of_requests[], int *flag,
