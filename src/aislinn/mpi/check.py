@@ -171,6 +171,11 @@ def check_persistent_request(state, request_id, inactive):
                 request_id, None, "Persistent request is active").throw()
     return request
 
+def check_unique_values(items, arg_position):
+    if len(set(items)) != len(items):
+        errormsg.InvalidArgument(
+                items, arg_position, "Non-unique values").throw()
+
 def check_request_ids(state, request_ids):
     for request_id in request_ids:
         check_request_id(state, request_id)

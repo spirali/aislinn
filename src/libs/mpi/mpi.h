@@ -503,6 +503,9 @@ int MPI_Group_size(MPI_Group group, int *size);
 int MPI_Group_incl(MPI_Group group, int n,
 	const int ranks[], MPI_Group *newgroup);
 
+int MPI_Group_excl(MPI_Group group, int n,
+	const int ranks[], MPI_Group *newgroup);
+
 int MPI_Group_compare(MPI_Group group1, MPI_Group group2,
 	int *result);
 

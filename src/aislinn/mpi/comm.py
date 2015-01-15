@@ -39,6 +39,10 @@ class Group:
     def size(self):
         return len(self.table)
 
+    @property
+    def ranks(self):
+        return range(self.size)
+
     def is_valid_rank(self, rank):
         return rank >= 0 and rank < len(self.table)
 

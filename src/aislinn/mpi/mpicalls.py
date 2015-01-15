@@ -108,6 +108,20 @@ def MPI_Group_incl(generator, args, state, context):
     generator.controller.write_int(group_ptr, group_id)
     return False
 
+def MPI_Group_excl(generator, args, state, context):
+    # FIXME: If count == 0 then return MPI_GROUP_NULL
+    group, count, ranks_ptr, group_ptr = args
+    ranks = generator.controller.read_ints(ranks_ptr, count)
+    for rank in ranks:
+        check.check_rank_in_group(group, rank, 3)
+    check.check_unique_values(ranks, 3)
+    table = [ group.rank_to_pid(rank)
+              for rank in group.ranks
+              if rank not in ranks ]
+    group_id = state.add_group(Group(table))
+    generator.controller.write_int(group_ptr, group_id)
+    return False
+
 def MPI_Group_compare(generator, args, state, context):
     group1, group2, ptr = args
     generator.controller.write_int(ptr, group_compare(group1, group2))
@@ -995,6 +1009,7 @@ calls_non_communicating = dict((c.name, c) for c in [
      Call(MPI_Group_free, (at.Pointer,)),
      Call(MPI_Group_size, (at.Group, at.Pointer)),
      Call(MPI_Group_incl, (at.Group, at.Count, at.Pointer, at.Pointer)),
+     Call(MPI_Group_excl, (at.Group, at.Count, at.Pointer, at.Pointer)),
      Call(MPI_Group_compare, (at.Group, at.Group, at.Pointer)),
      Call(MPI_Request_free, (at.Pointer,)),
      Call(MPI_Op_create, (at.Pointer, at.Int, at.Pointer)),

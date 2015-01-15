@@ -129,6 +129,15 @@ class BaseTests(TestCase):
         self.program("group2")
         self.execute(4)
 
+    def test_group_excl(self):
+        self.program("group_excl")
+        self.execute(4)
+        self.execute(2, error="invalidarg")
+
+    def test_group_excl2(self):
+        self.program("group_excl2")
+        self.execute(3, error="invalidarg")
+
     def test_finalized(self):
         self.program("finalized")
         self.execute(1)
