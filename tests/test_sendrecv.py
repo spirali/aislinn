@@ -132,6 +132,10 @@ class SendRecvTests(TestCase):
         self.program("waitsome2")
         self.execute(2)
 
+    def test_waitsome3(self):
+        self.program("waitsome3")
+        self.execute(1, error="invalidwrite")
+
     def test_waitany(self):
         self.program("waitany")
 

@@ -604,20 +604,25 @@ class Generator:
             return
 
         for state in gstate.states:
-            if state.status == State.StatusWaitAll:
-                self.process_wait_or_test_all(node, state, False)
-            elif state.status == State.StatusWaitAny:
-                self.process_wait_or_test_any(node, state, False)
-            elif state.status == State.StatusWaitSome:
-                self.process_wait_or_test_some(node, state, False)
-            elif state.status == State.StatusTest:
-                self.process_wait_or_test_all(node, state, True)
-            elif state.status == State.StatusProbe:
-                self.process_probe(node, state)
-            elif state.status == State.StatusFinished:
-                continue
-            else:
-                raise Exception("Unknown status")
+            try:
+                if state.status == State.StatusWaitAll:
+                    self.process_wait_or_test_all(node, state, False)
+                elif state.status == State.StatusWaitAny:
+                    self.process_wait_or_test_any(node, state, False)
+                elif state.status == State.StatusWaitSome:
+                    self.process_wait_or_test_some(node, state, False)
+                elif state.status == State.StatusTest:
+                    self.process_wait_or_test_all(node, state, True)
+                elif state.status == State.StatusProbe:
+                    self.process_probe(node, state)
+                elif state.status == State.StatusFinished:
+                    continue
+                else:
+                    raise Exception("Unknown status")
+            except UnexpectedOutput as e:
+                error_message = self.unexpected_output_error_message(state, e.output)
+                error_message.node = node
+                error_message.throw()
 
         if not node.arcs:
             if any(state.status != State.StatusFinished
