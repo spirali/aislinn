@@ -147,9 +147,10 @@ def check_and_get_group(state, group_id, arg_position):
 
 def check_request_id(state, request_id):
     if request_id == consts.MPI_REQUEST_NULL:
-        errormsg.InvalidArgument("MPI_REQUEST_NULL",
-                                 None,
-                                 "Invalid request").throw()
+        return
+        #errormsg.InvalidArgument("MPI_REQUEST_NULL",
+        #                         None,
+        #                         "Invalid request").throw()
     request = state.get_request(request_id)
 
     if request is None:

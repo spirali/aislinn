@@ -92,6 +92,10 @@ class SendRecvTests(TestCase):
         self.execute(3, ("c",), send_protocol="rendezvous")
         self.execute(3, ("c",))
 
+    def test_waitall2(self):
+        self.program("waitall2")
+        self.execute(1)
+
     def test_waitsome(self):
         self.program("waitsome")
         for output in ['1\n0 10 0 10\n3\n',

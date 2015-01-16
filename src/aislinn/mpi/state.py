@@ -488,7 +488,10 @@ class State:
     def finish_active_requests(self, generator, indices):
         self.requests = copy.copy(self.requests)
         for i, index in enumerate(indices):
-            request = self.get_request(self.active_request_ids[index])
+            request_id = self.active_request_ids[index]
+            if request_id == consts.MPI_REQUEST_NULL:
+                continue
+            request = self.get_request(request_id)
             self._finish_request(generator, request, index, i)
             self.requests.remove(request)
         self.active_request_ids = None
