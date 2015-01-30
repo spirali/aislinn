@@ -328,6 +328,8 @@ def MPI_Waitsome(generator, args, state, context):
 
 def MPI_Testall(generator, args, state, context):
     count, requests_ptr, flag_ptr, status_ptr = args
+    if count == 0:
+        return False
     request_ids = generator.controller.read_ints(requests_ptr, count)
     check.check_request_ids(state, request_ids)
     state.set_test(request_ids, flag_ptr, requests_ptr, status_ptr)

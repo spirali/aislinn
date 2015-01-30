@@ -522,6 +522,7 @@ class State:
                  status=None,
                  index_ptr=None,
                  immediate=False):
+        assert request_ids
         self.reset_state()
         # This wait was called immediately after creating request,
         # hence buffers are not locked
@@ -542,6 +543,8 @@ class State:
         self.status = self.StatusFinished
 
     def set_test(self, request_ids, flag_ptr, request_ptr, status_ptr):
+        assert request_ids
+        self.reset_state()
         self.status = self.StatusTest
         self.active_request_ids = request_ids
         self.flag_ptr = flag_ptr
