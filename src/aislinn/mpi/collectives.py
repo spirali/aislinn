@@ -588,8 +588,8 @@ class Bcast(OperationWithSingleBuffer):
     def after_copy(self):
         OperationWithSingleBuffer.after_copy(self)
         self.recvbufs = copy.copy(self.recvbufs)
-        self.recvcounts = copy.copy(self.counts)
-        self.recvtypes = copy.copy(self.types)
+        self.counts = copy.copy(self.counts)
+        self.datatypes = copy.copy(self.datatypes)
 
     def enter_main(self,
                    generator,
