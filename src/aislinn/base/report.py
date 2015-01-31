@@ -304,8 +304,11 @@ class Report:
                 e = pids[r][step]
                 name = e.name
                 data[r] = name
+                titles[r] = ""
+                if e.args:
+                    titles[r] += "Args: {0}\n".format(e.args)
                 if e.stacktrace:
-                    titles[r] = e.stacktrace.replace("|", "\n")
+                    titles[r] += e.stacktrace.replace("|", "\n")
                 if name in collective_operations:
                     classes[r] = "Collective"
                 elif name in wait_operations:

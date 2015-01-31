@@ -24,10 +24,12 @@ from base.report import EntryList
 class Event:
 
     stacktrace = None
+    args = None
 
-    def __init__(self, name, pid):
+    def __init__(self, name, pid, args=None):
         self.name = name
         self.pid = pid
+        self.args = args
 
     def get_entries(self):
         return EntryList()

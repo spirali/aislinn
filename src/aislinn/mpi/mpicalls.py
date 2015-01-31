@@ -918,11 +918,13 @@ class Call:
 
     def run(self, generator, args, state, context):
         assert len(args) == len(self.args)
-        args = [ self.args[i].make_conversion(args[i], i, state)
-                 for i in xrange(len(args)) ]
-        r = self.fn(generator, args, state, context)
+        a = [ self.args[i].make_conversion(args[i], i, state)
+              for i in xrange(len(args)) ]
+        r = self.fn(generator, a, state, context)
         generator.add_call_event(context,
-                                 event.CallEvent(self.event_name, state.pid))
+                                 event.CallEvent(self.event_name,
+                                                 state.pid,
+                                                 ",".join(args)))
         return r
 
 
