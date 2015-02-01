@@ -831,6 +831,10 @@ part2:
       a += PAGE_SIZE;
    }
 
+   if (lenB == 0) {
+       return;
+   }
+
    tl_assert(lenB < PAGE_SIZE);
 
    page_ptr = get_page_ptr(a);
@@ -1917,7 +1921,7 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
             p = VG_(snprintf)(m, l, " %lu", a[i]);
             m += p;
             l -= p;
-         }         
+         }
          VG_(strcpy)(m, "\n");
          answer = (Vg_AislinnCallAnswer*) arg[4];
          cet = CET_CALL;
@@ -2292,11 +2296,11 @@ static void an_pre_clo_init(void)
                                  an_instrument,
                                  an_fini);
 
-   VG_(needs_restore_thread)(restore_thread);
-
    VG_(needs_command_line_options)(process_cmd_line_option,
                                    print_usage,
                                    print_debug_usage);
+
+   VG_(needs_restore_thread)(restore_thread);
 
    VG_(needs_malloc_replacement)  (client_malloc,
                                    client_malloc, //MC_(__builtin_new),
@@ -2323,7 +2327,6 @@ static void an_pre_clo_init(void)
    VG_(track_new_mem_brk)     (an_new_mem_brk);
    VG_(needs_client_requests) (an_handle_client_request);*/
 
-   /*VG_(needs_restore_thread)(an_restore_thread);*/
    VG_(track_new_mem_stack_signal) (new_mem_stack_signal);
    VG_(track_new_mem_stack) (new_mem_stack);
    VG_(track_die_mem_stack) (die_mem_stack);
