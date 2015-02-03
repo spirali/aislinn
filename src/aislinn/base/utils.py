@@ -67,13 +67,17 @@ def convert_types(values, target_types):
 
 # Returns powerset of "items"
 def power_set(items):
-    if len(items) == 1:
-        yield items
-        yield []
-    else:
-        first = items[0]
-        for i in power_set(items[1:]):
-            lst = [ first ]
-            lst.extend(i)
-            yield lst
-            yield i
+    def power_set_helper(items):
+        if len(items) == 1:
+            yield items
+            yield []
+        else:
+            first = items[0]
+            for i in power_set_helper(items[1:]):
+                lst = [ first ]
+                lst.extend(i)
+                yield lst
+                yield i
+    if not items:
+        return []
+    return power_set_helper(items)
