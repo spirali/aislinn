@@ -218,9 +218,12 @@ class StateSpace:
             else:
                 raise TooManyOutputs()
         try:
-            return len(self.tree_reduce(reduce_op,
-                                        arc_value,
-                                        is_visible,
-                                        frozenset(("",))))
+            outputs = self.tree_reduce(reduce_op,
+                                       arc_value,
+                                       is_visible,
+                                       frozenset(("",)))
+            if outputs is None:
+                return None
+            return len(outputs)
         except TooManyOutputs:
             return None
