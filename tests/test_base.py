@@ -109,6 +109,11 @@ class BaseTests(TestCase):
         self.execute(2, "new", stdout=output)
         self.execute(2, "old", stdout=output)
 
+    def test_indexed_bottom(self):
+        output = "0 1 2 3 4 0 0 0 0 0 0 0 0 0 14 15 16 17 18 19 20 21 0 0 0 0 0 0 0 0 \n"
+        self.program("indexed_bottom")
+        self.execute(2, stdout=output)
+
     def test_uncommited(self):
         self.program("uncommited")
         self.execute(2, error="uncommited")

@@ -60,6 +60,16 @@ class BuildinType(Datatype):
         controller.write_buffer(
                pointer, vg_buffer.id, index, self.size * count, check)
 
+    def check(self, controller, pointer, count, read=False, write=False):
+        if read:
+            r = controller.is_readable(pointer, self.size * count)
+            if r != "Ok":
+                return r
+        if write:
+            r = controller.is_writable(pointer, self.size * count)
+            if r != "Ok":
+                return r
+        return None
 
 class ContiguousType(Datatype):
 
@@ -78,6 +88,9 @@ class ContiguousType(Datatype):
         self.datatype.unpack(
                 controller, vg_buffer, count * self.count,
                 pointer, index, check)
+
+    def check(self, controller, pointer, count, read=False, write=False):
+        return self.datatype.check(controller, pointer, count * self.count, read, write)
 
 
 class VectorType(Datatype):
@@ -117,6 +130,16 @@ class VectorType(Datatype):
                 index += step_index
             pointer -= self.stride
             pointer += step_index
+
+    def check(self, controller, pointer, count, read=False, write=False):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                r = self.datatype.check(
+                        controller, pointer, self.blocksize, read, write)
+                if r is not None:
+                    return r
+                pointer += self.stride
+            pointer -= self.stride
 
 
 class IndexedType(Datatype):
@@ -161,6 +184,17 @@ class IndexedType(Datatype):
                 index += self.sizes[j] * self.datatype.size
             pointer += self.unpack_size
 
+    def check(self, controller, pointer, count, read=False, write=False):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                r = self.datatype.check(
+                        controller,
+                        pointer + self.displs[j],
+                        self.sizes[j])
+                if r is not None:
+                    return r
+            pointer += self.unpack_size
+
 
 class StructType(Datatype):
 
@@ -202,6 +236,18 @@ class StructType(Datatype):
                             index,
                             check)
                     index += c * datatype.size
+            pointer += self.unpack_size
+
+    def check(self, controller, pointer, count, read=False, write=False):
+        for i in xrange(count):
+            for datatype, c, displ in \
+                zip(self.datatypes, self.counts, self.displs):
+                    r = datatype.check(
+                            controller,
+                            pointer + displ,
+                            c)
+                    if r is not None:
+                        return r
             pointer += self.unpack_size
 
 

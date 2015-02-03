@@ -820,8 +820,8 @@ def call_send(generator, args, state, context,
 
     check.check_rank(comm, target, 4, False, True)
 
-    r = generator.controller.is_readable(buf_ptr, count * datatype.size)
-    if r != "Ok":
+    r = datatype.check(generator.controller, buf_ptr, count, read=True)
+    if r is not None:
         e = errormsg.CallError()
         e.name = "invalid-send-buffer"
         e.short_description = "Invalid send buffer"
@@ -860,8 +860,8 @@ def call_recv(generator, args, state,
     buf_ptr, count, datatype, source, tag, comm, ptr = args
     check.check_rank(comm, source, 4, True, True)
 
-    r = generator.controller.is_writable(buf_ptr, count * datatype.size)
-    if r != "Ok":
+    r = datatype.check(generator.controller, buf_ptr, count, write=True)
+    if r is not None:
         e = errormsg.CallError()
         e.name = "invalid-recv-buffer"
         e.short_description = "Invalid receive buffer"
