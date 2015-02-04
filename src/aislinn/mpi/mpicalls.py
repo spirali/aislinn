@@ -231,10 +231,10 @@ def MPI_Iprobe(generator, args, state, context):
     else:
         generator.controller.write_int(flag_ptr, 1)
         if status_ptr:
-            generator.write_status(status_ptr,
-                                   consts.MPI_PROC_NULL,
-                                   consts.MPI_ANY_TAG,
-                                   0)
+            generator.controller.write_status(status_ptr,
+                                              consts.MPI_PROC_NULL,
+                                              consts.MPI_ANY_TAG,
+                                              0)
 
         # We cannot simply return False, because we need to create state
         # (with hash), to detect possible cyclic computation
@@ -250,10 +250,10 @@ def MPI_Probe(generator, args, state, context):
         return True
     else:
         if status_ptr:
-            generator.write_status(status_ptr,
-                                   consts.MPI_PROC_NULL,
-                                   consts.MPI_ANY_TAG,
-                                   0)
+            generator.controller.write_status(status_ptr,
+                                              consts.MPI_PROC_NULL,
+                                              consts.MPI_ANY_TAG,
+                                              0)
         return False
 
 def MPI_Wait(generator, args, state, context):
@@ -876,10 +876,10 @@ def call_recv(generator, args, state,
 
     if blocking and source == consts.MPI_PROC_NULL:
         if status_ptr:
-            generator.write_status(status_ptr,
-                                   consts.MPI_PROC_NULL,
-                                   consts.MPI_ANY_TAG,
-                                   0)
+            generator.controller.write_status(status_ptr,
+                                              consts.MPI_PROC_NULL,
+                                              consts.MPI_ANY_TAG,
+                                              0)
         return False
 
     request = state.add_recv_request(

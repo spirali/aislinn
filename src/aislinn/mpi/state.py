@@ -465,15 +465,15 @@ class State:
             status_ptr = self.active_request_status_ptr + \
                          generator.STATUS_SIZE * index_status
             if request.source == consts.MPI_PROC_NULL:
-                generator.write_status(status_ptr,
-                                  consts.MPI_PROC_NULL,
-                                  consts.MPI_ANY_TAG,
-                                  0)
+                generator.controller.write_status(status_ptr,
+                                                  consts.MPI_PROC_NULL,
+                                                  consts.MPI_ANY_TAG,
+                                                  0)
             else:
-                generator.write_status(status_ptr,
-                          message.source,
-                          message.tag,
-                          message.size)
+                generator.controller.write_status(status_ptr,
+                                                  message.source,
+                                                  message.tag,
+                                                  message.size)
 
     def finish_all_active_requests(self, generator):
         logging.debug("Removing active requests")

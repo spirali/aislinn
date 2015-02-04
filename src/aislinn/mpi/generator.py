@@ -18,7 +18,8 @@
 #
 
 
-from base.controller import Controller, UnexpectedOutput
+from base.controller import UnexpectedOutput
+from mpi.controller import Controller
 import errormsg
 from state import State
 from base.node import Node, Arc
@@ -400,9 +401,6 @@ class Generator:
             for vg_buffer in vg_buffers:
                 self.controller.free_buffer(vg_buffer.id)
 
-    def write_status(self, status_ptr, source, tag, size):
-        self.controller.write_ints(status_ptr, [ source, tag, size ])
-
     def apply_matching(self, node, state, matching):
         logging.debug("Applying matching state=%s matching=%s", state, matching)
         try:
@@ -675,10 +673,10 @@ class Generator:
             if flag_ptr is not None:
                 self.controller.write_int(flag_ptr, 1)
             if status_ptr:
-                self.write_status(status_ptr,
-                                  message.source,
-                                  message.tag,
-                                  message.size)
+                self.controller.write_status(status_ptr,
+                                             message.source,
+                                             message.tag,
+                                             message.size)
             new_state.add_probed_message(comm_id, source, tag, message)
             self.execute_state_and_add_node(node, new_state)
 
