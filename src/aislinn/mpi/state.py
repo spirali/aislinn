@@ -448,9 +448,11 @@ class State:
         assert request.is_completed()
         message = request.message
         request = request.original_request
-        if not self.immediate_wait and (request.is_send() or request.is_receive()):
-            generator.controller.unlock_memory(request.data_ptr,
-                                               request.datatype.size * request.count)
+        if not self.immediate_wait and \
+            (request.is_send() or request.is_receive()):
+            request.datatype.lock_memory(generator.controller,
+                                         request.data_ptr,
+                                         request.count, unlock=True)
 
         if self.active_request_pointer is not None and \
                 self.get_persistent_request(request.id) is None:

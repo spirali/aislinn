@@ -849,7 +849,7 @@ def call_send(generator, args, state, context,
     else:
         if not persistent:
             request.stacktrace = generator.controller.get_stacktrace()
-            generator.controller.lock_memory(buf_ptr, count * datatype.size)
+            datatype.lock_memory(generator.controller, buf_ptr, count)
         generator.controller.write_int(request_ptr, request.id)
 
     # TODO: Optimization : If message use eager protocol then nonblock
@@ -897,7 +897,7 @@ def call_recv(generator, args, state,
     else:
         if not persistent:
             request.stacktrace = generator.controller.get_stacktrace()
-            generator.controller.lock_memory(buf_ptr, count * datatype.size)
+            datatype.lock_memory(generator.controller, buf_ptr, count)
         generator.controller.write_int(request_ptr, request.id)
 
     # TODO: Optimization : If message is already here,

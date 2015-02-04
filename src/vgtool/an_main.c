@@ -266,22 +266,59 @@ static void memspace_init(void)
    current_memspace = ms;
 }
 
+/*static void page_dump(Page *page)
+{
+   VG_(printf)("~~~ Page %p addr=0x%lx ~~~\n", page, page->base);
+   UWord i;
+   VA *va = page->va;
+   char prev = va->vabits[0];
+   int chunk_size = 1;
+   for (i = 1; i < PAGE_SIZE; i++) {
+      if (va->vabits[i] == prev) {
+         chunk_size++;
+      } else {
+         if (chunk_size != 0) {
+            if (prev != 0) {
+                VG_(printf)("Chunk 0x%lx-0x%lx %d perm=%d\n",
+                            page->base + i - chunk_size,
+                            page->base + i,
+                            chunk_size,
+                            prev);
+            }
+            prev = va->vabits[i];
+            chunk_size = 1;
+         }
+      }
+   }
+   if (chunk_size != 0 && prev && prev != 0xFF) {
+      VG_(printf)("Chunk 0x%lx-0x%lx %d perm=%d\n",
+                  page->base + i - chunk_size,
+                  page->base + i,
+                  chunk_size,
+                  prev);
+   }
+}
 
-/*static
+static
 void memspace_dump(void)
 {
    VG_(printf)("========== MEMSPACE DUMP ===========\n");
    VG_(OSetGen_ResetIter)(current_memspace->auxmap);
    AuxMapEnt *elem;
    while ((elem = VG_(OSetGen_Next(current_memspace->auxmap)))) {
-      VG_(printf)("Auxmap %lu-%lu %d %lu\n", elem->base, elem->base + PAGE_SIZE, elem->ref_count, (Addr) elem->data);
+      VG_(printf)("Auxmap 0x%lx-0x%lx refs=%d data=%lu\n",
+                  elem->base,
+                  elem->base + PAGE_SIZE,
+                  elem->page->ref_count,
+                  (Addr) elem->page->data);
+      page_dump(elem->page);
    }
 
    XArray *a = current_memspace->allocation_blocks;
    Word i;
    for (i = 0; i < VG_(sizeXA)(a); i++) {
        AllocationBlock *block = VG_(indexXA)(a, i);
-       VG_(printf)("%lu: addr=%lu type=%d\n", i, block->address, block->type);
+       VG_(printf)("%lu: addr=0x%lx type=%d\n", i, block->address, block->type);
    }
 }*/
 
@@ -775,6 +812,7 @@ part2:
 
 static Bool check_is_writable(Addr addr, SizeT size, Addr *first_invalid_addr)
 {
+    //memspace_dump();
     return check_address_range_perms(addr, size, MEM_DEFINED, first_invalid_addr);
 }
 
@@ -912,33 +950,6 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
         AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
    }
 }
-
-/*static void page_dump(Page *page)
-{
-   VG_(printf)("~~~ Page %p addr=%lu ~~~\n", page, page->base);
-   int chunk_size = 0;
-   UWord i;
-   VA *va = page->va;
-   for (i = 0; i < PAGE_SIZE; i++) {
-      if (va->vabits[i]) {
-         chunk_size++;
-      } else {
-         if (chunk_size != 0) {
-            VG_(printf)("Chunk %lu-%lu %d\n",
-                        page->base + i - chunk_size,
-                        page->base + i,
-                        chunk_size);
-            chunk_size = 0;
-         }
-      }
-   }
-   if (chunk_size != 0) {
-      VG_(printf)("Chunk %lu-%lu %d\n",
-                  page->base + i - chunk_size,
-                  page->base + i,
-                  chunk_size);
-   }
-}*/
 
 static void memimage_save_page_content(Page *page)
 {

@@ -71,6 +71,12 @@ class BuildinType(Datatype):
                 return r
         return None
 
+    def lock_memory(self, controller, pointer, count, unlock=False):
+        if unlock:
+            controller.unlock_memory(pointer, self.size * count)
+        else:
+            controller.lock_memory(pointer, self.size * count)
+
 class ContiguousType(Datatype):
 
     def __init__(self, datatype, count):
@@ -90,7 +96,12 @@ class ContiguousType(Datatype):
                 pointer, index, check)
 
     def check(self, controller, pointer, count, read=False, write=False):
-        return self.datatype.check(controller, pointer, count * self.count, read, write)
+        return self.datatype.check(controller, pointer,
+                                   count * self.count, read, write)
+
+    def lock_memory(self, controller, pointer, count, unlock=False):
+        self.datatype.lock_memory(
+                controller, pointer, count * self.count, unlock)
 
 
 class VectorType(Datatype):
@@ -138,6 +149,14 @@ class VectorType(Datatype):
                         controller, pointer, self.blocksize, read, write)
                 if r is not None:
                     return r
+                pointer += self.stride
+            pointer -= self.stride
+
+    def lock_memory(self, controller, pointer, count, unlock=False):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.lock_memory(
+                    controller, pointer, self.blocksize, unlock)
                 pointer += self.stride
             pointer -= self.stride
 
@@ -190,9 +209,20 @@ class IndexedType(Datatype):
                 r = self.datatype.check(
                         controller,
                         pointer + self.displs[j],
-                        self.sizes[j])
+                        self.sizes[j],
+                        read, write)
                 if r is not None:
                     return r
+            pointer += self.unpack_size
+
+    def lock_memory(self, controller, pointer, count, unlock=False):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.lock_memory(
+                     controller,
+                     pointer + self.displs[j],
+                     self.sizes[j],
+                     unlock)
             pointer += self.unpack_size
 
 
@@ -245,7 +275,21 @@ class StructType(Datatype):
                     r = datatype.check(
                             controller,
                             pointer + displ,
-                            c)
+                            c,
+                            read, write)
+                    if r is not None:
+                        return r
+            pointer += self.unpack_size
+
+    def lock_memory(self, controller, pointer, count, unlock=False):
+        for i in xrange(count):
+            for datatype, c, displ in \
+                zip(self.datatypes, self.counts, self.displs):
+                    r = datatype.lock_memory(
+                            controller,
+                            pointer + displ,
+                            c,
+                            unlock)
                     if r is not None:
                         return r
             pointer += self.unpack_size
