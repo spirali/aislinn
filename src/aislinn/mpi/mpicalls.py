@@ -31,628 +31,587 @@ from comm import comm_id_name, comm_compare, group_compare, Group
 from keyval import Keyval
 
 
-def MPI_Initialized(generator, args, state, context):
+def MPI_Initialized(context, args):
     # This is called only when MPI is already initialized, uninitialized MPI is
     # hanled in generator
-    generator.controller.write_int(args[0], 1)
+    context.controller.write_int(args[0], 1)
     return False
 
-def MPI_Finalize(generator, args, state, context):
-    if state.finalized:
+def MPI_Finalize(context, args):
+    if context.state.finalized:
         e = errormsg.CallError()
         e.name = "doublefinalize"
         e.short_description = "MPI_Finalize was called twice"
         e.description = "MPI_Finalized was called twice"
-        e.throw()
+        context.add_error_and_throw(e)
 
-    state.finalized = True
+    context.state.finalized = True
     return False
 
-def MPI_Finalized(generator, args, state, context):
-    if state.finalized:
+def MPI_Finalized(context, args):
+    if context.state.finalized:
         flag = 1
     else:
         flag = 0
-    generator.controller.write_int(args[0], flag)
+    context.controller.write_int(args[0], flag)
     return False
 
-def MPI_Abort(generator, args, state, context):
+def MPI_Abort(context, args):
     comm, exitcode = args
 
     e = errormsg.CallError()
     e.name = "mpi-abort"
     e.short_description = "MPI_Abort called"
     e.description = "MPI_Abort called with exitcode={0}".format(exitcode)
-    e.throw()
+    context.add_error_and_throw(e)
 
-def MPI_Comm_rank(generator, args, state, context):
+def MPI_Comm_rank(context, args):
     comm, ptr = args
-    rank = comm.group.pid_to_rank(state.pid)
+    rank = comm.group.pid_to_rank(context.state.pid)
     if rank is None:
         rank = consts.MPI_UNDEFINED
-    generator.controller.write_int(ptr, rank)
+    context.controller.write_int(ptr, rank)
     return False
 
-def MPI_Comm_size(generator, args, state, context):
+def MPI_Comm_size(context, args):
     comm, ptr = args
-    generator.controller.write_int(ptr, comm.group.size)
+    context.controller.write_int(ptr, comm.group.size)
     return False
 
-def MPI_Comm_group(generator, args, state, context):
+def MPI_Comm_group(context, args):
     comm, group_ptr = args
-    group_id = state.add_group(comm.group)
-    generator.controller.write_int(group_ptr, group_id)
+    group_id = context.state.add_group(comm.group)
+    context.controller.write_int(group_ptr, group_id)
     return False
 
-def MPI_Group_free(generator, args, state, context):
+def MPI_Group_free(context, args):
     group_ptr = args[0]
-    group_id = generator.controller.read_int(group_ptr)
-    group = check.check_and_get_group(state, group_id, 1)
-    state.remove_group(group)
-    generator.controller.write_int(group_ptr, consts.MPI_GROUP_NULL)
+    group_id = context.controller.read_int(group_ptr)
+    group = check.check_and_get_group(context, group_id, 1)
+    context.state.remove_group(group)
+    context.controller.write_int(group_ptr, consts.MPI_GROUP_NULL)
     return False
 
-def MPI_Group_size(generator, args, state, context):
+def MPI_Group_size(context, args):
     group, ptr = args
-    generator.controller.write_int(ptr, group.size)
+    context.controller.write_int(ptr, group.size)
     return False
 
-def MPI_Group_incl(generator, args, state, context):
+def MPI_Group_incl(context, args):
     # FIXME: If count == 0 then return MPI_GROUP_NULL
     group, count, ranks_ptr, group_ptr = args
-    ranks = generator.controller.read_ints(ranks_ptr, count)
+    ranks = context.controller.read_ints(ranks_ptr, count)
     for rank in ranks:
-        check.check_rank_in_group(group, rank, 3)
+        check.check_rank_in_group(context, group, rank, 3)
     table = [ group.rank_to_pid(rank) for rank in ranks ]
-    group_id = state.add_group(Group(table))
-    generator.controller.write_int(group_ptr, group_id)
+    group_id = context.state.add_group(Group(table))
+    context.controller.write_int(group_ptr, group_id)
     return False
 
-def MPI_Group_excl(generator, args, state, context):
+def MPI_Group_excl(context, args):
     # FIXME: If count == 0 then return MPI_GROUP_NULL
     group, count, ranks_ptr, group_ptr = args
-    ranks = generator.controller.read_ints(ranks_ptr, count)
+    ranks = context.controller.read_ints(ranks_ptr, count)
     for rank in ranks:
-        check.check_rank_in_group(group, rank, 3)
-    check.check_unique_values(ranks, 3)
+        check.check_rank_in_group(context, group, rank, 3)
+    check.check_unique_values(context, ranks, 3)
     table = [ group.rank_to_pid(rank)
               for rank in group.ranks
               if rank not in ranks ]
-    group_id = state.add_group(Group(table))
-    generator.controller.write_int(group_ptr, group_id)
+    group_id = context.state.add_group(Group(table))
+    context.controller.write_int(group_ptr, group_id)
     return False
 
-def MPI_Group_compare(generator, args, state, context):
+def MPI_Group_compare(context, args):
     group1, group2, ptr = args
-    generator.controller.write_int(ptr, group_compare(group1, group2))
+    context.controller.write_int(ptr, group_compare(group1, group2))
     return False
 
-def MPI_Type_size(generator, args, state, context):
+def MPI_Type_size(context, args):
     datatype, ptr = args
-    generator.controller.write_int(ptr, datatype.size)
+    context.controller.write_int(ptr, datatype.size)
     return False
 
-def MPI_Send(generator, args, state, context):
-    return call_send(generator, args, state, context, True, "Send", "Send")
+def MPI_Send(context, args):
+    return call_send(context, args, True, "Send", "Send")
 
-def MPI_Ssend(generator, args, state, context):
-    return call_send(generator, args, state, context, True, "Ssend", "Ssend")
+def MPI_Ssend(context, args):
+    return call_send(context, args, True, "Ssend", "Ssend")
 
-def MPI_Rsend(generator, args, state, context):
+def MPI_Rsend(context, args):
     # TODO: Handle Rsend properly, now it is handled like a Ssend
-    return call_send(generator, args, state, context, True, "Ssend", "Rsend")
+    return call_send(context, args, True, "Ssend", "Rsend")
 
-def MPI_Bsend(generator, args, state, context):
-    return call_send(generator, args, state, context, True, "Bsend", "Bsend")
+def MPI_Bsend(context, args):
+    return call_send(context, args, True, "Bsend", "Bsend")
 
-def MPI_Recv(generator, args, state, context):
-    return call_recv(generator, args, state, context, True, "Recv")
+def MPI_Recv(context, args):
+    return call_recv(context, args, True, "Recv")
 
-def MPI_Isend(generator, args, state, context):
-    return call_send(generator, args, state, context, False, "Send", "Isend")
+def MPI_Isend(context, args):
+    return call_send(context, args, False, "Send", "Isend")
 
-def MPI_Issend(generator, args, state, context):
-    return call_send(generator, args, state, context, False, "Ssend", "Issend")
+def MPI_Issend(context, args):
+    return call_send(context, args, False, "Ssend", "Issend")
 
-def MPI_Irsend(generator, args, state, context):
+def MPI_Irsend(context, args):
     # TODO: Handle Rsend properly, now it is handled like a Ssend
-    return call_send(generator, args, state, context, False, "Ssend", "Irsend")
+    return call_send(context, args, False, "Ssend", "Irsend")
 
-def MPI_Ibsend(generator, args, state, context):
-    return call_send(generator, args, state, context, False, "Bsend", "Ibsend")
+def MPI_Ibsend(context, args):
+    return call_send(context, args, False, "Bsend", "Ibsend")
 
-def MPI_Irecv(generator, args, state, context):
-    return call_recv(generator, args, state, context, False, "Irecv")
+def MPI_Irecv(context, args):
+    return call_recv(context, args, False, "Irecv")
 
-def MPI_Sendrecv(generator, args, state, context):
+def MPI_Sendrecv(context, args):
     send_args = args[:5]
     send_args.append(args[-2]) # Add communicator
     recv_args = args[5:]
-    send_request = call_send(generator, send_args, state, context,
+    send_request = call_send(context, send_args,
                              True, "Send", "Send", return_request=True)
-    recv_request = call_recv(generator, recv_args, state, context,
+    recv_request = call_recv(context, recv_args,
                              True, "Recv", return_request=True)
-    state.set_wait((send_request.id, recv_request.id),
+    context.state.set_wait((send_request.id, recv_request.id),
                    None, # request pointer
                    args[-1], # status pointer
                    immediate=True)
     return True
 
-def MPI_Recv_init(generator, args, state, context):
-    return call_recv(generator, args, state,
-                     context, False, "MPI_Recv_init", True)
+def MPI_Recv_init(context, args):
+    return call_recv(
+            context, args, False, "MPI_Recv_init", True)
 
-def MPI_Send_init(generator, args, state, context):
+def MPI_Send_init(context, args):
     return call_send(
-            generator, args, state, context, False, "Send", "Send_init", True)
+            context, args, False, "Send", "Send_init", True)
 
-def MPI_Bsend_init(generator, args, state, context):
+def MPI_Bsend_init(context, args):
     return call_send(
-            generator, args, state, context, False, "Bsend", "Bsend_init", True)
+            context, args, False, "Bsend", "Bsend_init", True)
 
-def MPI_Ssend_init(generator, args, state, context):
+def MPI_Ssend_init(context, args):
     return call_send(
-            generator, args, state, context, False, "Ssend", "Ssend_init", True)
+            context, args, False, "Ssend", "Ssend_init", True)
 
-def MPI_Rsend_init(generator, args, state, context):
+def MPI_Rsend_init(context, args):
     # TODO: Handle Rsend properly, now it is handled like a Ssend
     return call_send(
-            generator, args, state, context, False, "Ssend", "Rsend_init", True)
+            context, args, False, "Ssend", "Rsend_init", True)
 
-def MPI_Start(generator, args, state, context):
-    request_id = generator.controller.read_int(args[0])
-    request = check.check_persistent_request(state, request_id, True)
-    state.start_persistent_request(generator, state, request)
+def MPI_Start(context, args):
+    request_id = context.controller.read_int(args[0])
+    request = check.check_persistent_request(context, request_id, True)
+    context.state.start_persistent_request(context, request)
     return False
 
-def MPI_Startall(generator, args, state, context):
+def MPI_Startall(context, args):
     count, requests_ptr = args
-    request_ids = generator.controller.read_ints(requests_ptr, count)
-    requests = [ check.check_persistent_request(state, request_id, True)
+    request_ids = context.controller.read_ints(requests_ptr, count)
+    requests = [ check.check_persistent_request(context, request_id, True)
                  for request_id in request_ids ]
     for request in requests:
-        state.start_persistent_request(generator, state, request)
+        context.state.start_persistent_request(context, request)
     return False
 
-def MPI_Request_free(generator, args, state, context):
+def MPI_Request_free(context, args):
     request_ptr = args[0]
-    request_id = generator.controller.read_int(request_ptr)
-    request = check.check_persistent_request(state, request_id, False)
-    state.remove_persistent_request(request)
-    generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL);
+    request_id = context.controller.read_int(request_ptr)
+    request = check.check_persistent_request(context, request_id, False)
+    context.state.remove_persistent_request(request)
+    context.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL);
     return False
 
-def MPI_Iprobe(generator, args, state, context):
+def MPI_Iprobe(context, args):
     source, tag, comm, flag_ptr, status_ptr = args
-    check.check_rank(comm, source, 1, True, True)
+    check.check_rank(context, comm, source, 1, True, True)
 
     if source != consts.MPI_PROC_NULL:
-        state.set_probe(comm, source, tag, flag_ptr, status_ptr)
+        context.state.set_probe(comm, source, tag, flag_ptr, status_ptr)
     else:
-        generator.controller.write_int(flag_ptr, 1)
+        context.controller.write_int(flag_ptr, 1)
         if status_ptr:
-            generator.controller.write_status(status_ptr,
+            context.controller.write_status(status_ptr,
                                               consts.MPI_PROC_NULL,
                                               consts.MPI_ANY_TAG,
                                               0)
 
-        # We cannot simply return False, because we need to create state
+        # We cannot simply return False, because we need to create context.state
         # (with hash), to detect possible cyclic computation
-        state.set_ready()
+        context.state.set_ready()
     return True
 
-def MPI_Probe(generator, args, state, context):
+def MPI_Probe(context, args):
     source, tag, comm, status_ptr = args
-    check.check_rank(comm, source, 1, True, True)
+    check.check_rank(context, comm, source, 1, True, True)
 
     if source != consts.MPI_PROC_NULL:
-        state.set_probe(comm, source, tag, None, status_ptr)
+        context.state.set_probe(comm, source, tag, None, status_ptr)
         return True
     else:
         if status_ptr:
-            generator.controller.write_status(status_ptr,
+            context.controller.write_status(status_ptr,
                                               consts.MPI_PROC_NULL,
                                               consts.MPI_ANY_TAG,
                                               0)
         return False
 
-def MPI_Wait(generator, args, state, context):
+def MPI_Wait(context, args):
     request_ptr, status_ptr = args
 
-    request_id = generator.controller.read_int(request_ptr)
-    check.check_request_id(state, request_id)
-    if state.get_persistent_request(request_id) is None:
-        generator.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
-    state.set_wait([ request_id ], None, status_ptr)
+    request_id = context.controller.read_int(request_ptr)
+    check.check_request_id(context, request_id)
+    if context.state.get_persistent_request(request_id) is None:
+        context.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
+    context.state.set_wait([ request_id ], None, status_ptr)
     return True
 
-def MPI_Test(generator, args, state, context):
+def MPI_Test(context, args):
     request_ptr, flag_ptr, status_ptr = args
-    request_id = generator.controller.read_int(request_ptr)
-    check.check_request_id(state, request_id)
-    state.set_test([ request_id ], flag_ptr, request_ptr, status_ptr)
+    request_id = context.controller.read_int(request_ptr)
+    check.check_request_id(context, request_id)
+    context.state.set_test([ request_id ], flag_ptr, request_ptr, status_ptr)
     return True
 
-def MPI_Waitall(generator, args, state, context):
+def MPI_Waitall(context, args):
     count, requests_ptr, status_ptr = args
     if count == 0:
         return False
-    request_ids = generator.controller.read_ints(requests_ptr, count)
-    check.check_request_ids(state, request_ids)
+    request_ids = context.controller.read_ints(requests_ptr, count)
+    check.check_request_ids(context, request_ids)
     values = []
     for request_id in request_ids:
-        if state.get_persistent_request(request_id) is None:
+        if context.state.get_persistent_request(request_id) is None:
             values.append(consts.MPI_REQUEST_NULL)
         else:
             values.append(request_id)
-    generator.controller.write_ints(requests_ptr, values)
-    state.set_wait(request_ids, None, status_ptr)
+    context.controller.write_ints(requests_ptr, values)
+    context.state.set_wait(request_ids, None, status_ptr)
     return True
 
-def MPI_Waitany(generator, args, state, context):
+def MPI_Waitany(context, args):
     count, requests_ptr, index_ptr, status_ptr = args
-    request_ids = generator.controller.read_ints(requests_ptr, count)
+    request_ids = context.controller.read_ints(requests_ptr, count)
 
     for i, request_id in enumerate(request_ids):
         if request_id == consts.MPI_REQUEST_NULL:
             continue
-        if state.get_persistent_request(request_id) is None:
-            check.check_request_id(state, request_id)
-        elif not state.get_request(request_id):
+        if context.state.get_persistent_request(request_id) is None:
+            check.check_request_id(context, request_id)
+        elif not context.state.get_request(request_id):
             request_ids[i] = consts.MPI_REQUEST_NULL
     if all(id == consts.MPI_REQUEST_NULL for id in request_ids):
-        generator.controller.write_int(index_ptr, consts.MPI_UNDEFINED)
+        context.controller.write_int(index_ptr, consts.MPI_UNDEFINED)
         return False
-    state.set_wait(request_ids, requests_ptr, status_ptr,
-                   status=state.StatusWaitAny, index_ptr=index_ptr)
+    context.state.set_wait(request_ids, requests_ptr, status_ptr,
+                   status=context.state.StatusWaitAny, index_ptr=index_ptr)
     return True
 
-def MPI_Waitsome(generator, args, state, context):
+def MPI_Waitsome(context, args):
     count, requests_ptr, outcount_ptr, indices_ptr, status_ptr = args
-    request_ids = generator.controller.read_ints(requests_ptr, count)
+    request_ids = context.controller.read_ints(requests_ptr, count)
 
     for i, request_id in enumerate(request_ids):
         if request_id == consts.MPI_REQUEST_NULL:
             continue
-        if state.get_persistent_request(request_id) is None:
-            check.check_request_id(state, request_id)
-        elif not state.get_request(request_id):
+        if context.state.get_persistent_request(request_id) is None:
+            check.check_request_id(context, request_id)
+        elif not context.state.get_request(request_id):
             request_ids[i] = consts.MPI_REQUEST_NULL
     if all(id == consts.MPI_REQUEST_NULL for id in request_ids):
-        generator.controller.write_int(outcount_ptr, consts.MPI_UNDEFINED)
+        context.controller.write_int(outcount_ptr, consts.MPI_UNDEFINED)
         return False
-    state.set_wait(request_ids, requests_ptr, status_ptr,
-                   status=state.StatusWaitSome,
+    context.state.set_wait(request_ids, requests_ptr, status_ptr,
+                   status=context.state.StatusWaitSome,
                    index_ptr=(indices_ptr, outcount_ptr))
     return True
 
-def MPI_Testall(generator, args, state, context):
+def MPI_Testall(context, args):
     count, requests_ptr, flag_ptr, status_ptr = args
     if count == 0:
         return False
-    request_ids = generator.controller.read_ints(requests_ptr, count)
-    check.check_request_ids(state, request_ids)
-    state.set_test(request_ids, flag_ptr, requests_ptr, status_ptr)
+    request_ids = context.controller.read_ints(requests_ptr, count)
+    check.check_request_ids(context, request_ids)
+    context.state.set_test(request_ids, flag_ptr, requests_ptr, status_ptr)
     return True
 
-def MPI_Barrier(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Barrier(context, args):
+    return call_collective_operation(context,
                                      collectives.Barrier,
                                      True,
                                      args)
 
-def MPI_Gather(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Gather(context, args):
+    return call_collective_operation(context,
                                      collectives.Gather,
                                      True,
                                      args)
 
-def MPI_Allgather(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Allgather(context, args):
+    return call_collective_operation(context,
                                      collectives.Allgather,
                                      True,
                                      args)
 
-def MPI_Gatherv(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Gatherv(context, args):
+    return call_collective_operation(context,
                                      collectives.Gatherv,
                                      True,
                                      args)
 
-def MPI_Allgatherv(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Allgatherv(context, args):
+    return call_collective_operation(context,
                                      collectives.Allgatherv,
                                      True,
                                      args)
 
-def MPI_Scatter(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Scatter(context, args):
+    return call_collective_operation(context,
                                      collectives.Scatter,
                                      True,
                                      args)
 
-def MPI_Scatterv(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Scatterv(context, args):
+    return call_collective_operation(context,
                                      collectives.Scatterv,
                                      True,
                                      args)
 
-def MPI_Reduce(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Reduce(context, args):
+    return call_collective_operation(context,
                                      collectives.Reduce,
                                      True,
                                      args)
 
-def MPI_Reduce_scatter(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Reduce_scatter(context, args):
+    return call_collective_operation(context,
                                      collectives.ReduceScatter,
                                      True,
                                      args)
 
-def MPI_Allreduce(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Allreduce(context, args):
+    return call_collective_operation(context,
                                      collectives.AllReduce,
                                      True,
                                      args)
 
-def MPI_Scan(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Scan(context, args):
+    return call_collective_operation(context,
                                      collectives.Scan,
                                      True,
                                      args)
 
-def MPI_Bcast(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Bcast(context, args):
+    return call_collective_operation(context,
                                      collectives.Bcast,
                                      True,
                                      args)
 
-def MPI_Ibarrier(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Ibarrier(context, args):
+    return call_collective_operation(context,
                                      collectives.Barrier,
                                      False,
                                      args)
 
-def MPI_Igather(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Igather(context, args):
+    return call_collective_operation(context,
                                      collectives.Gather,
                                      False,
                                      args)
 
-def MPI_Igatherv(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Igatherv(context, args):
+    return call_collective_operation(context,
                                      collectives.Gatherv,
                                      False,
                                      args)
 
-def MPI_Iscatter(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Iscatter(context, args):
+    return call_collective_operation(context,
                                      collectives.Scatter,
                                      False,
                                      args)
 
-def MPI_Iscatterv(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Iscatterv(context, args):
+    return call_collective_operation(context,
                                      collectives.Scatterv,
                                      False,
                                      args)
 
-def MPI_Ireduce(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Ireduce(context, args):
+    return call_collective_operation(context,
                                      collectives.Reduce,
                                      False,
                                      args)
 
-def MPI_Iallreduce(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Iallreduce(context, args):
+    return call_collective_operation(context,
                                      collectives.AllReduce,
                                      False,
                                      args)
 
-def MPI_Ibcast(generator, args, state, context):
-    return call_collective_operation(generator,
-                                     state,
-                                     context,
+def MPI_Ibcast(context, args):
+    return call_collective_operation(context,
                                      collectives.Bcast,
                                      False,
                                      args)
 
 
-def MPI_Op_create(generator, args, state, context):
+def MPI_Op_create(context, args):
     fn_ptr, commute, op_ptr = args
     op = ops.UserDefinedOperation(bool(commute), fn_ptr)
-    state.add_op(op)
-    generator.controller.write_int(op_ptr, op.op_id)
+    context.state.add_op(op)
+    context.controller.write_int(op_ptr, op.op_id)
     return False
 
-def MPI_Op_free(generator, args, state, context):
+def MPI_Op_free(context, args):
     op_ptr = args[0]
-    op_id = generator.controller.read_int(op_ptr)
-    op = check.check_op(state, op_id, 1)
-    state.remove_op(op)
-    generator.controller.write_int(op_ptr, consts.MPI_OP_NULL)
+    op_id = context.controller.read_int(op_ptr)
+    op = check.check_op(context, op_id, 1)
+    context.state.remove_op(op)
+    context.controller.write_int(op_ptr, consts.MPI_OP_NULL)
     return False
 
-def MPI_Comm_split(generator, args, state, context):
+def MPI_Comm_split(context, args):
     comm = args[0]
     args = args[1:]
-    op = state.gstate.call_collective_operation(
-                generator, state, context, comm,
-                collectives.CommSplit, True, args)
-    request_id = state.add_collective_request(comm.comm_id, op.cc_id)
-    state.set_wait((request_id,))
+    op = context.state.gstate.call_collective_operation(
+                context, comm, collectives.CommSplit, True, args)
+    request_id = context.state.add_collective_request(comm.comm_id, op.cc_id)
+    context.state.set_wait((request_id,))
     return True
 
-def MPI_Comm_dup(generator, args, state, context):
+def MPI_Comm_dup(context, args):
     comm, new_comm_ptr = args
-    op = state.gstate.call_collective_operation(
-                generator, state, context, comm,
-                collectives.CommDup, True, new_comm_ptr)
-    request_id = state.add_collective_request(comm.comm_id, op.cc_id)
-    state.set_wait((request_id,))
+    op = context.state.gstate.call_collective_operation(
+                context, comm, collectives.CommDup, True, new_comm_ptr)
+    request_id = context.state.add_collective_request(comm.comm_id, op.cc_id)
+    context.state.set_wait((request_id,))
     return True
 
-def MPI_Comm_compare(generator, args, state, context):
+def MPI_Comm_compare(context, args):
     comm1, comm2, result_ptr = args
-    generator.controller.write_int(result_ptr,
+    context.controller.write_int(result_ptr,
                                    comm_compare(comm1, comm2))
     return False
 
-def MPI_Comm_free(generator, args, state, context):
+def MPI_Comm_free(context, args):
     comm_ptr = args[0]
 
-    comm_id = generator.controller.read_int(comm_ptr)
+    comm_id = context.controller.read_int(comm_ptr)
     if comm_id == consts.MPI_COMM_WORLD or comm_id == consts.MPI_COMM_SELF:
         e = errormsg.CallError()
         e.name = "permanentcommfree"
         name = comm_id_name(comm_id)
         e.short_description = "{0} cannot be freed".format(name)
         e.description = "Communicator {0} cannot be freed".format(name)
-        e.throw()
-    comm = check.check_comm(state, comm_id, 1)
-    state.remove_comm(generator, context, comm)
-    generator.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
+        context.add_error_and_throw(e)
+    comm = check.check_comm(context, comm_id, 1)
+    context.state.remove_comm(context, comm)
+    context.controller.write_int(comm_ptr, consts.MPI_COMM_NULL);
     return False
 
-def MPI_Get_count(generator, args, state, context):
+def MPI_Get_count(context, args):
     status_ptr, datatype, count_ptr = args
-    size = generator.controller.read_int(status_ptr + 2 * generator.INT_SIZE)
+    size = context.controller.read_int(
+            status_ptr + 2 * context.controller.INT_SIZE)
     result = datatype.get_count(size)
     if result is None:
         result = consts.MPI_UNDEFINED
-    generator.controller.write_int(count_ptr, result)
+    context.controller.write_int(count_ptr, result)
     return False
 
-def MPI_Get_processor_name(generator, args, state, context):
+def MPI_Get_processor_name(context, args):
     name_ptr, len_ptr = args
 
-    if "Ok" != generator.controller.is_writable(
+    if "Ok" != context.controller.is_writable(
             name_ptr, consts.MPI_MAX_PROCESSOR_NAME):
         e = errormsg.CallError()
         e.name = "invalid-name-buffer"
         e.short_description = "Invalid buffer for processor name"
         e.description = "Invalid buffer for processor name"
-        e.throw()
+        context.add_error_and_throw(e)
 
-    name = "Processor-{0}".format(state.pid)
+    name = "Processor-{0}".format(context.state.pid)
 
     assert len(name) < consts.MPI_MAX_PROCESSOR_NAME - 1
 
     # Memory do not have to be checked again
-    generator.controller.write_string(name_ptr, name, check=False)
-    generator.controller.write_int(len_ptr, len(name))
+    context.controller.write_string(name_ptr, name, check=False)
+    context.controller.write_int(len_ptr, len(name))
     return False
 
 
-def MPI_Type_contiguous(generator, args, state, context):
+def MPI_Type_contiguous(context, args):
     count, datatype, newtype_ptr = args
     newtype = types.ContiguousType(datatype, count)
-    state.add_datatype(newtype)
-    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    context.state.add_datatype(newtype)
+    context.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_vector(generator, args, state, context):
+def MPI_Type_vector(context, args):
     count, blocksize, stride, datatype, newtype_ptr = args
     newtype = types.VectorType(datatype, count, blocksize, stride, False)
-    state.add_datatype(newtype)
-    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    context.state.add_datatype(newtype)
+    context.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_hvector(generator, args, state, context):
+def MPI_Type_hvector(context, args):
     count, blocksize, stride, datatype, newtype_ptr = args
     newtype = types.VectorType(datatype, count, blocksize, stride, True)
-    state.add_datatype(newtype)
-    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    context.state.add_datatype(newtype)
+    context.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_indexed(generator, args, state, context):
+def MPI_Type_indexed(context, args):
     count, sizes_ptr, displs_ptr, datatype, newtype_ptr = args
-    sizes = generator.controller.read_ints(sizes_ptr, count)
-    check.check_sizes(sizes, 2)
-    displs = generator.controller.read_ints(displs_ptr, count)
+    sizes = context.controller.read_ints(sizes_ptr, count)
+    check.check_sizes(context, sizes, 2)
+    displs = context.controller.read_ints(displs_ptr, count)
     newtype = types.IndexedType(datatype, count, sizes, displs, False)
-    state.add_datatype(newtype)
-    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    context.state.add_datatype(newtype)
+    context.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_create_hindexed(generator, args, state, context):
+def MPI_Type_create_hindexed(context, args):
     count, sizes_ptr, displs_ptr, datatype, newtype_ptr = args
-    sizes = generator.controller.read_ints(sizes_ptr, count)
-    check.check_sizes(sizes, 2)
-    displs = generator.controller.read_pointers(displs_ptr, count)
+    sizes = context.controller.read_ints(sizes_ptr, count)
+    check.check_sizes(context, sizes, 2)
+    displs = context.controller.read_pointers(displs_ptr, count)
     newtype = types.IndexedType(datatype, count, sizes, displs, True)
-    state.add_datatype(newtype)
-    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    context.state.add_datatype(newtype)
+    context.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_hindexed(generator, args, state, context):
-    return MPI_Type_create_hindexed(generator, args, state, context)
+def MPI_Type_hindexed(context, args):
+    return MPI_Type_create_hindexed(context, args)
 
-def MPI_Type_create_struct(generator, args, state, context):
+def MPI_Type_create_struct(context, args):
     count, sizes_ptr, displs_ptr, types_ptr, newtype_ptr = args
-    sizes = generator.controller.read_ints(sizes_ptr, count)
-    check.check_sizes(sizes, 2)
-    displs = generator.controller.read_pointers(displs_ptr, count)
-    type_ids = generator.controller.read_ints(types_ptr, count)
-    datatypes = check.check_datatypes(state, type_ids, 4, True)
+    sizes = context.controller.read_ints(sizes_ptr, count)
+    check.check_sizes(context, sizes, 2)
+    displs = context.controller.read_pointers(displs_ptr, count)
+    type_ids = context.controller.read_ints(types_ptr, count)
+    datatypes = check.check_datatypes(context, type_ids, 4, True)
 
     newtype = types.StructType(datatypes, sizes, displs)
-    state.add_datatype(newtype)
-    generator.controller.write_int(newtype_ptr, newtype.type_id)
+    context.state.add_datatype(newtype)
+    context.controller.write_int(newtype_ptr, newtype.type_id)
     return False
 
-def MPI_Type_struct(generator, args, state, context):
-    return MPI_Type_create_struct(generator, args, state, context)
+def MPI_Type_struct(context, args):
+    return MPI_Type_create_struct(context, args)
 
-def MPI_Type_commit(generator, args, state, context):
+def MPI_Type_commit(context, args):
     datatype_ptr = args[0]
-    type_id = generator.controller.read_int(datatype_ptr)
-    datatype = check.check_datatype(state, type_id, 1, True)
-    state.commit_datatype(datatype)
+    type_id = context.controller.read_int(datatype_ptr)
+    datatype = check.check_datatype(context, type_id, 1, True)
+    context.state.commit_datatype(datatype)
     return False
 
-def MPI_Type_free(generator, args, state, context):
+def MPI_Type_free(context, args):
     datatype_ptr = args[0]
-    type_id = generator.controller.read_int(datatype_ptr)
-    datatype = check.check_datatype(state, type_id, 1, True)
+    type_id = context.controller.read_int(datatype_ptr)
+    datatype = check.check_datatype(context, type_id, 1, True)
 
     if datatype.is_buildin():
         e = errormsg.CallError()
@@ -660,27 +619,30 @@ def MPI_Type_free(generator, args, state, context):
         e.short_description = "Freeing predefined type"
         e.description = "Predefined datatype '{0}' cannot be freed" \
                 .format(datatype.name)
-        e.throw()
+        context.add_error_and_throw(e)
 
-    state.remove_datatype(datatype)
-    generator.controller.write_int(datatype_ptr, consts.MPI_DATATYPE_NULL)
+    context.state.remove_datatype(datatype)
+    context.controller.write_int(datatype_ptr, consts.MPI_DATATYPE_NULL)
     return False
 
-def MPI_Dims_create(generator, args, state, context):
+def MPI_Dims_create(context, args):
     nnodes, ndims, dims_ptr = args
 
     if ndims < 1:
-        errormsg.InvalidArgument(ndims,
+        e = errormsg.InvalidArgument(ndims,
                                  2,
-                                 "Invalid number of dimensions").throw()
+                                 "Invalid number of dimensions")
+        context.add_error_and_throw(e)
 
-    dims = generator.controller.read_ints(dims_ptr, ndims)
+
+    dims = context.controller.read_ints(dims_ptr, ndims)
     count = 0
     for d in dims:
         if d < 0 or (d > 0 and nnodes % d != 0):
-            errormsg.InvalidArgument(d,
+            e = errormsg.InvalidArgument(d,
                                      3,
-                                     "Invalid dimension value").throw()
+                                     "Invalid dimension value")
+            context.add_error_and_throw(e)
         if d > 0:
             nnodes /= d
         else:
@@ -693,75 +655,73 @@ def MPI_Dims_create(generator, args, state, context):
                 dims[i] = factors[count]
                 count += 1
 
-    generator.controller.write_ints(dims_ptr, dims)
+    context.controller.write_ints(dims_ptr, dims)
     return False
 
-def MPI_Comm_set_errhandler(generator, args, state, context):
+def MPI_Comm_set_errhandler(context, args):
     # Currently we can do nothing, because error is never returned
     return False
 
-def MPI_Comm_create_keyval(generator, args, state, context):
+def MPI_Comm_create_keyval(context, args):
     copy_fn, delete_fn, keyval_ptr, extra_ptr = args
     keyval = Keyval(copy_fn, delete_fn, extra_ptr)
-    state.add_keyval(keyval)
-    generator.controller.write_int(keyval_ptr, keyval.keyval_id)
+    context.state.add_keyval(keyval)
+    context.controller.write_int(keyval_ptr, keyval.keyval_id)
     return False
 
-def MPI_Comm_free_keyval(generator, args, state, context):
+def MPI_Comm_free_keyval(context, args):
     keyval_ptr = args[0]
-    keyval_id = generator.controller.read_int(keyval_ptr)
-    keyval = check.check_keyval(state, keyval_id, 1)
-    state.remove_keyval(keyval)
-    generator.controller.write_int(keyval_ptr, consts.MPI_KEYVAL_INVALID)
+    keyval_id = context.controller.read_int(keyval_ptr)
+    keyval = check.check_keyval(context, keyval_id, 1)
+    context.state.remove_keyval(keyval)
+    context.controller.write_int(keyval_ptr, consts.MPI_KEYVAL_INVALID)
     return False
 
-def MPI_Comm_get_attr(generator, args, state, context):
+def MPI_Comm_get_attr(context, args):
     comm, keyval, value_ptr, flag_ptr = args
     if keyval.keyval_id == consts.MPI_TAG_UB:
-        value = generator.get_const_ptr(consts.MPI_TAG_UB)
+        value = context.generator.get_const_ptr(consts.MPI_TAG_UB)
     else:
-        value = state.get_attr(comm, keyval)
+        value = context.state.get_attr(comm, keyval)
     if value is not None:
-        generator.controller.write_pointer(value_ptr, value)
-        generator.controller.write_int(flag_ptr, 1)
+        context.controller.write_pointer(value_ptr, value)
+        context.controller.write_int(flag_ptr, 1)
     else:
-        generator.controller.write_int(flag_ptr, 0)
+        context.controller.write_int(flag_ptr, 0)
     return False
 
-def MPI_Comm_set_attr(generator, args, state, context):
+def MPI_Comm_set_attr(context, args):
     comm, keyval, value = args
-    state.set_attr(generator, context, comm, keyval, value)
+    context.state.set_attr(context, comm, keyval, value)
     return False
 
-def MPI_Comm_delete_attr(generator, args, state, context):
+def MPI_Comm_delete_attr(context, args):
     comm, keyval = args
-    if state.get_attr(comm, keyval) is None:
+    if context.state.get_attr(comm, keyval) is None:
         e = errormsg.CallError()
         e.name = "value-not-found"
         e.short_description = "Attribute not found"
         e.description = "Attribute not found in the communicator"
-        e.throw()
-    state.delete_attr(generator, context, comm, keyval)
+        context.add_error_and_throw(e)
+    context.state.delete_attr(context, comm, keyval)
     return False
 
-def MPI_Keyval_create(generator, args, state, context):
-    return MPI_Comm_create_keyval(generator, args, state, context)
+def MPI_Keyval_create(context, args):
+    return MPI_Comm_create_keyval(context, args)
 
-def MPI_Keyval_free(generator, args, state, context):
-    return MPI_Comm_free_keyval(generator, args, state, context)
+def MPI_Keyval_free(context, args):
+    return MPI_Comm_free_keyval(context, args)
 
-def MPI_Attr_get(generator, args, state, context):
-    return MPI_Comm_get_attr(generator, args, state, context)
+def MPI_Attr_get(context, args):
+    return MPI_Comm_get_attr(context, args)
 
-def MPI_Attr_put(generator, args, state, context):
-    return MPI_Comm_set_attr(generator, args, state, context)
+def MPI_Attr_put(context, args):
+    return MPI_Comm_set_attr(context, args)
 
-def MPI_Attr_delete(generator, args, state, context):
-    return MPI_Comm_delete_attr(generator, args, state, context)
+def MPI_Attr_delete(context, args):
+    return MPI_Comm_delete_attr(context, args)
 
-def call_collective_operation(generator,
-                              state,
-                              context,
+def call_collective_operation(context,
                               op_class,
                               blocking,
                               args):
@@ -773,13 +733,13 @@ def call_collective_operation(generator,
         comm = args[-2]
         args = args[:-2]
 
-    op = state.gstate.call_collective_operation(
-                generator, state, context, comm, op_class, blocking, args)
-    request_id = state.add_collective_request(comm.comm_id, op.cc_id)
+    op = context.state.gstate.call_collective_operation(
+                context, comm, op_class, blocking, args)
+    request_id = context.state.add_collective_request(comm.comm_id, op.cc_id)
     if blocking:
-        state.set_wait((request_id,))
+        context.state.set_wait((request_id,))
     else:
-        generator.controller.write_int(request_ptr, request_id)
+        context.controller.write_int(request_ptr, request_id)
     return blocking
 
 def get_send_type(generator, state, mode, datatype, count):
@@ -811,63 +771,64 @@ def get_send_type(generator, state, mode, datatype, count):
         assert generator.send_protocol == "full"
         return SendRequest.Standard
 
-def call_send(generator, args, state, context,
+def call_send(context, args,
               blocking, mode, name, persistent=False, return_request=False):
+    context.state = context.state
     if blocking:
         buf_ptr, count, datatype, target, tag, comm = args
     else:
         buf_ptr, count, datatype, target, tag, comm, request_ptr = args
 
-    check.check_rank(comm, target, 4, False, True)
+    check.check_rank(context, comm, target, 4, False, True)
 
-    r = datatype.check(generator.controller, buf_ptr, count, read=True)
+    r = datatype.check(context.controller, buf_ptr, count, read=True)
     if r is not None:
         e = errormsg.CallError()
         e.name = "invalid-send-buffer"
         e.short_description = "Invalid send buffer"
         e.description = "Invalid receive buffer. " \
                         "Address 0x{0:x} is not accessible.".format(int(r))
-        e.throw()
+        context.add_error_and_throw(e)
 
-    send_type = get_send_type(generator, state, mode, datatype, count)
-    request = state.add_send_request(comm.comm_id, target,
+    send_type = get_send_type(
+            context.generator, context.state, mode, datatype, count)
+    request = context.state.add_send_request(comm.comm_id, target,
                                      tag, buf_ptr, datatype, count, send_type)
     if not persistent:
-        request.create_message(generator, state)
+        request.create_message(context)
 
         if send_type == SendRequest.Buffered or target == consts.MPI_PROC_NULL:
-            state.set_request_as_completed(request)
+            context.state.set_request_as_completed(request)
     else:
         assert not blocking
-        state.make_request_persistent(request.id)
+        context.state.make_request_persistent(request.id)
 
     if return_request:
         return request
 
     if blocking:
-        state.set_wait((request.id,), immediate=True)
+        context.state.set_wait((request.id,), immediate=True)
     else:
         if not persistent:
-            request.stacktrace = generator.controller.get_stacktrace()
-            datatype.lock_memory(generator.controller, buf_ptr, count)
-        generator.controller.write_int(request_ptr, request.id)
+            request.stacktrace = context.controller.get_stacktrace()
+            datatype.lock_memory(context.controller, buf_ptr, count)
+        context.controller.write_int(request_ptr, request.id)
 
     # TODO: Optimization : If message use eager protocol then nonblock
     return blocking
 
-def call_recv(generator, args, state,
-              context, blocking, name, persistent=False, return_request=False):
+def call_recv(context, args, blocking, name, persistent=False, return_request=False):
     buf_ptr, count, datatype, source, tag, comm, ptr = args
-    check.check_rank(comm, source, 4, True, True)
+    check.check_rank(context, comm, source, 4, True, True)
 
-    r = datatype.check(generator.controller, buf_ptr, count, write=True)
+    r = datatype.check(context.controller, buf_ptr, count, write=True)
     if r is not None:
         e = errormsg.CallError()
         e.name = "invalid-recv-buffer"
         e.short_description = "Invalid receive buffer"
         e.description = "Invalid receive buffer. " \
                         "Address 0x{0:x} is not accessible.".format(int(r))
-        e.throw()
+        context.add_error_and_throw(e)
 
     if blocking:
         status_ptr = ptr
@@ -876,29 +837,29 @@ def call_recv(generator, args, state,
 
     if blocking and source == consts.MPI_PROC_NULL:
         if status_ptr:
-            generator.controller.write_status(status_ptr,
+            context.controller.write_status(status_ptr,
                                               consts.MPI_PROC_NULL,
                                               consts.MPI_ANY_TAG,
                                               0)
         return False
 
-    request = state.add_recv_request(
+    request = context.state.add_recv_request(
                            comm.comm_id, source, tag, buf_ptr, datatype, count)
 
     if persistent:
        assert not blocking
-       state.make_request_persistent(request.id)
+       context.state.make_request_persistent(request.id)
 
     if return_request:
         return request
 
     if blocking:
-        state.set_wait((request.id,), None, status_ptr, immediate=True)
+        context.state.set_wait((request.id,), None, status_ptr, immediate=True)
     else:
         if not persistent:
-            request.stacktrace = generator.controller.get_stacktrace()
-            datatype.lock_memory(generator.controller, buf_ptr, count)
-        generator.controller.write_int(request_ptr, request.id)
+            request.stacktrace = context.controller.get_stacktrace()
+            datatype.lock_memory(context.controller, buf_ptr, count)
+        context.controller.write_int(request_ptr, request.id)
 
     # TODO: Optimization : If message is already here,
     # then non block and continue
@@ -916,15 +877,16 @@ class Call:
     def name(self):
         return self.fn.__name__
 
-    def run(self, generator, args, state, context):
+    def run(self, context, args):
         assert len(args) == len(self.args)
-        a = [ self.args[i].make_conversion(args[i], i, state)
-              for i in xrange(len(args)) ]
-        r = self.fn(generator, a, state, context)
-        generator.add_call_event(context,
-                                 event.CallEvent(self.event_name,
-                                                 state.pid,
-                                                 ",".join(args)))
+        r = self.fn(context,
+                    [ self.args[i].make_conversion(args[i], i, context)
+                      for i in xrange(len(args)) ])
+        e = event.CallEvent(self.event_name,
+                            context.state.pid,
+                            ",".join(args))
+        e.stacktrace = context.controller.get_stacktrace()
+        context.add_event(e)
         return r
 
 

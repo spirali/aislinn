@@ -40,6 +40,7 @@ def check_str(value):
 
 class Controller:
 
+    # TODO: Universal architecture detection
     POINTER_SIZE = 8
     INT_SIZE = 4
 
@@ -78,7 +79,7 @@ class Controller:
         return self.receive_line()
 
     def kill(self):
-        if self.process:
+        if self.process and self.process.poll() is None:
             self.process.kill()
             self.process = None
 
@@ -273,7 +274,10 @@ class Controller:
         self.send_command(command)
         r = self.receive_line()
         if r != "Ok":
-            raise UnexpectedOutput(r)
+            raise self.on_unexpected_output(r)
+
+    def on_unexpected_output(self, line):
+        raise UnexpectedOutput(line)
 
     def receive_until_ok(self):
         result = []

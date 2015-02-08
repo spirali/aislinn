@@ -93,24 +93,23 @@ class GlobalState(EqMixin):
                 return op
 
     def call_collective_operation(self,
-                                  generator,
-                                  state,
                                   context,
                                   comm,
                                   op_class,
                                   blocking,
                                   args):
+        assert context.gstate is self
         if self.collective_operations is None:
             self.collective_operations = []
-        cc_id = state.get_cc_id_counter(comm)
+        cc_id = context.state.get_cc_id_counter(comm)
         op = self.get_operation_by_cc_id(comm.comm_id, cc_id)
         if op is not None:
             op.check_compatability(op_class, blocking)
         else:
             op = op_class(self, comm, blocking, cc_id)
             self.collective_operations.append(op)
-        state.inc_cc_id_counter(comm)
-        op.enter(generator, state, context, comm, args)
+        context.state.inc_cc_id_counter(comm)
+        op.enter(context, comm, args)
         return op
 
     def finish_collective_operation(self, op):

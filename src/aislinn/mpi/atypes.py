@@ -26,12 +26,13 @@ class Arg:
     c_type = "invalid"
 
     @classmethod
-    def convert(cls, value, arg_position, state):
+    def convert(cls, value, arg_position, context):
         return value
 
     @classmethod
-    def make_conversion(cls, value, arg_position, state):
-        return cls.convert(convert_type(value, cls.c_type), arg_position, state)
+    def make_conversion(cls, value, arg_position, context):
+        return cls.convert(convert_type(value, cls.c_type),
+                           arg_position, context)
 
 
 class Pointer(Arg):
@@ -45,69 +46,69 @@ class Int(Arg):
 class Comm(Int):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_comm(state, value, arg_position)
+    def convert(cls, value, arg_position, context):
+        return check.check_comm(context, value, arg_position)
 
 
 class Group(Int):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_and_get_group(state, value, arg_position)
+    def convert(cls, value, arg_position, context):
+        return check.check_and_get_group(context, value, arg_position)
 
 
 class Op(Int):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_op(state, value, arg_position)
+    def convert(cls, value, arg_position, context):
+        return check.check_op(context, value, arg_position)
 
 
 class Count(Int):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_count(value, arg_position)
+    def convert(cls, value, arg_position, context):
+        return check.check_count(context, value, arg_position)
 
 
 class Datatype(Int):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_datatype(state, value, arg_position)
+    def convert(cls, value, arg_position, context):
+        return check.check_datatype(context, value, arg_position)
 
 
 class DatatypeU(Int): # Uncommited
 
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_datatype(state, value, arg_position, True)
+    def convert(cls, value, arg_position, context):
+        return check.check_datatype(context, value, arg_position, True)
 
 class Rank(Int):
     pass
 
 class Tag(Int):
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_tag(value, arg_position, False)
+    def convert(cls, value, arg_position, context):
+        return check.check_tag(context, value, arg_position, False)
 
 
 class TagAT(Int): # Allow MPI_ANY_TAG
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_tag(value, arg_position, True)
+    def convert(cls, value, arg_position, context):
+        return check.check_tag(context, value, arg_position, True)
 
 
 class Keyval(Int):
     @classmethod
-    def convert(cls, value, arg_position, state):
-        return check.check_keyval(state, value, arg_position)
+    def convert(cls, value, arg_position, context):
+        return check.check_keyval(context, value, arg_position)
 
 
 class StatusPtr(Pointer):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
+    def convert(cls, value, arg_position, context):
         if value == consts.MPI_STATUS_IGNORE:
             return None
         else:
@@ -116,7 +117,7 @@ class StatusPtr(Pointer):
 class StatusesPtr(Pointer):
 
     @classmethod
-    def convert(cls, value, arg_position, state):
+    def convert(cls, value, arg_position, context):
         if value == consts.MPI_STATUSES_IGNORE:
             return None
         else:

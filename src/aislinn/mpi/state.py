@@ -47,7 +47,6 @@ class State:
     allocations = None
 
     def __init__(self, gstate, pid, vg_state):
-        assert vg_state is not None
         self.gstate = gstate
         self.pid = pid
         self.vg_state = vg_state
@@ -118,23 +117,22 @@ class State:
             if keyval and keyval.keyval_id == keyval_id:
                 return keyval
 
-    def set_attr(self, generator, context, comm, keyval, value):
+    def set_attr(self, context, comm, keyval, value):
         key = (comm.comm_id, keyval)
         if key in self.attrs:
-            self.delete_attr(generator, context, comm, keyval)
+            self.delete_attr(context, comm, keyval)
         self.attrs = copy.copy(self.attrs)
         self.attrs[key] = value
 
-    def delete_attr(self, generator, context, comm, keyval):
+    def delete_attr(self, context, comm, keyval):
         self.attrs = copy.copy(self.attrs)
         key = (comm.comm_id, keyval)
         value = self.attrs[key]
         del self.attrs[key]
         if keyval.delete_fn != consts.MPI_NULL_DELETE_FN:
-            generator.run_function(
-                self, context,
+            context.run_function(
                 keyval.delete_fn,
-                generator.controller.FUNCTION_2_INT_2_POINTER,
+                context.controller.FUNCTION_2_INT_2_POINTER,
                 comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
 
     def get_attr(self, comm, keyval):
@@ -144,27 +142,6 @@ class State:
         for (comm_id, keyval), value in self.attrs.items():
             if comm_id == comm.comm_id:
                 yield keyval, value
-
-    def copy_comm_attrs(self, generator, context, comm, new_comm):
-        for keyval, value in self.get_comm_attrs(comm):
-            if keyval.copy_fn == consts.MPI_NULL_COPY_FN:
-                continue
-            tmp = generator.controller.client_malloc(generator.POINTER_SIZE + \
-                                                     generator.INT_SIZE)
-            value_out_ptr = tmp
-            flag_ptr = tmp + generator.POINTER_SIZE
-
-            generator.run_function(
-                self, context,
-                keyval.copy_fn,
-                generator.controller.FUNCTION_2_INT_4_POINTER,
-                comm.comm_id, keyval.keyval_id, keyval.extra_ptr,
-                value, value_out_ptr, flag_ptr)
-
-            if generator.controller.read_int(flag_ptr):
-                self.set_attr(generator, context, new_comm, keyval,
-                              generator.controller.read_pointer(value_out_ptr))
-            generator.controller.client_free(tmp)
 
     def add_datatype(self, datatype):
         datatype.type_id = \
@@ -194,9 +171,9 @@ class State:
         self.comms = copy.copy(self.comms)
         self.comms.append(comm)
 
-    def remove_comm(self, generator, context, comm):
+    def remove_comm(self, context, comm):
         for keyval, value in self.get_comm_attrs(comm):
-            self.delete_attr(generator, context, comm, keyval)
+            self.delete_attr(context, comm, keyval)
 
         self.comms = copy.copy(self.comms)
         i = self.comms.index(comm)
@@ -396,41 +373,41 @@ class State:
         self.persistent_requests = copy.copy(self.persistent_requests)
         self.persistent_requests.remove(request)
 
-    def start_persistent_request(self, generator, state, request):
+    def start_persistent_request(self, context, request):
         assert self.get_request(request.id) is None
         request = copy.copy(request)
-        request.stacktrace = generator.controller.get_stacktrace()
+        request.stacktrace = context.controller.get_stacktrace()
         if request.is_send():
             self.add_request(request)
             if request.target == consts.MPI_PROC_NULL:
-                state.set_request_as_completed(request)
+                context.state.set_request_as_completed(request)
             else:
-                request.create_message(generator, state)
+                request.create_message(context)
                 if request.send_type == SendRequest.Buffered:
-                    state.set_request_as_completed(request)
+                    context.state.set_request_as_completed(request)
 
             sz = request.count * request.datatype.size
-            r = generator.controller.is_writable(request.data_ptr, sz)
+            r = context.controller.is_writable(request.data_ptr, sz)
             if r != "Ok":
                 e = errormsg.CallError()
                 e.name = "invalid-send-buffer"
                 e.short_description = "Invalid send buffer"
                 e.description = "Invalid receive buffer. " \
                                 "Address 0x{0:x} is not accessible.".format(int(r))
-                e.throw()
-            generator.controller.lock_memory(request.data_ptr, sz)
+                context.add_error_and_throw(e)
+            context.controller.lock_memory(request.data_ptr, sz)
 
         elif request.is_receive():
             sz = request.count * request.datatype.size
-            r = generator.controller.is_writable(request.data_ptr, sz)
+            r = context.controller.is_writable(request.data_ptr, sz)
             if r != "Ok":
                 e = errormsg.CallError()
                 e.name = "invalid-recv-buffer"
                 e.short_description = "Invalid receive buffer"
                 e.description = "Invalid receive buffer. " \
                                 "Address 0x{0:x} is not accessible.".format(int(r))
-                e.throw()
-            generator.controller.lock_memory(
+                context.add_error_and_throw(e)
+            context.controller.lock_memory(
                     request.data_ptr,
                     request.count * request.datatype.size)
             self.add_request(request)
@@ -443,58 +420,58 @@ class State:
         self.add_request(request)
         return request_id
 
-    def _finish_request(self, generator, request,
+    def _finish_request(self, context, request,
                         index_pointer, index_status):
         assert request.is_completed()
         message = request.message
         request = request.original_request
         if not self.immediate_wait and \
             (request.is_send() or request.is_receive()):
-            request.datatype.lock_memory(generator.controller,
+            request.datatype.lock_memory(context.controller,
                                          request.data_ptr,
                                          request.count, unlock=True)
 
         if self.active_request_pointer is not None and \
                 self.get_persistent_request(request.id) is None:
-            generator.controller.write_int(
+            context.controller.write_int(
                     self.active_request_pointer + \
-                    generator.REQUEST_SIZE * index_pointer,
+                    context.controller.REQUEST_SIZE * index_pointer,
                     consts.MPI_REQUEST_NULL)
 
         if self.active_request_status_ptr is not None and request.is_receive():
             status_ptr = self.active_request_status_ptr + \
-                         generator.STATUS_SIZE * index_status
+                         context.controller.STATUS_SIZE * index_status
             if request.source == consts.MPI_PROC_NULL:
-                generator.controller.write_status(status_ptr,
+                context.controller.write_status(status_ptr,
                                                   consts.MPI_PROC_NULL,
                                                   consts.MPI_ANY_TAG,
                                                   0)
             else:
-                generator.controller.write_status(status_ptr,
+                context.controller.write_status(status_ptr,
                                                   message.source,
                                                   message.tag,
                                                   message.size)
 
-    def finish_all_active_requests(self, generator):
+    def finish_all_active_requests(self, context):
         logging.debug("Removing active requests")
-        self.finish_active_requests(generator,
+        self.finish_active_requests(context,
                                     range(len(self.active_request_ids)))
 
-    def finish_active_request(self, generator, request):
+    def finish_active_request(self, context, request):
         index = self.active_request_ids.index(request.id)
-        self._finish_request(generator, request, index, 0)
+        self._finish_request(context, request, index, 0)
         self.requests = copy.copy(self.requests)
         self.requests.remove(request)
         self.active_request_ids = None
 
-    def finish_active_requests(self, generator, indices):
+    def finish_active_requests(self, context, indices):
         self.requests = copy.copy(self.requests)
         for i, index in enumerate(indices):
             request_id = self.active_request_ids[index]
             if request_id == consts.MPI_REQUEST_NULL:
                 continue
             request = self.get_request(request_id)
-            self._finish_request(generator, request, index, i)
+            self._finish_request(context, request, index, i)
             self.requests.remove(request)
         self.active_request_ids = None
 

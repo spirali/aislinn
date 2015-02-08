@@ -72,20 +72,20 @@ class CollectiveOperation:
     def after_copy(self):
         pass
 
-    def enter(self, generator, state, context, comm, args):
+    def enter(self, context, comm, args):
         logging.debug("Entering collective operation %s", self)
         assert self.remaining_processes_enter >= 0
         assert self.remaining_processes_complete >= 0
         self.remaining_processes_enter -= 1
-        self.enter_main(generator, state, context, comm, args)
+        self.enter_main(context, comm, args)
 
-    def complete(self, generator, state):
+    def complete(self, context):
         logging.debug("Completing collective operation %s", self)
         assert self.remaining_processes_complete >= 0
         self.remaining_processes_complete -= 1
-        self.complete_main(generator, state, state.get_comm(self.comm_id))
+        self.complete_main(context, context.state.get_comm(self.comm_id))
         if self.remaining_processes_complete == 0:
-            state.gstate.finish_collective_operation(self)
+            context.gstate.finish_collective_operation(self)
             self.dispose()
 
     def is_finished(self):
@@ -94,7 +94,7 @@ class CollectiveOperation:
     def has_root(self):
         return self.root is not None
 
-    def check_root(self, comm, root):
+    def check_root(self, context, comm, root):
         if self.root is None:
             self.root = root
             self.root_pid = comm.group.rank_to_pid(root)
@@ -103,7 +103,7 @@ class CollectiveOperation:
             e.name = "rootmismatch"
             e.short_description = "Root mismatch"
             e.description = "Root mismatch"
-            e.throw()
+            context.add_error_and_throw(e)
 
     def compute_hash(self, hashthread):
         hashthread.update("{0} {1} {2} {3} {4} {5}".
@@ -194,8 +194,6 @@ class Barrier(CollectiveOperation):
     name = "barrier"
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
@@ -204,7 +202,7 @@ class Barrier(CollectiveOperation):
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
+    def complete_main(self, context, comm):
         pass
 
     def compute_hash_data(self, hashthread):
@@ -224,38 +222,36 @@ class Gatherv(OperationWithBuffers):
         self.displs = None
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcounts, displs, recvtype, root = args
-        check.check_rank(comm, root, 8)
-        rank = state.get_rank(comm)
-        self.check_root(comm, root)
+        check.check_rank(context, comm, root, 8)
+        rank = context.state.get_rank(comm)
+        self.check_root(context, comm, root)
 
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
+        self.buffers[rank] = context.generator.new_buffer_and_pack(
+                context.controller, sendtype, sendcount, sendbuf)
 
         if root == rank:
-            recvtype = check.check_datatype(state, recvtype, 7)
+            recvtype = check.check_datatype(context, recvtype, 7)
             self.recvtype = recvtype
             self.recvbuf = recvbuf
-            self.recvcounts = generator.controller.read_ints(
+            self.recvcounts = context.controller.read_ints(
                     recvcounts, self.process_count)
-            self.displs = generator.controller.read_ints(
+            self.displs = context.controller.read_ints(
                     displs, self.process_count)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
                self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        if state.pid == self.root_pid:
+    def complete_main(self, context, comm):
+        if context.state.pid == self.root_pid:
             recvbuf = self.recvbuf
-            controller = generator.controller
+            controller = context.controller
             for vg_buffer, count, displ in zip(self.buffers,
                                                self.recvcounts,
                                                self.displs):
@@ -283,21 +279,19 @@ class Gather(OperationWithBuffers):
         self.recvtype = None
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        check.check_rank(comm, root, 7, False, False)
-        self.check_root(comm, root)
+        check.check_rank(context, comm, root, 7, False, False)
+        self.check_root(context, comm, root)
 
-        rank = state.get_rank(comm)
+        rank = context.state.get_rank(comm)
         if self.root == rank:
             self.recvbuf = recvbuf
-            self.recvtype = check.check_datatype(state, recvtype, 7)
-            check.check_count(recvcount, 5)
+            self.recvtype = check.check_datatype(context, recvtype, 7)
+            check.check_count(context, recvcount, 5)
             self.recvcount = recvcount
 
         self.sendtype = sendtype
@@ -309,16 +303,16 @@ class Gather(OperationWithBuffers):
             if rank != root:
                 InvalidInPlace().throw()
         else:
-            self.buffers[rank] = generator.new_buffer_and_pack(
-                    sendtype, sendcount, sendbuf)
+            self.buffers[rank] = context.generator.new_buffer_and_pack(
+                    context.controller, sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
                self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        if state.pid == self.root_pid:
-            controller = generator.controller
+    def complete_main(self, context, comm):
+        if context.state.pid == self.root_pid:
+            controller = context.controller
             for i, vg_buffer in enumerate(self.buffers):
                 if vg_buffer: # if vg_buffer is None, then MPI_IN_PLACE was used
                     self.recvtype.unpack(controller,
@@ -345,33 +339,31 @@ class Allgather(OperationWithBuffers):
         self.recvtypes = [ None ] * self.process_count
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype = args
 
-        rank = state.get_rank(comm)
+        rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
-        self.recvtypes[rank] = check.check_datatype(state, recvtype, 7)
-        check.check_count(recvcount, 5)
+        self.recvtypes[rank] = check.check_datatype(context, recvtype, 7)
+        check.check_count(context, recvcount, 5)
         self.recvcounts[rank] = recvcount
 
         self.sendtype = sendtype
         self.sendcount = sendcount
 
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
+        self.buffers[rank] = context.generator.new_buffer_and_pack(
+                context.controller, sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
-        controller = generator.controller
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
+        controller = context.controller
         for i, vg_buffer in enumerate(self.buffers):
             self.recvtypes[rank].unpack(controller,
                  vg_buffer,
@@ -398,32 +390,30 @@ class Allgatherv(OperationWithBuffers):
         self.displs =  [ None ] * self.process_count
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcounts, displs, recvtype = args
-        rank = state.get_rank(comm)
+        rank = context.state.get_rank(comm)
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
+        self.buffers[rank] = context.generator.new_buffer_and_pack(
+                context.controller, sendtype, sendcount, sendbuf)
 
-        recvtype = check.check_datatype(state, recvtype, 7)
+        recvtype = check.check_datatype(context, recvtype, 7)
         self.recvtypes[rank] = recvtype
         self.recvbufs[rank] = recvbuf
-        self.recvcounts[rank] = generator.controller.read_ints(
+        self.recvcounts[rank] = context.controller.read_ints(
                 recvcounts, self.process_count)
-        self.displs[rank] = generator.controller.read_ints(
+        self.displs[rank] = context.controller.read_ints(
                 displs, self.process_count)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
-        controller = generator.controller
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
+        controller = context.controller
         recvbuf = self.recvbufs[rank]
         recvtype = self.recvtypes[rank]
         for vg_buffer, count, displ in zip(self.buffers,
@@ -461,37 +451,36 @@ class Scatterv(OperationWithSingleBuffer):
         self.recvtypes = copy.copy(self.recvtypes)
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         sendbuf, sendcounts, displs, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        check.check_rank(comm, root, 8)
-        self.check_root(comm, root)
-        rank = state.get_rank(comm)
+        check.check_rank(context, comm, root, 8)
+        self.check_root(context, comm, root)
+        rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         self.recvtypes[rank] = recvtype
         self.recvcounts[rank] = recvcount
         if self.root == rank:
-            sendtype = check.check_datatype(state, sendtype, 4)
+            sendtype = check.check_datatype(context, sendtype, 4)
             self.sendtype = sendtype
-            self.sendcounts = generator.controller.read_ints(
+            self.sendcounts = context.controller.read_ints(
                     sendcounts, self.process_count)
-            self.displs = generator.controller.read_ints(
+            self.displs = context.controller.read_ints(
                     displs, self.process_count)
             sendcount = max(s + d for s, d in zip(self.sendcounts, self.displs))
             assert self.buffer is None
-            self.buffer = generator.new_buffer_and_pack(sendtype, sendcount, sendbuf)
+            self.buffer = context.generator.new_buffer_and_pack(
+                    context.controller, sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return self.buffer is not None
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
         index =  self.sendtype.size * self.displs[rank]
-        self.recvtypes[rank].unpack(generator.controller,
+        self.recvtypes[rank].unpack(context.controller,
                                     self.buffer,
                                     self.recvcounts[rank],
                                     self.recvbufs[rank],
@@ -527,40 +516,41 @@ class Scatter(OperationWithSingleBuffer):
         self.recvtypes = copy.copy(self.recvtypes)
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
                recvbuf, recvcount, recvtype, root = args
-        check.check_rank(comm, root, 8)
-        self.check_root(comm, root)
-        rank = state.get_rank(comm)
+        check.check_rank(context, comm, root, 8)
+        self.check_root(context, comm, root)
+        rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         self.recvtypes[rank] = recvtype
         self.recvcounts[rank] = recvcount
 
         if self.root == rank:
-            check.check_count(sendcount, 2)
-            sendtype = check.check_datatype(state, sendtype, 3)
+            check.check_count(context, sendcount, 2)
+            sendtype = check.check_datatype(context, sendtype, 3)
             self.sendtype = sendtype
             self.sendcount = sendcount
             assert self.buffer is None
-            self.buffer = generator.new_buffer_and_pack(
-                    sendtype, sendcount * self.process_count, sendbuf)
+            self.buffer = context.generator.new_buffer_and_pack(
+                    context.controller,
+                    sendtype,
+                    sendcount * self.process_count,
+                    sendbuf)
         elif recvbuf == consts.MPI_IN_PLACE:
             InvalidInPlace().throw()
 
     def can_be_completed(self, state):
         return self.buffer is not None
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
         index = rank * self.sendtype.size * self.sendcount
         recvbuf = self.recvbufs[rank]
         if recvbuf != consts.MPI_IN_PLACE:
-            self.recvtypes[rank].unpack(generator.controller,
+            self.recvtypes[rank].unpack(context.controller,
                                         self.buffer,
                                         self.recvcounts[rank],
                                         self.recvbufs[rank],
@@ -592,19 +582,18 @@ class Bcast(OperationWithSingleBuffer):
         self.datatypes = copy.copy(self.datatypes)
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         buffer, count, datatype, root = args
-        check.check_rank(comm, root, 8)
-        self.check_root(comm, root)
-        rank = state.get_rank(comm)
+        check.check_rank(context, comm, root, 8)
+        self.check_root(context, comm, root)
+        rank = context.state.get_rank(comm)
         if self.root == rank:
             self.count = count
             assert self.buffer is None
-            self.buffer = generator.new_buffer_and_pack(datatype, count, buffer)
+            self.buffer = context.generator.new_buffer_and_pack(
+                    context.controller, datatype, count, buffer)
         else:
             self.recvbufs[rank] = buffer
             self.datatypes[rank] = datatype
@@ -613,10 +602,10 @@ class Bcast(OperationWithSingleBuffer):
     def can_be_completed(self, state):
         return self.buffer is not None
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
         if self.root != rank:
-            self.datatypes[rank].unpack(generator.controller,
+            self.datatypes[rank].unpack(context.controller,
                                         self.buffer,
                                         self.counts[rank],
                                         self.recvbufs[rank])
@@ -629,28 +618,17 @@ class Bcast(OperationWithSingleBuffer):
                                for t in self.datatypes]))
 
 
-def execute_reduce_op(generator, state, comm, rank, ccop,
+def execute_reduce_op(context, comm, rank, ccop,
                       recvbuf, buffers, count, scan=False):
-
-    # This is hack to get execution context,
-    # By this approach we lost events from reduce function
-    # On the other hand, it is not clear in which context
-    # should be reduction operations called
-    # BUT! Errors are still catched almost correctly (traceback is not full)
-    # because exception is propagated to the real context
-    from generator import ExecutionContext
-    context = ExecutionContext()
-
-    controller = generator.controller
+    controller = context.controller
     # We have to use malloc because operation runs in client context
     # and buffers are not visible for code in client
-    tmp = controller.client_malloc(generator.INT_SIZE * 2)
+    tmp = controller.client_malloc(controller.INT_SIZE * 2)
     len_ptr = tmp
-    datatype_ptr = tmp + generator.INT_SIZE
+    datatype_ptr = tmp + controller.INT_SIZE
     controller.write_int(len_ptr, count)
     controller.write_int(datatype_ptr, ccop.datatype.type_id)
-
-    generator.controller.write_buffer(recvbuf, buffers[0].id)
+    controller.write_buffer(recvbuf, buffers[0].id)
 
     if scan:
         limit = rank + 1
@@ -659,8 +637,7 @@ def execute_reduce_op(generator, state, comm, rank, ccop,
 
     for r in xrange(1, limit):
         buffer_mem = controller.client_malloc_from_buffer(buffers[r].id)
-        generator.run_function(
-                state, context,
+        context.run_function(
                 ccop.op.fn_ptr,
                 controller.FUNCTION_4_POINTER,
                 buffer_mem, recvbuf, len_ptr, datatype_ptr)
@@ -680,14 +657,12 @@ class Reduce(OperationWithBuffers):
         self.op = None
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
 
         sendbuf, recvbuf, count, datatype, op, root = args
-        check.check_rank(comm, root, 6)
+        check.check_rank(context, comm, root, 6)
 
         if self.op is None:
             self.op = op
@@ -698,12 +673,14 @@ class Reduce(OperationWithBuffers):
                     self.count == count and
                     self.datatype == datatype)
 
-        self.check_root(comm, root)
+        self.check_root(context, comm, root)
 
-        rank = state.get_rank(comm)
+        rank = context.state.get_rank(comm)
         self.recvbuf = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(datatype,
+        self.buffers[rank] = context.generator.new_buffer_and_pack(
+                                                           context.controller,
+                                                           datatype,
                                                            count,
                                                            sendbuf)
 
@@ -711,10 +688,10 @@ class Reduce(OperationWithBuffers):
         return state.pid != self.root_pid or \
                self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        if state.pid == self.root_pid:
-            rank = state.get_rank(comm)
-            execute_reduce_op(generator, state, comm, rank,
+    def complete_main(self, context, comm):
+        if context.state.pid == self.root_pid:
+            rank = context.state.get_rank(comm)
+            execute_reduce_op(context, comm, rank,
                               self, self.recvbuf, self.buffers, self.count)
 
     def compute_hash_data(self, hashthread):
@@ -741,8 +718,6 @@ class AllReduce(OperationWithBuffers):
         self.recvbufs = copy.copy(self.recvbufs)
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
@@ -758,19 +733,19 @@ class AllReduce(OperationWithBuffers):
                     self.count == count and
                     self.datatype == datatype)
 
-        generator.controller.memcpy(recvbuf, sendbuf, datatype.size * count)
-        rank = state.get_rank(comm)
+        context.controller.memcpy(recvbuf, sendbuf, datatype.size * count)
+        rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(
-                datatype, count, sendbuf)
+        self.buffers[rank] = context.generator.new_buffer_and_pack(
+                context.controller, datatype, count, sendbuf)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
-        execute_reduce_op(generator, state, comm, rank,
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
+        execute_reduce_op(context, comm, rank,
                           self, self.recvbufs[rank], self.buffers, self.count)
 
     def compute_hash_data(self, hashthread):
@@ -799,15 +774,13 @@ class ReduceScatter(OperationWithBuffers):
             self.final_buffer.inc_ref()
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
 
         sendbuf, recvbuf, counts_ptr, datatype, op = args
 
-        counts = generator.controller.read_ints(counts_ptr, comm.group.size)
+        counts = context.controller.read_ints(counts_ptr, comm.group.size)
 
         if self.counts is None:
             self.counts = counts
@@ -816,7 +789,7 @@ class ReduceScatter(OperationWithBuffers):
             e.name = "counts-mismatch"
             e.short_description = "Counts mismatch"
             e.description = "{0} != {1}".format(repr(self.counts), repr(counts))
-            e.throw()
+            context.add_error_and_throw(e)
 
         total_count = sum(counts)
 
@@ -827,32 +800,32 @@ class ReduceScatter(OperationWithBuffers):
             assert (self.op.fn_ptr == self.op.fn_ptr and
                     self.datatype == datatype)
 
-        rank = state.get_rank(comm)
+        rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = generator.new_buffer_and_pack(
-                datatype, total_count, sendbuf)
+        self.buffers[rank] = context.generator.new_buffer_and_pack(
+                context.controller, datatype, total_count, sendbuf)
 
         if self.remaining_processes_enter == 0:
-            tmp = generator.controller.client_malloc(datatype.size * total_count)
-            execute_reduce_op(generator, state, comm, rank,
+            tmp = context.controller.client_malloc(datatype.size * total_count)
+            execute_reduce_op(context, comm, rank,
                               self, tmp, self.buffers, total_count)
             for vg_buffer in self.buffers:
                 if vg_buffer:
                     vg_buffer.dec_ref()
-            self.final_buffer = generator.new_buffer_and_pack(
-                                    datatype, total_count, tmp)
-            generator.controller.client_free(tmp)
+            self.final_buffer = context.generator.new_buffer_and_pack(
+                context.controller, datatype, total_count, tmp)
+            context.controller.client_free(tmp)
             self.buffers = []
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
         count = self.counts[rank]
         index = sum(self.counts[:rank]) * self.datatype.size
-        self.datatype.unpack(generator.controller,
+        self.datatype.unpack(context.controller,
                              self.final_buffer,
                              count,
                              self.recvbufs[rank],
@@ -875,9 +848,9 @@ class Scan(AllReduce):
 
     name = "scan"
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
-        execute_reduce_op(generator, state, comm, rank,
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
+        execute_reduce_op(context, comm, rank,
                           self, self.recvbufs[rank],
                           self.buffers, self.count, scan=True)
 
@@ -900,15 +873,13 @@ class CommSplit(CollectiveOperation):
         self.comm_ids = copy.copy(self.comm_ids)
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         color, key, newcomm_ptr = args
         # In comm_id is first argument, but is was removed from args
-        check.check_color(color, 2)
-        rank = state.get_rank(comm)
+        check.check_color(context, color, 2)
+        rank = context.state.get_rank(comm)
 
         assert self.colors[rank] is None
         assert self.keys[rank] is None
@@ -931,7 +902,7 @@ class CommSplit(CollectiveOperation):
             for color, g in items:
                 g.sort() # This sort is needed by MPI specification
                 ranks = [ r for key, r in g ]
-                c = state.gstate.create_new_communicator(comm, ranks)
+                c = context.gstate.create_new_communicator(comm, ranks)
                 for r in ranks:
                     self.comm_ids[r] = c.comm_id
             self.colors = None
@@ -940,12 +911,12 @@ class CommSplit(CollectiveOperation):
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
         comm_id = self.comm_ids[rank]
         if comm_id is None:
             comm_id = consts.MPI_COMM_NULL
-        generator.controller.write_int(self.newcomm_ptrs[rank],
+        context.controller.write_int(self.newcomm_ptrs[rank],
                                        comm_id)
 
     def compute_hash_data(self, hashthread):
@@ -968,29 +939,27 @@ class CommDup(CollectiveOperation):
         self.newcomm_ptrs = copy.copy(self.newcomm_ptrs)
 
     def enter_main(self,
-                   generator,
-                   state,
                    context,
                    comm,
                    args):
         newcomm_ptr = args
-        rank = state.get_rank(comm)
+        rank = context.state.get_rank(comm)
 
         assert self.newcomm_ptrs[rank] is None
         self.newcomm_ptrs[rank] = newcomm_ptr
 
         if self.newcomm_id is None:
-            self.newcomm_id = state.gstate.clone_communicator(comm).comm_id
-        new_comm = state.get_comm(self.newcomm_id)
-        state.copy_comm_attrs(generator, context, comm, new_comm)
+            self.newcomm_id = context.gstate.clone_communicator(comm).comm_id
+        new_comm = context.state.get_comm(self.newcomm_id)
+        context.copy_comm_attrs(comm, new_comm)
 
 
     def can_be_completed(self, state):
         return True
 
-    def complete_main(self, generator, state, comm):
-        rank = state.get_rank(comm)
-        generator.controller.write_int(self.newcomm_ptrs[rank],
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
+        context.controller.write_int(self.newcomm_ptrs[rank],
                                        self.newcomm_id)
 
     def compute_hash_data(self, hashthread):

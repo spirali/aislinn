@@ -69,22 +69,22 @@ class SendRequest(Request):
         self.count = count
         self.message = None
 
-    def create_message(self, generator, state):
+    def create_message(self, context):
         assert self.message is None
         if self.target == consts.MPI_PROC_NULL:
             return
         sz = self.count * self.datatype.size
-        vg_buffer = generator.new_buffer_and_pack(self.datatype,
-                                                  self.count,
-                                                  self.data_ptr)
+        vg_buffer = context.generator.new_buffer_and_pack(context.controller,
+                                                          self.datatype,
+                                                          self.count,
+                                                          self.data_ptr)
 
-
-        comm = state.get_comm(self.comm_id)
+        comm = context.state.get_comm(self.comm_id)
         target_pid = comm.group.rank_to_pid(self.target)
-        message = Message(comm.comm_id, state.get_rank(comm),
+        message = Message(comm.comm_id, context.state.get_rank(comm),
                           self.target, self.tag, vg_buffer, sz)
-        state.gstate.get_state(target_pid).add_message(message)
-        generator.message_sizes.add(sz)
+        context.gstate.get_state(target_pid).add_message(message)
+        context.generator.message_sizes.add(sz)
         self.message = message
 
     def is_standard_send(self):

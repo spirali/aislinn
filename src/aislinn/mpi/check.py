@@ -20,12 +20,14 @@
 import errormsg
 import consts
 
-def check_rank(comm,
+def check_rank(context,
+               comm,
                rank,
                arg_position,
                any_source_allowed=False,
                proc_null_allowed=False):
-    return check_rank_in_group(comm.group,
+    return check_rank_in_group(context,
+                               comm.group,
                                rank,
                                arg_position,
                                any_source_allowed,
@@ -33,7 +35,9 @@ def check_rank(comm,
 
 
 
-def check_rank_in_group(group,
+def check_rank_in_group(
+               context,
+               group,
                rank,
                arg_position,
                any_source_allowed=False,
@@ -41,76 +45,87 @@ def check_rank_in_group(group,
 
     if rank == consts.MPI_PROC_NULL:
         if not proc_null_allowed:
-            errormsg.InvalidArgument("MPI_PROC_NULL",
+            errormsg.InvalidArgument(context,
+                                     "MPI_PROC_NULL",
                                      arg_position,
                                      "MPI_PROC_NULL not allowed").throw()
     elif rank == consts.MPI_ANY_SOURCE:
         if not any_source_allowed:
-            errormsg.InvalidArgument("MPI_ANY_SOURCE",
+            errormsg.InvalidArgument(context,
+                                     "MPI_ANY_SOURCE",
                                      arg_position,
                                      "MPI_ANY_SOURCE not allowed").throw()
     elif rank < 0 or rank >= group.size:
-        errormsg.InvalidArgument(rank, arg_position, "Invalid rank").throw()
+        errormsg.InvalidArgument(context, rank, arg_position, "Invalid rank").throw()
     return rank
 
-def check_tag(tag,
+def check_tag(context,
+              tag,
               arg_position,
               any_tag_allowed):
 
     if tag == consts.MPI_ANY_TAG:
         if not any_tag_allowed:
-            errormsg.InvalidArgument("MPI_ANY_TAG", arg_position).throw()
+            errormsg.InvalidArgument(context, "MPI_ANY_TAG", arg_position).throw()
     elif tag < 0:
         errormsg.InvalidArgument(
+                context,
                 tag,
                 arg_position,
                 "Tag has to be a non-negative number.").throw()
     return tag
 
-def check_count(count, arg_position):
+def check_count(context, count, arg_position):
     if count < 0:
-        errormsg.InvalidArgument(count,
+        errormsg.InvalidArgument(context,
+                                 count,
                                  arg_position,
                                  "Count has to be non-negative.").throw()
     return count
 
-def check_size(size, arg_position):
+def check_size(context, size, arg_position):
     if size < 0:
-        errormsg.InvalidArgument(size,
+        errormsg.InvalidArgument(context,
+                                 size,
                                  arg_position,
                                  "Size has to be non-negative.").throw()
 
-def check_sizes(sizes, arg_position):
+def check_sizes(context, sizes, arg_position):
     for i, size in enumerate(sizes):
         if size < 0:
-            errormsg.InvalidArgument(size,
+            errormsg.InvalidArgument(context,
+                                     size,
                                      arg_position,
                                      "Size has to be non-negative. "
                                      "({0}. item of array)".format(i)
                                      ).throw()
 
-def check_color(color, arg_position):
+def check_color(context, color, arg_position):
     if color != consts.MPI_UNDEFINED and color < 0:
-        errormsg.InvalidArgument(color,
+        errormsg.InvalidArgument(context,
+                                 color,
                                  arg_position,
                                  "Color has to be non-negative.").throw()
 
-def check_op(state, op_id, arg_position):
+def check_op(context, op_id, arg_position):
     if op_id == consts.MPI_OP_NULL:
-        errormsg.InvalidArgument("MPI_OP_NULL",
+        errormsg.InvalidArgument(context,
+                                 "MPI_OP_NULL",
                                  arg_position,
                                  "Invalid operation").throw()
-    op = state.get_op(op_id)
+    op = context.state.get_op(op_id)
     if op is None:
-        errormsg.InvalidArgument(op_id,
+        errormsg.InvalidArgument(context,
+                                 op_id,
                                  arg_position,
                                  "Invalid operation").throw()
     return op
 
-def check_datatype(state, type_id, arg_position, allow_uncommited=False):
-    datatype = state.get_datatype(type_id)
+def check_datatype(context, type_id, arg_position, allow_uncommited=False):
+    datatype = context.state.get_datatype(type_id)
     if datatype is None:
-        errormsg.InvalidArgument(type_id,
+        errormsg.InvalidArgument(context,
+                                 type_id,
                                  arg_position,
                                  "Invalid datatype").throw()
     if not datatype.commited and not allow_uncommited:
@@ -118,73 +133,81 @@ def check_datatype(state, type_id, arg_position, allow_uncommited=False):
         e.name = "uncommited"
         e.short_description = "Uncommited datatype"
         e.description = "Uncommited datatype used in communication"
-        e.throw()
+        context.add_error_and_throw(e)
     return datatype
 
-def check_datatypes(state, type_ids, arg_position, allow_uncommited=False):
-    return [ check_datatype(state, type_id, arg_position, allow_uncommited)
+def check_datatypes(context, type_ids, arg_position, allow_uncommited=False):
+    return [ check_datatype(context, type_id, arg_position, allow_uncommited)
              for type_id in type_ids ]
 
-def check_comm(state, comm_id, arg_position):
+def check_comm(context, comm_id, arg_position):
     if comm_id == consts.MPI_COMM_NULL:
-        errormsg.InvalidArgument("MPI_COMM_NULL",
+        errormsg.InvalidArgument(context,
+                                 "MPI_COMM_NULL",
                                  arg_position,
                                  "Invalid communicator").throw()
-    comm = state.get_comm(comm_id)
+    comm = context.state.get_comm(comm_id)
     if comm is None:
-        errormsg.InvalidArgument(comm_id,
+        errormsg.InvalidArgument(context,
+                                 comm_id,
                                  arg_position,
                                  "Invalid communicator").throw()
     return comm
 
-def check_and_get_group(state, group_id, arg_position):
-    group = state.get_group(group_id)
+def check_and_get_group(context, group_id, arg_position):
+    group = context.state.get_group(group_id)
     if group is None:
-        errormsg.InvalidArgument(group_id,
+        errormsg.InvalidArgument(context,
+                                 group_id,
                                  arg_position,
                                  "Invalid group").throw()
     return group
 
-def check_request_id(state, request_id):
+def check_request_id(context, request_id):
     if request_id == consts.MPI_REQUEST_NULL:
         return
         #errormsg.InvalidArgument("MPI_REQUEST_NULL",
         #                         None,
         #                         "Invalid request").throw()
-    request = state.get_request(request_id)
+    request = context.state.get_request(request_id)
 
     if request is None:
-        errormsg.InvalidArgument(request_id, None, "Invalid request").throw()
-
-def check_persistent_request(state, request_id, inactive):
-    if request_id == consts.MPI_REQUEST_NULL:
-        errormsg.InvalidArgument("MPI_REQUEST_NULL",
+        errormsg.InvalidArgument(context,
+                                 request_id,
                                  None,
                                  "Invalid request").throw()
-    request = state.get_persistent_request(request_id)
+
+def check_persistent_request(context, request_id, inactive):
+    if request_id == consts.MPI_REQUEST_NULL:
+        errormsg.InvalidArgument(context,
+                                 "MPI_REQUEST_NULL",
+                                 None,
+                                 "Invalid request").throw()
+    request = context.state.get_persistent_request(request_id)
 
     if request is None:
         errormsg.InvalidArgument(
-                request_id, None, "Invalid persistent request").throw()
+                context, request_id, None, "Invalid persistent request").throw()
 
-    if inactive and state.get_request(request_id) is not None:
+    if inactive and context.state.get_request(request_id) is not None:
         errormsg.InvalidArgument(
-                request_id, None, "Persistent request is active").throw()
+                context, request_id, None, "Persistent request is active").throw()
     return request
 
-def check_unique_values(items, arg_position):
+def check_unique_values(context, items, arg_position):
     if len(set(items)) != len(items):
         errormsg.InvalidArgument(
-                items, arg_position, "Non-unique values").throw()
+                context, items, arg_position, "Non-unique values").throw()
 
-def check_request_ids(state, request_ids):
+def check_request_ids(context, request_ids):
     for request_id in request_ids:
-        check_request_id(state, request_id)
+        check_request_id(context, request_id)
 
-def check_keyval(state, keyval_id, arg_position):
-    keyval = state.get_keyval(keyval_id)
+def check_keyval(context, keyval_id, arg_position):
+    keyval = context.state.get_keyval(keyval_id)
     if keyval is None:
-            errormsg.InvalidArgument(keyval_id,
+            errormsg.InvalidArgument(context,
+                                     keyval_id,
                                      arg_position,
                                      "Invalid keyval").throw()
     return keyval

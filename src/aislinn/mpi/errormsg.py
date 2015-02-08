@@ -68,8 +68,9 @@ class NonzeroExitCode(ErrorMessage):
     name = "exitcode"
     short_description = "Nonzero exit code"
 
-    def __init__(self, exitcode):
+    def __init__(self, context, exitcode):
         ErrorMessage.__init__(self)
+        self.pid = context.state.pid
         self.exitcode = exitcode
 
     @property
@@ -142,11 +143,18 @@ class InvalidArgument(CallError):
     name = "invalidarg"
     short_description = "Invalid argument"
 
-    def __init__(self, arg_value, arg_position, extra_message=""):
+    def __init__(self, context, arg_value, arg_position, extra_message=""):
         ErrorMessage.__init__(self)
+        self.pid = context.state.pid
         self.arg_value = arg_value
         self.arg_position = arg_position
         self.extra_message = extra_message
+
+        # Temporary hack until new version of error messages
+        self.context = context
+
+    def throw(self):
+        self.context.add_error_and_throw(self)
 
     @property
     def description(self):

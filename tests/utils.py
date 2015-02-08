@@ -46,7 +46,12 @@ class TestCase(unittest.TestCase):
         for error in self.report.errors:
             if error.name == name:
                 for key, value in args.items():
-                    self.assertEquals(error.element.find(key).text, value)
+                    e = error.element.find(key)
+                    if e is None:
+                        raise Exception(
+                                "Cannot find attribute '{0}' for error '{1}'" \
+                                        .format(key, name))
+                    self.assertEquals(e.text, value)
 
     def program(self, test_name, files=None, **kw):
         if files is None:
