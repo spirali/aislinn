@@ -9,12 +9,9 @@ class CollectiveTests(TestCase):
     def test_invalid(self):
         self.program("invalid")
 
-        args = [ "gatherv_root",
-                 "gatherv_sendcount",
-                 "reduce_op" ]
-
-        for arg in args:
-            self.execute(2, arg, error="invalidarg")
+        self.execute(2, "gatherv_root", error="mpi/invalid-arg/rank")
+        self.execute(2, "gatherv_sendcount", error="mpi/invalid-arg/count")
+        self.execute(2, "reduce_op", error="mpi/invalid-arg/operation")
 
     def test_ibarrier(self):
         self.program("ibarrier")
@@ -47,8 +44,8 @@ class CollectiveTests(TestCase):
         self.execute(3, "gatherv")
         self.execute(3, "iwaitall")
         self.execute(3, "iwait")
-        self.execute(3, "mismatch", error="rootmismatch")
-        self.execute(3, "imismatch", error="rootmismatch")
+        self.execute(3, "mismatch", error="mpi/collective-mismatch/root")
+        self.execute(3, "imismatch", error="mpi/collective-mismatch/root")
 
     def test_allgatherv(self):
         self.program("allgatherv")
@@ -175,7 +172,7 @@ class CollectiveTests(TestCase):
 
     def test_reduce_scatter2(self):
         self.program("reduce_scatter2")
-        self.execute(4, error="counts-mismatch")
+        self.execute(4, error="mpi/collective-mismatch/count")
 
     def test_loc(self):
         output = "int: (100, 1) (100, 1)\n" \
@@ -232,6 +229,19 @@ class CollectiveTests(TestCase):
         self.output(3, "OUT[3]: 40 5 7800\n")
         self.output(4, "OUT[4]: 40 0 0\n")
         self.execute(5)
+
+    def test_in_place_err(self):
+        self.program("in_place_err")
+        self.execute(2, "scatter", error="mpi/collective-invalid-in-place")
+        self.execute(2, "gather", error="mpi/collective-invalid-in-place")
+
+    def test_invalid_order(self):
+        self.program("invalid_order")
+        self.execute(2, error="mpi/collective-mixing/type")
+
+    def test_mixing(self):
+        self.program("mixing")
+        self.execute(2, error="mpi/collective-mixing/blocking-nonblocking")
 
 
 if __name__ == "__main__":

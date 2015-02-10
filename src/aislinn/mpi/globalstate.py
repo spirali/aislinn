@@ -104,7 +104,7 @@ class GlobalState(EqMixin):
         cc_id = context.state.get_cc_id_counter(comm)
         op = self.get_operation_by_cc_id(comm.comm_id, cc_id)
         if op is not None:
-            op.check_compatability(op_class, blocking)
+            op.check_compatability(context, op_class, blocking)
         else:
             op = op_class(self, comm, blocking, cc_id)
             self.collective_operations.append(op)
@@ -138,16 +138,13 @@ class GlobalState(EqMixin):
             for op in self.collective_operations:
                 op.sanity_check()
 
-    def mpi_leak_check(self):
-        result = []
+    def mpi_leak_check(self, generator, node):
+        found = False
+        for state in self.states:
+            found |= state.request_leak_check(generator, node)
+
+        if found:
+            return
 
         for state in self.states:
-            result += state.request_leak_check()
-
-        if result:
-            return result
-
-        for state in self.states:
-            result += state.message_leak_check()
-
-        return result
+            state.message_leak_check(generator, node)

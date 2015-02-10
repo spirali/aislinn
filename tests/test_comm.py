@@ -40,6 +40,10 @@ class CommTests(TestCase):
         self.output(4, "303 404 505\n")
         self.execute(6)
 
+    def test_split_invalid(self):
+        self.program("split-invalid")
+        self.execute(3, error="mpi/invalid-arg/color")
+
     def test_dup(self):
         self.program("dup")
         self.output(0, "0 0 4 0 1\n")
@@ -60,7 +64,7 @@ class CommTests(TestCase):
 
     def test_free2(self):
         self.program("free2")
-        self.execute(2, error="permanentcommfree")
+        self.execute(2, error="mpi/freeing-permanent-comm")
 
     def test_compare(self):
         self.program("compare")

@@ -10,13 +10,13 @@ class SendRecvTests(TestCase):
         self.program("send_and_receive")
         self.execute(2, "1 ssend", stdout="Receive\nSend\n")
         self.execute(2, "1 bsend", stdout="Send\nReceive\n")
-        self.execute(2, "0 bsend", error="deadlock")
+        self.execute(2, "0 bsend", error="mpi/deadlock")
         self.execute(2, "1 rsend", stdout="Send\nReceive\n")
 
         self.output(0, "Send\n")
         self.output(1, "Receive\n")
         self.execute(2, "1 send")
-        self.execute(2, "0 send", error="deadlock")
+        self.execute(2, "0 send", error="mpi/deadlock")
 
         # When Rsend is fully implemented, this should cause an error
         # self.execute(2, "1 rsend-err")
@@ -27,10 +27,10 @@ class SendRecvTests(TestCase):
         self.output(0, "Send\n")
         self.output(1, "Receive\n")
         self.execute(2, "1 send")
-        self.execute(2, "0 send", error="deadlock")
+        self.execute(2, "0 send", error="mpi/deadlock")
         self.execute(2, "1 ssend", stdout="Receive\nSend\n")
         self.execute(2, "1 bsend", stdout="Send\nReceive\n")
-        self.execute(2, "0 bsend", error="deadlock")
+        self.execute(2, "0 bsend", error="mpi/deadlock")
         self.execute(2, "1 rsend")
 
         # When Rsend is fully implemented, this should cause an error
@@ -62,9 +62,9 @@ class SendRecvTests(TestCase):
         self.program("test_recv")
 
         self.execute(2, ("0", "0"))
-        self.execute(2, ("1", "0"), error="exitcode")
+        self.execute(2, ("1", "0"), error="base/exitcode")
         self.check_error("exitcode", pid="0", exitcode="1")
-        self.execute(2, ("0", "2"), error="exitcode")
+        self.execute(2, ("0", "2"), error="base/exitcode")
         self.check_error("exitcode", pid="0", exitcode="2")
 
     def test_match1(self):
@@ -134,7 +134,7 @@ class SendRecvTests(TestCase):
 
     def test_waitsome3(self):
         self.program("waitsome3")
-        self.execute(1, error="invalidwrite")
+        self.execute(1, error="mem/invalid-write")
 
     def test_waitany(self):
         self.program("waitany")
@@ -176,14 +176,14 @@ class SendRecvTests(TestCase):
         self.execute(3, send_protocol="rendezvous")
         self.execute(3, send_protocol="3")
         self.execute(3, send_protocol="1M")
-        self.execute(3, send_protocol="5", error="deadlock")
-        self.execute(3, send_protocol="dynamic", error="deadlock")
-        self.execute(3, send_protocol="full", error="deadlock")
+        self.execute(3, send_protocol="5", error="mpi/deadlock")
+        self.execute(3, send_protocol="dynamic", error="mpi/deadlock")
+        self.execute(3, send_protocol="full", error="mpi/deadlock")
 
     def test_cross_send1(self):
         self.program("cross1")
         self.execute(2, send_protocol="eager")
-        self.execute(2, send_protocol="rendezvous", error="deadlock")
+        self.execute(2, send_protocol="rendezvous", error="mpi/deadlock")
 
     def test_cross_send2(self):
         self.program("cross2")
@@ -221,7 +221,7 @@ class SendRecvTests(TestCase):
         self.execute(2, "20 10", stdout="200 100\n")
         self.execute(2, "MPI_ANY_TAG MPI_ANY_TAG", stdout="100 200\n")
         self.execute(2, "20 MPI_ANY_TAG", stdout="200 100\n")
-        self.execute(2, "10 1", stdout="", error="deadlock")
+        self.execute(2, "10 1", stdout="", error="mpi/deadlock")
 
     def test_getcount(self):
         self.program("getcount")
@@ -232,7 +232,7 @@ class SendRecvTests(TestCase):
         self.program("partialrecv")
         self.execute(2, "2", stdout="2 0\n12\n13\n-1\n-1\n-1\n")
         self.execute(2, "4", stdout="4 0\n12\n13\n15\n21\n-1\n")
-        self.execute(2, "6", error="message-truncated")
+        self.execute(2, "6", error="mpi/message-truncated")
 
 
 if __name__ == "__main__":

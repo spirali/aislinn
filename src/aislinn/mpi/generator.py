@@ -172,13 +172,23 @@ class Generator:
         return True
 
     def memory_leak_check(self):
+        final_nodes = list(self.statespace.all_final_nodes())
         allocations = [ frozenset(node.allocations)
                         if node.allocations else frozenset()
-                        for node in self.statespace.all_final_nodes() ]
+                        for node in final_nodes ]
         all_allocations = frozenset.union(*allocations)
         deterministic = frozenset.intersection(*allocations)
         for a in sorted(all_allocations - deterministic):
-            m = errormsg.NotFreedMemory(a.addr, a.size)
+            for node in final_nodes:
+                if node.allocations and a in node.allocations:
+                    m = errormsg.MemoryLeak(None,
+                                            pid=a.pid,
+                                            node=node,
+                                            address=a.addr,
+                                            size=a.size)
+                    break
+            else:
+                assert 0 # This shoud not happen
             self.add_error_message(m)
 
         self.deterministic_unallocated_memory = 0
@@ -399,13 +409,14 @@ class Generator:
         if not node.arcs:
             if any(state.status != State.StatusFinished
                    for state in gstate.states):
-                message = errormsg.Deadlock()
-                message.node = node
+                context = Context(self, node, None)
+                active_pids = [ state.pid for state in gstate.states
+                                if state.status != State.StatusFinished ]
+                message = errormsg.Deadlock(context,
+                                            active_pids=active_pids)
                 self.add_error_message(message)
             else:
-                for message in gstate.mpi_leak_check():
-                    message.node = node
-                    self.add_error_message(message)
+                gstate.mpi_leak_check(self, node)
                 node.allocations = sum((state.allocations
                                         for state in gstate.states), [])
         gstate.dispose()
@@ -445,6 +456,10 @@ class Generator:
                                                 message.size)
             context.state.add_probed_message(comm_id, source, tag, message)
             context.run_and_make_node()
+
+    def make_context(self, node, state):
+        # This function exists to avoid importing Context in state.py
+        return Context(self, node, state)
 
     def prepare_context(self, node, state):
         context = Context(self, node, state)
@@ -571,26 +586,21 @@ class Generator:
         self.working_queue.append((node, gstate))
 
         if self.debug_state == uid:
-            e = errormsg.ErrorMessage()
-            e.node = node
-            e.name = "captured-state"
-            e.short_description = "Captured state"
-            e.description = "The state {0} was captured " \
-                            "because of option --debug-state".format(uid)
-            e.throw()
+            context = Context(self, node, None)
+            context.add_error_and_throw(
+                    errormsg.StateCaptured(context, uid=uid))
         return node
 
     def create_report(self, args):
         for error_message in self.error_messages:
             if error_message.node:
                 error_message.events = \
-                        self.statespace.events_to_node(error_message.node,
-                                                       error_message.last_arc)
+                        self.statespace.events_to_node(error_message.node, None)
                 if self.stdout_mode == "capture":
                     error_message.stdout = \
                             [ self.statespace.stream_to_node(
                                 error_message.node,
-                                error_message.last_arc,
+                                None,
                                 STREAM_STDOUT,
                                 pid)
                               for pid in xrange(self.process_count) ]
@@ -598,7 +608,7 @@ class Generator:
                     error_message.stderr = \
                             [ self.statespace.stream_to_node(
                                 error_message.node,
-                                error_message.last_arc,
+                                None,
                                 STREAM_STDERR,
                                 pid)
                               for pid in xrange(self.process_count) ]

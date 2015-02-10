@@ -389,11 +389,7 @@ class State:
             sz = request.count * request.datatype.size
             r = context.controller.is_writable(request.data_ptr, sz)
             if r != "Ok":
-                e = errormsg.CallError()
-                e.name = "invalid-send-buffer"
-                e.short_description = "Invalid send buffer"
-                e.description = "Invalid receive buffer. " \
-                                "Address 0x{0:x} is not accessible.".format(int(r))
+                e = errormsg.InvalidSendBuffer(context, address=int(r))
                 context.add_error_and_throw(e)
             context.controller.lock_memory(request.data_ptr, sz)
 
@@ -401,11 +397,7 @@ class State:
             sz = request.count * request.datatype.size
             r = context.controller.is_writable(request.data_ptr, sz)
             if r != "Ok":
-                e = errormsg.CallError()
-                e.name = "invalid-recv-buffer"
-                e.short_description = "Invalid receive buffer"
-                e.description = "Invalid receive buffer. " \
-                                "Address 0x{0:x} is not accessible.".format(int(r))
+                e = errormsg.InvalidReceiveBuffer(context, address=int(r))
                 context.add_error_and_throw(e)
             context.controller.lock_memory(
                     request.data_ptr,
@@ -754,21 +746,24 @@ class State:
             if request.is_data_addr(addr):
                 return request.stacktrace
 
-    def request_leak_check(self):
-        result = []
+    def request_leak_check(self, generator, node):
+        found = False
         for request in self.requests:
-            message = errormsg.NotFreedRequest(request)
-            message.pid = self.pid
-            result.append(message)
-        return result
+            context = generator.make_context(node, self)
+            e = errormsg.NotFreedRequest(context,
+                                         request_name=request.name)
+            context.add_error_message(e)
+            found = True
+        return found
 
-    def message_leak_check(self):
-        result = []
+    def message_leak_check(self, generator, node):
         for message in self.messages:
-            message = errormsg.NotReceivedMessage(message)
-            message.pid = self.pid
-            result.append(message)
-        return result
+            context = generator.make_context(node, self)
+            e = errormsg.NotReceivedMessage(context,
+                                            source=message.source,
+                                            target=message.target,
+                                            tag=message.tag)
+            context.add_error_message(e)
 
     def _new_request_id(self):
         i = 10

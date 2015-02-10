@@ -98,3 +98,10 @@ MPI_IN_PLACE = 0xffffffffffffffff # (void*) -1
 # ---- Others  -------------------------------------
 
 MPI_MAX_PROCESSOR_NAME = 128
+
+def get_const_name(value):
+    for name, v in globals().items():
+        if v == value and name.startswith("MPI_") and abs(v) > 0x0FFF:
+            # Ignore small numberic constants because it
+            # causes false matching to often
+            return name

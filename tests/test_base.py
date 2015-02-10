@@ -9,8 +9,8 @@ class BaseTests(TestCase):
     def test_helloworld(self):
         self.program("helloworld")
 
-        self.execute(1, error="nompicall", check_output=False)
-        self.execute(3, error="nompicall", check_output=False)
+        self.execute(1, error="mpi/no-mpi-call", check_output=False)
+        self.execute(3, error="mpi/no-mpi-call", check_output=False)
 
     def test_helloworld2(self):
         self.program("helloworld2")
@@ -21,35 +21,28 @@ class BaseTests(TestCase):
         self.execute(3, check_output=False)
         self.assertEquals(self.report.number_of_nodes, 5)
 
-    def test_exitcode(self):
+    def test_(self):
         self.program("exitcode")
-        self.execute(1, error="exitcode")
+        self.execute(1, error="base/exitcode")
         self.check_error("exitcode", pid="0", exitcode="21")
         self.assertEquals(self.report.number_of_nodes, 3)
 
-    """
-    def test_arg_p(self):
-        self.program("exitcode")
-        errmsg = "==AN== ERROR: Invalid number of processes (parameter -p)\n"
-        self.execute(-1, exitcode=1, stderr=errmsg)
-        self.execute(0, exitcode=1, stderr=errmsg)
-    """
-
     def test_invalid_args(self):
         self.program("args")
-        args = [ "isend_rank_1",
-                 "isend_rank_2",
-                 "isend_rank_3",
-                 "irecv_rank",
-                 "irecv_tag",
-                 "send_tag",
-                 "send_tag_2",
-                 "isend_count",
-                 "irecv_count",
-                 "irecv_datatype" ]
+        args = [ ("isend_rank_1", "mpi/invalid-arg/rank"),
+                 ("isend_rank_2", "mpi/invalid-arg/rank"),
+                 ("isend_rank_3", "mpi/invalid-arg/rank"),
+                 ("irecv_rank", "mpi/invalid-arg/rank"),
+                 ("irecv_tag", "mpi/invalid-arg/tag"),
+                 ("send_tag", "mpi/invalid-arg/tag"),
+                 ("send_tag_2", "mpi/invalid-arg/tag"),
+                 ("isend_count", "mpi/invalid-arg/count"),
+                 ("irecv_count", "mpi/invalid-arg/count"),
+                 ("irecv_datatype", "mpi/invalid-arg/datatype")
+                ]
 
-        for arg in args:
-            self.execute(2, arg, error="invalidarg")
+        for arg, error in args:
+            self.execute(2, arg, error=error)
             self.check_error("invalidarg", pid="0")
 
     def test_globals(self):
@@ -90,6 +83,11 @@ class BaseTests(TestCase):
         self.program("struct")
         self.execute(2, stdout=output)
 
+    def test_struct_invalid(self):
+        self.program("struct_invalid")
+        self.execute(1, "count", error="mpi/invalid-arg/count")
+        self.execute(1, "sizes", error="mpi/invalid-arg/length")
+
     def test_hvector(self):
         output = "0 1 2 3 4 5 10 11 12 13 14 15 16 17 18 19 20 21 26 27 28 29 "\
                  "30 31 32 33 34 35 36 37 42 43 44 45 46 47 48 49 50 51 52 53 "\
@@ -118,19 +116,19 @@ class BaseTests(TestCase):
         output = "0 1 2 3 4 5 6 7 8 0 0 0 12 13 0 0 16 17 0 0 0 0 0 0 0 0 0 0 0 0 \n"
         self.program("indexed_intersect")
         self.execute(2, "4", stdout=output)
-        self.execute(2, "0", error="invalid-recv-buffer")
+        self.execute(2, "0", error="mpi/invalid-recv-buffer")
 
     def test_uncommited(self):
         self.program("uncommited")
-        self.execute(2, error="uncommited")
+        self.execute(2, error="mpi/invalid-arg/uncommited-datatype")
 
     def test_typefree1(self):
         self.program("typefree1")
-        self.execute(2, error="invalidarg")
+        self.execute(2, error="mpi/invalid-arg/datatype")
 
     def test_typefree2(self):
         self.program("typefree2")
-        self.execute(2, error="remove-buildin-type")
+        self.execute(2, error="mpi/removing-buildin-datatype")
 
     def test_group(self):
         self.program("group")
@@ -143,11 +141,15 @@ class BaseTests(TestCase):
     def test_group_excl(self):
         self.program("group_excl")
         self.execute(4)
-        self.execute(2, error="invalidarg")
+        self.execute(2, error="mpi/invalid-arg/rank")
 
     def test_group_excl2(self):
         self.program("group_excl2")
-        self.execute(3, error="invalidarg")
+        self.execute(3, error="mpi/invalid-arg/non-unique-values")
+
+    def test_group_free_invalid(self):
+        self.program("group_free_invalid")
+        self.execute(1, error="mpi/invalid-arg/group")
 
     def test_finalized(self):
         self.program("finalized")
@@ -169,7 +171,12 @@ class BaseTests(TestCase):
     def test_keyval3(self):
         self.program("keyval3")
         self.execute(1, stdout="DELETE 1\n")
-        self.execute(1, "error", error="invalidarg")
+        self.execute(1, "error", error="mpi/invalid-arg/communicator")
+        self.execute(1, "free_error", error="mpi/invalid-arg/keyval")
+        self.execute(1, "delete_attr_error",
+                error="mpi/invalid-arg/attribute")
+        self.execute(1, "exit_error", error="base/exit-in-callback")
+        self.execute(1, "comm_error", error="mpi/communication-in-callback")
 
     def test_print(self):
         self.program("print")
@@ -199,16 +206,36 @@ class BaseTests(TestCase):
         self.output(1, "Processor-1\n")
         self.execute(2, "1000")
         # Test buffer smaller than MPI_MAX_PROCESSOR_NAME
-        self.execute(2, "100", error="invalid-name-buffer")
+        self.execute(2, "100", error="mpi/invalid-processor-name-buffer")
 
     def test_request_leak(self):
         self.program("request_leak")
-        self.execute(1, "send", error="not-freed-request")
-        self.execute(1, "recv", error="not-freed-request")
+        self.execute(1, "send", error="mpi/pending-request")
+        self.execute(1, "recv", error="mpi/pending-request")
+
+    def test_request_invalid(self):
+        self.program("request_invalid")
+        self.execute(1, "wait", error="mpi/invalid-arg/request")
+        self.execute(1, "waitall", error="mpi/invalid-arg/request")
+        self.check_error(
+                "mpi/invalid-arg/request", pid="0", index="1", value="123")
+        self.execute(1, "start",
+             error="mpi/invalid-arg/not-persistent-request")
+        self.execute(1, "start-active",
+             error="mpi/invalid-arg/already-active-persistent-request")
 
     def test_message_leak(self):
         self.program("message_leak")
-        self.execute(2, error="not-received-message")
+        self.execute(2, error="mpi/pending-message")
+
+    def test_double_finalize(self):
+        self.program("double_finalize")
+        self.execute(1, error="mpi/double-finalize")
+
+    def test_abort(self):
+        self.program("abort")
+        self.execute(1, "before", error="mpi/init-missing")
+        self.execute(1, "after", error="mpi/abort")
 
 
 if __name__ == "__main__":

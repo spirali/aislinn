@@ -22,13 +22,6 @@ import logging
 import errormsg
 import check
 import consts
-import comm
-
-class InvalidInPlace(errormsg.CallError):
-
-    name = "invalid-in-place"
-    short_description = "Invalid use of MPI_IN_PLACE"
-    description = "Invalid use of MPI_IN_PLACE"
 
 
 class CollectiveOperation:
@@ -45,24 +38,14 @@ class CollectiveOperation:
         self.data = None
         logging.debug("New collective operation %s", self)
 
-    def check_compatability(self, op_class, blocking):
+    def check_compatability(self, context, op_class, blocking):
         if self.name != op_class.name:
-            e = errormsg.CallError()
-            e.name = "collectivemismatch"
-            e.short_description = "Collective mismatch"
-            e.description = "Invalid order of collective operations in " \
-                            "communicator {0}. Operation MPI_{1} expected." \
-                                .format(comm.comm_id_name(self.comm_id),
-                                        self.mpi_name)
-            e.throw()
+            e = errormsg.CollectiveMixing(context)
+            context.add_error_and_throw(e)
 
         if self.blocking != blocking:
-            e = errormsg.CallError()
-            e.name = "blocknonblockcc"
-            e.short_description = "Blocking collective mixed with nonblocking"
-            e.description = "Blocking collective operation mixed " \
-                            "with nonblocking"
-            e.throw()
+            e = errormsg.CollectiveMixingBlockingNonBlocking(context)
+            context.add_error_and_throw(e)
 
     def copy(self):
         op = copy.copy(self)
@@ -99,11 +82,9 @@ class CollectiveOperation:
             self.root = root
             self.root_pid = comm.group.rank_to_pid(root)
         elif self.root != root:
-            e = errormsg.CallError()
-            e.name = "rootmismatch"
-            e.short_description = "Root mismatch"
-            e.description = "Root mismatch"
-            context.add_error_and_throw(e)
+            context.add_error_and_throw(
+                    errormsg.RootMismatch(
+                        context, value1=self.root, value2=root))
 
     def compute_hash(self, hashthread):
         hashthread.update("{0} {1} {2} {3} {4} {5}".
@@ -301,7 +282,7 @@ class Gather(OperationWithBuffers):
 
         if sendbuf == consts.MPI_IN_PLACE:
             if rank != root:
-                InvalidInPlace().throw()
+                context.add_error_and_throw(errormsg.InvalidInPlace(context))
         else:
             self.buffers[rank] = context.generator.new_buffer_and_pack(
                     context.controller, sendtype, sendcount, sendbuf)
@@ -540,7 +521,7 @@ class Scatter(OperationWithSingleBuffer):
                     sendcount * self.process_count,
                     sendbuf)
         elif recvbuf == consts.MPI_IN_PLACE:
-            InvalidInPlace().throw()
+            context.add_error_and_throw(errormsg.InvalidInPlace(context))
 
     def can_be_completed(self, state):
         return self.buffer is not None
@@ -785,11 +766,9 @@ class ReduceScatter(OperationWithBuffers):
         if self.counts is None:
             self.counts = counts
         elif self.counts != counts:
-            e = errormsg.CallError()
-            e.name = "counts-mismatch"
-            e.short_description = "Counts mismatch"
-            e.description = "{0} != {1}".format(repr(self.counts), repr(counts))
-            context.add_error_and_throw(e)
+            context.add_error_and_throw(
+                    errormsg.CountMismatch(
+                        context, value1=self.counts, value2=counts))
 
         total_count = sum(counts)
 
@@ -877,7 +856,8 @@ class CommSplit(CollectiveOperation):
                    comm,
                    args):
         color, key, newcomm_ptr = args
-        # In comm_id is first argument, but is was removed from args
+        # In comm_id is the first argument, but is was removed from args
+        # therefore real position of color is 2
         check.check_color(context, color, 2)
         rank = context.state.get_rank(comm)
 

@@ -57,16 +57,18 @@ class Context:
         self.controller = None
         self.node = node
         self.state = state
-        if state:
+        if state is not None:
             self.gstate = state.gstate
         else:
             self.gstate = None
 
+        self.fn_name = None
         self.events = []
         self.stream_chunks = []
 
-    def make_node(self, save=True):
-        if self.state.status != self.state.StatusFinished and save:
+    def make_node(self):
+        if (self.state and
+                self.state.status != self.state.StatusFinished):
             self.state.vg_state = self.save_state(True)
         node = self.generator.add_node(self.node, self.gstate)
         arc = Arc(node, self.events, self.get_compact_stream_chunks())
@@ -76,6 +78,14 @@ class Context:
         self.stream_chunks = None
         self.state = None
         self.gstate = None
+
+    def make_fail_node(self):
+        if not self.events or not self.stream_chunks:
+            # There is no visible change, so no new node is made
+            return
+        node = self.generator.add_node(self.node, self.gstate, do_hash=False)
+        arc = Arc(node, self.events, self.get_compact_stream_chunks())
+        self.node.add_arc(arc)
 
     def add_event(self, event):
         self.events.append(event)
@@ -145,17 +155,12 @@ class Context:
         return vg_state
 
     def handle_call(self, name, args, callback=False):
+        self.fn_name = name
         call = mpicalls.calls_non_communicating.get(name)
         if call is None:
             call = mpicalls.calls_communicating.get(name)
             if callback:
-                e = errormsg.CallError()
-                e.name = "comm-not-allowed"
-                e.short_description = "Communication function " \
-                                      "called in callback"
-                e.description = "Communication function '{0}' " \
-                                "called in callback".format(name)
-                e.throw()
+                self.add_error_and_throw(errormsg.CommunicationInCallback(self))
         if call is not None:
             logging.debug("Call %s %s", name, args)
             return call.run(self, args)
@@ -176,14 +181,10 @@ class Context:
                 # count cannot be None because
                 # datatype check should be already performed
                 if count > request.count:
-                    e = errormsg.ErrorMessage()
-                    e.name = "message-truncated"
-                    e.short_description = "Message truncated"
-                    e.description = "Message is bigger than receive buffer"
-                    e.pid = self.state.pid
+                    e = errormsg.MessageTruncated(self,
+                                                  message_size=count,
+                                                  buffer_size=request.count)
                     self.add_error_and_throw(e)
-                    # TODO: In fact it is not fatal error, it should be handle
-                    # in a way that we can continue
                 request.datatype.unpack(self.controller,
                                         message.vg_buffer,
                                         count,
@@ -231,7 +232,7 @@ class Context:
                 self.state.set_finished()
                 if exitcode != 0:
                     self.add_error_message(
-                            errormsg.NonzeroExitCode(self, exitcode))
+                            errormsg.NonzeroExitCode(self, exitcode=exitcode))
                 self.state.allocations = \
                     [ Allocation(self.state.pid, addr, size)
                       for addr, size in self.controller.get_allocations() ]
@@ -244,12 +245,21 @@ class Context:
     def make_error_message_from_report(self, parts):
         assert parts[0] == "REPORT"
         name = parts[1]
-        for error in errormsg.runtime_errors:
-            if error.name == name:
-                e = error(self.state, *parts[2:])
-                e.stacktrace = self.controller.get_stacktrace()
-                return e
-        raise Exception("Unknown runtime error: " + name)
+        if name == "heaperror":
+            assert len(parts) == 2
+            return errormsg.HeapExhausted(self)
+        elif name == "invalidwrite":
+            assert len(parts) == 4
+            addr = int(parts[2], 16)
+            size = int(parts[3])
+            return errormsg.InvalidWrite(self, address=addr, size=size)
+        elif name == "invalidwrite-locked":
+            assert len(parts) == 4
+            addr = int(parts[2], 16)
+            size = int(parts[3])
+            return errormsg.InvalidWriteLocked(self, address=addr, size=size)
+        else:
+            raise Exception("Unknown runtime error: " + name)
 
     def run_and_make_node(self):
         self.run()
@@ -269,13 +279,10 @@ class Context:
                 exitcode = convert_type(result[1], "int")
                 if exitcode != 0:
                     self.add_error_message(
-                            errormsg.NonzeroExitCode(self, exitcode))
+                            errormsg.NonzeroExitCode(self, exitcode=exitcode))
                     return True
                 else:
-                    e = errormsg.ErrorMessage()
-                    e.name = "nompicall"
-                    e.short_description = "No MPI routine"
-                    e.description = "Program terminated without calling MPI_Init"
+                    e = errormsg.NoMpiCall(self)
                     self.add_error_message(e)
                 return True
             elif result[0] == "REPORT":
@@ -295,10 +302,7 @@ class Context:
                     result = controller.run_process()
                     continue
                 elif result[1] != "MPI_Init":
-                    e = errormsg.ErrorMessage()
-                    e.name = "nompiinit"
-                    e.short_description = "MPI is not initialized"
-                    e.description = "{0} was called without MPI_Init".format(result[1])
+                    e = errormsg.NoMpiInit(self)
                     self.add_error_message(e)
                     return True
                 break
@@ -359,10 +363,8 @@ class Context:
         while result != "FUNCTION_FINISH":
             result = result.split()
             if result[0] == "EXIT":
-                e = errormsg.CallError()
-                e.name = "exit-in-callback"
-                e.message = "Program terminated in callback"
-                e.throw()
+                e = errormsg.ExitInCallback(self)
+                self.add_error_and_throw(e)
             assert result[0] == "CALL"
             assert not self.handle_call(result[1], result[2:], True)
             result = self.controller.run_process()

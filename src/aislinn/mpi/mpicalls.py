@@ -27,7 +27,7 @@ import ops
 import misc
 import atypes as at
 from request import SendRequest
-from comm import comm_id_name, comm_compare, group_compare, Group
+from comm import comm_compare, group_compare, Group
 from keyval import Keyval
 
 
@@ -39,12 +39,8 @@ def MPI_Initialized(context, args):
 
 def MPI_Finalize(context, args):
     if context.state.finalized:
-        e = errormsg.CallError()
-        e.name = "doublefinalize"
-        e.short_description = "MPI_Finalize was called twice"
-        e.description = "MPI_Finalized was called twice"
+        e = errormsg.DoubleFinalize(context)
         context.add_error_and_throw(e)
-
     context.state.finalized = True
     return False
 
@@ -58,12 +54,8 @@ def MPI_Finalized(context, args):
 
 def MPI_Abort(context, args):
     comm, exitcode = args
-
-    e = errormsg.CallError()
-    e.name = "mpi-abort"
-    e.short_description = "MPI_Abort called"
-    e.description = "MPI_Abort called with exitcode={0}".format(exitcode)
-    context.add_error_and_throw(e)
+    context.add_error_and_throw(
+        errormsg.AbortCalled(context, exitcode=exitcode))
 
 def MPI_Comm_rank(context, args):
     comm, ptr = args
@@ -201,15 +193,15 @@ def MPI_Rsend_init(context, args):
 
 def MPI_Start(context, args):
     request_id = context.controller.read_int(args[0])
-    request = check.check_persistent_request(context, request_id, True)
+    request = check.check_persistent_request(context, request_id, True, 1)
     context.state.start_persistent_request(context, request)
     return False
 
 def MPI_Startall(context, args):
     count, requests_ptr = args
     request_ids = context.controller.read_ints(requests_ptr, count)
-    requests = [ check.check_persistent_request(context, request_id, True)
-                 for request_id in request_ids ]
+    requests = [ check.check_persistent_request(context, request_id, True, 2, i)
+                 for i, request_id in enumerate(request_ids) ]
     for request in requests:
         context.state.start_persistent_request(context, request)
     return False
@@ -217,7 +209,7 @@ def MPI_Startall(context, args):
 def MPI_Request_free(context, args):
     request_ptr = args[0]
     request_id = context.controller.read_int(request_ptr)
-    request = check.check_persistent_request(context, request_id, False)
+    request = check.check_persistent_request(context, request_id, False, 1)
     context.state.remove_persistent_request(request)
     context.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL);
     return False
@@ -260,7 +252,7 @@ def MPI_Wait(context, args):
     request_ptr, status_ptr = args
 
     request_id = context.controller.read_int(request_ptr)
-    check.check_request_id(context, request_id)
+    check.check_request_id(context, request_id, 1)
     if context.state.get_persistent_request(request_id) is None:
         context.controller.write_int(request_ptr, consts.MPI_REQUEST_NULL)
     context.state.set_wait([ request_id ], None, status_ptr)
@@ -269,7 +261,7 @@ def MPI_Wait(context, args):
 def MPI_Test(context, args):
     request_ptr, flag_ptr, status_ptr = args
     request_id = context.controller.read_int(request_ptr)
-    check.check_request_id(context, request_id)
+    check.check_request_id(context, request_id, 1)
     context.state.set_test([ request_id ], flag_ptr, request_ptr, status_ptr)
     return True
 
@@ -278,7 +270,7 @@ def MPI_Waitall(context, args):
     if count == 0:
         return False
     request_ids = context.controller.read_ints(requests_ptr, count)
-    check.check_request_ids(context, request_ids)
+    check.check_request_ids(context, request_ids, 2)
     values = []
     for request_id in request_ids:
         if context.state.get_persistent_request(request_id) is None:
@@ -297,7 +289,7 @@ def MPI_Waitany(context, args):
         if request_id == consts.MPI_REQUEST_NULL:
             continue
         if context.state.get_persistent_request(request_id) is None:
-            check.check_request_id(context, request_id)
+            check.check_request_id(context, request_id, 2, i)
         elif not context.state.get_request(request_id):
             request_ids[i] = consts.MPI_REQUEST_NULL
     if all(id == consts.MPI_REQUEST_NULL for id in request_ids):
@@ -315,7 +307,7 @@ def MPI_Waitsome(context, args):
         if request_id == consts.MPI_REQUEST_NULL:
             continue
         if context.state.get_persistent_request(request_id) is None:
-            check.check_request_id(context, request_id)
+            check.check_request_id(context, request_id, 2, i)
         elif not context.state.get_request(request_id):
             request_ids[i] = consts.MPI_REQUEST_NULL
     if all(id == consts.MPI_REQUEST_NULL for id in request_ids):
@@ -331,7 +323,7 @@ def MPI_Testall(context, args):
     if count == 0:
         return False
     request_ids = context.controller.read_ints(requests_ptr, count)
-    check.check_request_ids(context, request_ids)
+    check.check_request_ids(context, request_ids, 2)
     context.state.set_test(request_ids, flag_ptr, requests_ptr, status_ptr)
     return True
 
@@ -499,11 +491,7 @@ def MPI_Comm_free(context, args):
 
     comm_id = context.controller.read_int(comm_ptr)
     if comm_id == consts.MPI_COMM_WORLD or comm_id == consts.MPI_COMM_SELF:
-        e = errormsg.CallError()
-        e.name = "permanentcommfree"
-        name = comm_id_name(comm_id)
-        e.short_description = "{0} cannot be freed".format(name)
-        e.description = "Communicator {0} cannot be freed".format(name)
+        e = errormsg.FreeingPermanentComm(context, comm_id=comm_id)
         context.add_error_and_throw(e)
     comm = check.check_comm(context, comm_id, 1)
     context.state.remove_comm(context, comm)
@@ -525,14 +513,10 @@ def MPI_Get_processor_name(context, args):
 
     if "Ok" != context.controller.is_writable(
             name_ptr, consts.MPI_MAX_PROCESSOR_NAME):
-        e = errormsg.CallError()
-        e.name = "invalid-name-buffer"
-        e.short_description = "Invalid buffer for processor name"
-        e.description = "Invalid buffer for processor name"
-        context.add_error_and_throw(e)
+        context.add_error_and_throw(
+                errormsg.InvalidBufferForProcessorName(context))
 
     name = "Processor-{0}".format(context.state.pid)
-
     assert len(name) < consts.MPI_MAX_PROCESSOR_NAME - 1
 
     # Memory do not have to be checked again
@@ -614,11 +598,7 @@ def MPI_Type_free(context, args):
     datatype = check.check_datatype(context, type_id, 1, True)
 
     if datatype.is_buildin():
-        e = errormsg.CallError()
-        e.name = "remove-buildin-type"
-        e.short_description = "Freeing predefined type"
-        e.description = "Predefined datatype '{0}' cannot be freed" \
-                .format(datatype.name)
+        e = errormsg.RemovingBuildinDatatype(context, datatype=datatype)
         context.add_error_and_throw(e)
 
     context.state.remove_datatype(datatype)
@@ -698,10 +678,7 @@ def MPI_Comm_set_attr(context, args):
 def MPI_Comm_delete_attr(context, args):
     comm, keyval = args
     if context.state.get_attr(comm, keyval) is None:
-        e = errormsg.CallError()
-        e.name = "value-not-found"
-        e.short_description = "Attribute not found"
-        e.description = "Attribute not found in the communicator"
+        e = errormsg.AttributeNotFound(context)
         context.add_error_and_throw(e)
     context.state.delete_attr(context, comm, keyval)
     return False
@@ -783,11 +760,7 @@ def call_send(context, args,
 
     r = datatype.check(context.controller, buf_ptr, count, read=True)
     if r is not None:
-        e = errormsg.CallError()
-        e.name = "invalid-send-buffer"
-        e.short_description = "Invalid send buffer"
-        e.description = "Invalid receive buffer. " \
-                        "Address 0x{0:x} is not accessible.".format(int(r))
+        e = errormsg.InvalidSendBuffer(context, address=int(r))
         context.add_error_and_throw(e)
 
     send_type = get_send_type(
@@ -823,11 +796,7 @@ def call_recv(context, args, blocking, name, persistent=False, return_request=Fa
 
     r = datatype.check(context.controller, buf_ptr, count, write=True)
     if r is not None:
-        e = errormsg.CallError()
-        e.name = "invalid-recv-buffer"
-        e.short_description = "Invalid receive buffer"
-        e.description = "Invalid receive buffer. " \
-                        "Address 0x{0:x} is not accessible.".format(int(r))
+        e = errormsg.InvalidReceiveBuffer(context, address=int(r))
         context.add_error_and_throw(e)
 
     if blocking:
@@ -880,7 +849,7 @@ class Call:
     def run(self, context, args):
         assert len(args) == len(self.args)
         r = self.fn(context,
-                    [ self.args[i].make_conversion(args[i], i, context)
+                    [ self.args[i].make_conversion(args[i], i + 1, context)
                       for i in xrange(len(args)) ])
         e = event.CallEvent(self.event_name,
                             context.state.pid,

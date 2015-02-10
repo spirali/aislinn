@@ -242,8 +242,15 @@ class Report:
         info = self.entries_to_xml("analysis-info", self.analysis_info)
         root.append(info)
         for error in self.error_messages:
-            e = self.entries_to_xml("error", error.get_entries())
+            e = xml.Element("error")
+            e.set("key", error.key)
             e.set("name", error.name)
+            e.set("description", error.description)
+            for name, value in error.args.items():
+                if value is not None:
+                    e.set(name, str(value))
+            if error.pid is not None:
+                e.set("pid", str(error.pid))
             root.append(e)
             ev = xml.Element("events")
             root.append(ev)
@@ -357,8 +364,11 @@ class Report:
             div.child("p", "{0} error(s) found" \
                     .format(len(self.error_messages)))
             for error in self.error_messages:
-                div.child("h3", "Error: " + error.short_description)
-                div.text(error.description)
+                h3 = div.child("h3", "Error: " + error.name)
+                key = h3.child("span")
+                key.set("class", "key")
+                key.text("(" + error.key + ")")
+                div.child("p", error.description)
                 if error.pid is not None:
                     div.child("h4", "Rank")
                     div.text("Error occured on rank {0} in MPI_COMM_WORLD".format(error.pid))
@@ -597,6 +607,11 @@ td {
 
 .Collective {
     background-color: #FF5555;
+}
+
+.key {
+    color: gray;
+    font-size: smaller;
 }
 
 """

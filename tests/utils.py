@@ -42,16 +42,16 @@ class TestCase(unittest.TestCase):
         filename = os.path.join(AISLINN_BUILD, "report.xml")
         return Report(filename)
 
-    def check_error(self, name, **args):
+    def check_error(self, error_key, **args):
         for error in self.report.errors:
-            if error.name == name:
+            if error.key == error_key:
                 for key, value in args.items():
-                    e = error.element.find(key)
-                    if e is None:
+                    a = error.element.get(key)
+                    if a is None:
                         raise Exception(
                                 "Cannot find attribute '{0}' for error '{1}'" \
-                                        .format(key, name))
-                    self.assertEquals(e.text, value)
+                                        .format(key, error_key))
+                    self.assertEquals(a, value)
 
     def program(self, test_name, files=None, **kw):
         if files is None:
@@ -135,7 +135,7 @@ class TestCase(unittest.TestCase):
         self.report = report
 
         # Check errors
-        found_errors = [ e.name for e in report.errors ]
+        found_errors = [ e.key for e in report.errors ]
         if error is None and found_errors:
             raise Exception("No errors expected, found: " + repr(found_errors))
         if isinstance(error, str):
@@ -161,7 +161,7 @@ class TestCase(unittest.TestCase):
 
         if REPORT_GALLERY and error:
             filename = "{0.category}-{0.test_name}-{0.counter}-{1}.html" \
-                    .format(self, "_".join(error))
+                    .format(self, "_".join(error).replace("/", "."))
             os.rename(os.path.join(AISLINN_BUILD, "report.html"),
                       os.path.join(AISLINN_REPORT_GALLERY, filename))
 
@@ -296,6 +296,10 @@ class Error(object):
 
     def __init__(self, element):
         self.element = element
+
+    @property
+    def key(self):
+        return self.element.get("key")
 
     @property
     def name(self):
