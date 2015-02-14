@@ -17,6 +17,10 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+
+VERSION_STRING = "0.2.0"
+
+
 from mpi.generator import Generator
 from base.stream import STREAM_STDOUT, STREAM_STDERR
 import base.utils as utils
@@ -243,6 +247,7 @@ def write_outputs(generator, stream_name, limit, file_prefix):
 
 def main():
     args, valgrind_args = parse_args()
+    logging.info("Aislinn v%s", VERSION_STRING)
 
     run_args = [ args.program ] + args.args
     generator = Generator(run_args,
@@ -258,7 +263,7 @@ def main():
     logging.debug("Run args: %s", run_args)
     logging.debug("Valgrind args: %s", valgrind_args)
 
-    logging.info("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
+    logging.debug("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
 
     if args.profile:
         import cProfile
