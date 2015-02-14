@@ -267,6 +267,15 @@ def main():
         pr.enable()
     if not generator.run(args.p):
         sys.exit(1)
+
+    if generator.error_messages:
+        for e in generator.error_messages:
+            logging.info("Found error '%s'", e.name)
+        logging.info("%s error(s) found", len(generator.error_messages))
+    else:
+        logging.info("No errors found")
+
+
     if args.profile:
         pr.disable()
         with open("aislinn.stats", "w") as f:
@@ -292,9 +301,5 @@ def main():
             write_outputs(generator, STREAM_STDERR, args.stderr_write, "stderr")
         generator.create_report(args).write_html("report.html")
         logging.info("Report written into 'report.html'")
-    if generator.error_messages:
-        logging.info("%s error(s) found", len(generator.error_messages))
-    else:
-        logging.info("No errors found")
 
 main()
