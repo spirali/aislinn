@@ -22,7 +22,6 @@ import base.resource
 import socket
 import subprocess
 import paths
-import time
 import logging
 
 class UnexpectedOutput(Exception):
@@ -63,21 +62,29 @@ class Controller:
         self.args = tuple(args)
         self.cwd = cwd
         self.valgrind_args = ()
+        self.server_socket = None
 
     def start(self, capture_syscalls=()):
         assert self.process is None # Nothing is running
         assert self.conn is None
 
-        s = self._start_server()
-        port = s.getsockname()[1]
+        self.server_socket = self._start_server()
+        port = self.server_socket.getsockname()[1]
         self._start_valgrind(port, capture_syscalls)
 
-        # Give valgrind time to initialize, we definitely need a better system
-        time.sleep(0.1)
-        if self.process.poll():
-            return None
+    def start_and_connect(self, *args, **kw):
+        self.start(*args, **kw)
+        return self.connect()
 
-        self.conn, addr = s.accept()
+    def connect(self):
+        self.server_socket.settimeout(0.3)
+        try:
+            self.conn, addr = self.server_socket.accept()
+        except socket.timeout:
+            logging.error("Aislinn client was not started")
+            return None
+        self.server_socket.close()
+        self.server_socket = None
         return self.receive_line()
 
     def kill(self):

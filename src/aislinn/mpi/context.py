@@ -251,7 +251,8 @@ class Context:
         controller = self.generator._controller
         controller.context = self
         self.controller = controller
-        result = controller.start(capture_syscalls=["write"])
+        controller.start(capture_syscalls=["write"])
+        result = controller.connect()
         if result is None:
             return None
 

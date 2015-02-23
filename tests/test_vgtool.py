@@ -12,7 +12,7 @@ class VgToolTests(TestCase):
         self.program("simple")
         c = self.controller()
         #c.valgrind_args = ("--verbose=1",)
-        self.assertEquals(c.start(), "CALL Hello 1")
+        self.assertEquals(c.start_and_connect(), "CALL Hello 1")
         h = c.hash_state()
         s = c.save_state()
         h2 = c.hash_state()
@@ -54,7 +54,7 @@ class VgToolTests(TestCase):
     def test_local(self):
         self.program("local")
         c = self.controller(verbose=False)
-        call, name, arg = c.start().split()
+        call, name, arg = c.start_and_connect().split()
         h1 = c.hash_state()
         c.write_int(arg, 211);
         h2 = c.hash_state()
@@ -67,7 +67,7 @@ class VgToolTests(TestCase):
     def test_global(self):
         self.program("global")
         c = self.controller()
-        call, name, arg = c.start().split()
+        call, name, arg = c.start_and_connect().split()
         h1 = c.hash_state()
         c.write_int(arg, 211);
         h2 = c.hash_state()
@@ -80,7 +80,7 @@ class VgToolTests(TestCase):
     def test_restore_after_quit(self):
         self.program("simple")
         c = self.controller()
-        self.assertEquals(c.start(), "CALL Hello 1")
+        self.assertEquals(c.start_and_connect(), "CALL Hello 1")
         s = c.save_state()
         h1 = c.hash_state()
         self.assertEquals(c.run_process(), "CALL Hello 2")
@@ -107,7 +107,7 @@ class VgToolTests(TestCase):
     def test_function_call(self):
         self.program("function")
         c = self.controller()
-        call, name, fn_a, fn_b = c.start().split()
+        call, name, fn_a, fn_b = c.start_and_connect().split()
         self.assertEquals(call, "CALL")
         self.assertEquals(name, "INIT")
         s = c.save_state()
@@ -128,7 +128,7 @@ class VgToolTests(TestCase):
         self.program("syscall")
         c = self.controller()
         c.stdout_arg = open(os.devnull, "rb")
-        c.start()
+        c.start_and_connect()
         s = c.save_state()
 
         self.assertEquals(c.run_process(), "CALL Second")
@@ -156,7 +156,7 @@ class VgToolTests(TestCase):
         self.program("syscall")
         c = self.controller()
         c.stdout_arg = subprocess.PIPE
-        c.start()
+        c.start_and_connect()
         c.set_capture_syscall("write", True)
         c.run_process()
         c.run_drop_syscall()
@@ -169,7 +169,7 @@ class VgToolTests(TestCase):
         self.program("access")
 
         c = self.controller(("10", "9"))
-        ptr = self.get_call_1(c.start(), "init")
+        ptr = self.get_call_1(c.start_and_connect(), "init")
         self.assertEquals("Ok", c.is_writable(ptr, 10 * INT_SIZE))
         self.assertEquals(ptr + 10 * INT_SIZE, int(c.is_writable(ptr, 11 * INT_SIZE)))
         self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
@@ -177,11 +177,11 @@ class VgToolTests(TestCase):
         self.assertEquals("EXIT 0", c.run_process())
 
         c = self.controller(("9", "10"))
-        c.start()
+        c.start_and_connect()
         self.assertTrue(c.run_process().startswith("REPORT invalidwrite "))
 
         c = self.controller(("10", "9"))
-        ptr = self.get_call_1(c.start(), "init")
+        ptr = self.get_call_1(c.start_and_connect(), "init")
         p2 = ptr + 6 * INT_SIZE
         c.lock_memory(p2, 4 * INT_SIZE)
         self.assertEquals("Ok", c.is_writable(ptr, INT_SIZE))
@@ -194,7 +194,7 @@ class VgToolTests(TestCase):
         self.assertEquals("EXIT 0", c.run_process())
 
         c = self.controller(("10", "9"))
-        ptr = self.get_call_1(c.start(), "init")
+        ptr = self.get_call_1(c.start_and_connect(), "init")
         c.lock_memory(ptr, 10 * INT_SIZE)
         self.assertEquals(int(ptr), int(c.is_writable(ptr, 11 * INT_SIZE)))
         self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
@@ -203,7 +203,7 @@ class VgToolTests(TestCase):
 
         s = 1000000 * INT_SIZE # 1M integers
         c = self.controller((str(s), "9"))
-        ptr = self.get_call_1(c.start(), "init")
+        ptr = self.get_call_1(c.start_and_connect(), "init")
         self.assertEquals("Ok", c.is_writable(ptr, s))
         self.assertEquals("Ok", c.is_readable(ptr, s))
         p2 = ptr + 500000 * INT_SIZE
