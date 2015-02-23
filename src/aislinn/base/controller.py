@@ -17,6 +17,7 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import base.resource
 
 import socket
 import subprocess
@@ -37,6 +38,7 @@ def check_str(value):
         return "check"
     else:
         return "unsafe"
+
 
 class Controller:
 
@@ -83,12 +85,6 @@ class Controller:
             self.process.kill()
             self.process = None
 
-    def save_state(self):
-        return self.send_and_receive_int("SAVE\n")
-
-    def free_state(self, state_id):
-        self.send_and_receive_ok("FREE {0}\n".format(state_id))
-
     def run_process(self):
         return self.send_and_receive("RUN\n")
 
@@ -99,16 +95,6 @@ class Controller:
         command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(
                 fn_pointer, fn_type, len(args), " ".join(map(str, args)))
         return self.send_and_receive(command)
-
-    def restore_state(self, state_id):
-        assert state_id is not None
-        return self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
-
-    def new_buffer(self, size):
-        return self.send_and_receive_int("NEW_BUFFER {0}\n".format(size))
-
-    def free_buffer(self, buffer_id):
-        self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
 
     def client_malloc(self, size):
         return self.send_and_receive_int("CLIENT_MALLOC {0}\n".format(size))
@@ -298,6 +284,21 @@ class Controller:
         self.send_and_receive_ok(
              "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
 
+    def save_state(self):
+        return self.send_and_receive_int("SAVE\n")
+
+    def restore_state(self, state_id):
+        self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
+
+    def make_buffer(self, size):
+        return self.send_and_receive_int("NEW_BUFFER {0}\n".format(size))
+
+    def free_state(self, state_id):
+        self.send_and_receive_ok("FREE {0}\n".format(state_id))
+
+    def free_buffer(self, buffer_id):
+        self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
+
     def _start_valgrind(self, port, capture_syscalls):
         args = (
             paths.VALGRIND_BIN,
@@ -331,3 +332,63 @@ class Controller:
         s.bind((HOST, PORT))
         s.listen(1)
         return s
+
+
+
+class VgState(base.resource.Resource):
+    hash = None
+
+class VgBuffer(base.resource.Resource):
+    hash = None
+
+
+class ControllerWithResources(Controller):
+
+    def __init__(self, args, cwd=None):
+        Controller.__init__(self, args, cwd)
+        self.states = base.resource.ResourceManager(VgState)
+        self.buffers = base.resource.ResourceManager(VgBuffer)
+        self.state_cache = {}
+
+    @property
+    def states_count(self):
+        assert len(self.state_cache) == self.states.resource_count
+        return self.states.resource_count
+
+    @property
+    def buffers_count(self):
+        return self.buffers.resource_count
+
+    def cleanup_states(self):
+        if self.states.not_used_resources:
+            for state in self.states.pickup_resources_to_clean():
+                if state.hash:
+                    del self.state_cache[state.hash]
+                self.free_state(state.id)
+
+    def cleanup_buffers(self):
+        if self.buffers.not_used_resources:
+            for b in self.buffers.pickup_resources_to_clean():
+                self.free_buffer(b.id)
+
+    def save_state(self, hash=None):
+        if hash:
+            state = self.state_cache.get(hash)
+            if state:
+                logging.debug("State %s retrieved from cache", hash)
+                state.inc_ref_revive()
+                return state
+        state = self.states.new(Controller.save_state(self))
+        if hash is not None:
+            state.hash = hash
+            self.state_cache[hash] = state
+        return state
+
+    def save_state_with_hash(self):
+        return self.save_state(self.hash_state())
+
+    def restore_state(self, state):
+        Controller.restore_state(self, state.id)
+
+    def make_buffer(self, size):
+        return self.buffers.new(Controller.make_buffer(self, size))

@@ -74,10 +74,9 @@ class SendRequest(Request):
         if self.target == consts.MPI_PROC_NULL:
             return
         sz = self.count * self.datatype.size
-        vg_buffer = context.generator.new_buffer_and_pack(context.controller,
-                                                          self.datatype,
-                                                          self.count,
-                                                          self.data_ptr)
+        vg_buffer = context.controller.make_buffer_and_pack(self.datatype,
+                                                            self.count,
+                                                            self.data_ptr)
 
         comm = context.state.get_comm(self.comm_id)
         target_pid = comm.group.rank_to_pid(self.target)

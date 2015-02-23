@@ -30,7 +30,6 @@ from base.utils import power_set
 from mpi.context import Context, ErrorFound
 
 import consts
-import base.resource
 
 import logging
 import datetime
@@ -52,10 +51,6 @@ class Generator:
         self.working_queue = deque()
         self.error_messages = []
         self.message_sizes = set()
-        self.vg_states = base.resource.ResourceManager("vg_state")
-        self.vg_buffers = base.resource.ResourceManager("vg_buffer")
-
-        self.vg_state_cache = {}
 
         self.send_protocol = aislinn_args.send_protocol
         self.send_protocol_eager_threshold = \
@@ -200,9 +195,8 @@ class Generator:
             self.debug_compare()
 
         # Check there is no memory leak
-        assert self.vg_states.resource_count == 0
-        assert self.vg_buffers.resource_count == 0
-        assert len(self.vg_state_cache) == 0
+        assert self._controller.states_count == 0
+        assert self._controller.buffers_count == 0
         stats = self._controller.get_stats()
         # All pages are active, i.e. we have freed everyhing else
         assert stats["pages"] == stats["active-pages"]
@@ -230,17 +224,8 @@ class Generator:
         self.cleanup()
 
     def cleanup(self):
-        if self.vg_states.not_used_resources:
-            vg_states = self.vg_states.pickup_resources_to_clean()
-            for vg_state in vg_states:
-                if vg_state.hash:
-                    del self.vg_state_cache[vg_state.hash]
-                self._controller.free_state(vg_state.id)
-
-        if self.vg_buffers.not_used_resources:
-            vg_buffers = self.vg_buffers.pickup_resources_to_clean()
-            for vg_buffer in vg_buffers:
-                self._controller.free_buffer(vg_buffer.id)
+        self._controller.cleanup_states()
+        self._controller.cleanup_buffers()
 
     def fast_partial_expand(self, node, gstate):
         for state in gstate.states:
@@ -550,17 +535,6 @@ class Generator:
                 #if test:
                 #    self.controller.write_int(state.flag_ptr, 1)
                 context.run_and_make_node()
-
-    def new_buffer(self, controller, size):
-        buffer_id = controller.new_buffer(size)
-        vg_buffer = self.vg_buffers.new(buffer_id)
-        return vg_buffer
-
-    def new_buffer_and_pack(self, controller, datatype, count, addr):
-        vg_buffer = self.new_buffer(controller, datatype.size * count)
-        datatype.pack(controller, addr, vg_buffer, count)
-        vg_buffer.hash = controller.hash_buffer(vg_buffer.id)
-        return vg_buffer
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:

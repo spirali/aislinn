@@ -69,7 +69,7 @@ class Context:
     def make_node(self):
         if (self.state and
                 self.state.status != self.state.StatusFinished):
-            self.state.vg_state = self.save_state(True)
+            self.state.vg_state = self.controller.save_state_with_hash()
         node = self.generator.add_node(self.node, self.gstate)
         arc = Arc(node, self.events, self.get_compact_stream_chunks())
         self.node.add_arc(arc)
@@ -136,24 +136,6 @@ class Context:
     def finish_all_active_requests(self):
         self.state.finish_all_active_requests(self)
 
-    def save_state(self, make_hash):
-        if make_hash:
-            hash = self.controller.hash_state()
-            vg_state = self.generator.vg_state_cache.get(hash)
-            if vg_state:
-                logging.debug("State %s retrieved from cache", hash)
-                vg_state.inc_ref_revive()
-                # inc_ref_revive is used, because object can be freed this time,
-                # but in cache, hence it was not freed yet
-                return vg_state
-        else:
-            hash = None
-
-        vg_state = self.generator.vg_states.new(self.controller.save_state())
-        vg_state.hash = hash
-        self.generator.vg_state_cache[hash] = vg_state
-        return vg_state
-
     def handle_call(self, name, args, callback=False):
         self.fn_name = name
         call = mpicalls.calls_non_communicating.get(name)
@@ -204,7 +186,7 @@ class Context:
         self.controller = self.generator._controller
         # Register context into controller to capture unexpected outputs
         self.controller.context = self
-        self.controller.restore_state(self.state.vg_state.id)
+        self.controller.restore_state(self.state.vg_state)
         self.state.vg_state.dec_ref()
         self.state.vg_state = None
 
@@ -332,7 +314,7 @@ class Context:
         for ptr, op_id in zip(function_ptrs, operations):
             ops.buildin_operations[op_id].fn_ptr = ptr
 
-        vg_state = self.save_state(True)
+        vg_state = self.controller.save_state_with_hash()
 
         if self.generator.send_protocol == "dynamic":
             send_protocol_thresholds = (0, sys.maxint)

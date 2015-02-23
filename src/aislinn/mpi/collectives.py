@@ -213,8 +213,8 @@ class Gatherv(OperationWithBuffers):
         self.check_root(context, comm, root)
 
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.generator.new_buffer_and_pack(
-                context.controller, sendtype, sendcount, sendbuf)
+        self.buffers[rank] = context.controller.make_buffer_and_pack(
+                sendtype, sendcount, sendbuf)
 
         if root == rank:
             recvtype = check.check_datatype(context, recvtype, 7)
@@ -284,8 +284,8 @@ class Gather(OperationWithBuffers):
             if rank != root:
                 context.add_error_and_throw(errormsg.InvalidInPlace(context))
         else:
-            self.buffers[rank] = context.generator.new_buffer_and_pack(
-                    context.controller, sendtype, sendcount, sendbuf)
+            self.buffers[rank] = context.controller.make_buffer_and_pack(
+                    sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
@@ -336,8 +336,8 @@ class Allgather(OperationWithBuffers):
         self.sendcount = sendcount
 
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.generator.new_buffer_and_pack(
-                context.controller, sendtype, sendcount, sendbuf)
+        self.buffers[rank] = context.controller.make_buffer_and_pack(
+                sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -378,8 +378,8 @@ class Allgatherv(OperationWithBuffers):
                recvbuf, recvcounts, displs, recvtype = args
         rank = context.state.get_rank(comm)
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.generator.new_buffer_and_pack(
-                context.controller, sendtype, sendcount, sendbuf)
+        self.buffers[rank] = context.controller.make_buffer_and_pack(
+                sendtype, sendcount, sendbuf)
 
         recvtype = check.check_datatype(context, recvtype, 7)
         self.recvtypes[rank] = recvtype
@@ -452,8 +452,8 @@ class Scatterv(OperationWithSingleBuffer):
                     displs, self.process_count)
             sendcount = max(s + d for s, d in zip(self.sendcounts, self.displs))
             assert self.buffer is None
-            self.buffer = context.generator.new_buffer_and_pack(
-                    context.controller, sendtype, sendcount, sendbuf)
+            self.buffer = context.controller.make_buffer_and_pack(
+                    sendtype, sendcount, sendbuf)
 
     def can_be_completed(self, state):
         return self.buffer is not None
@@ -515,8 +515,7 @@ class Scatter(OperationWithSingleBuffer):
             self.sendtype = sendtype
             self.sendcount = sendcount
             assert self.buffer is None
-            self.buffer = context.generator.new_buffer_and_pack(
-                    context.controller,
+            self.buffer = context.controller.make_buffer_and_pack(
                     sendtype,
                     sendcount * self.process_count,
                     sendbuf)
@@ -573,8 +572,8 @@ class Bcast(OperationWithSingleBuffer):
         if self.root == rank:
             self.count = count
             assert self.buffer is None
-            self.buffer = context.generator.new_buffer_and_pack(
-                    context.controller, datatype, count, buffer)
+            self.buffer = context.controller.make_buffer_and_pack(
+                    datatype, count, buffer)
         else:
             self.recvbufs[rank] = buffer
             self.datatypes[rank] = datatype
@@ -659,11 +658,8 @@ class Reduce(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.recvbuf = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.generator.new_buffer_and_pack(
-                                                           context.controller,
-                                                           datatype,
-                                                           count,
-                                                           sendbuf)
+        self.buffers[rank] = context.controller.make_buffer_and_pack(
+            datatype, count, sendbuf)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
@@ -718,8 +714,8 @@ class AllReduce(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.generator.new_buffer_and_pack(
-                context.controller, datatype, count, sendbuf)
+        self.buffers[rank] = context.controller.make_buffer_and_pack(
+                datatype, count, sendbuf)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -782,8 +778,8 @@ class ReduceScatter(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.generator.new_buffer_and_pack(
-                context.controller, datatype, total_count, sendbuf)
+        self.buffers[rank] = context.controller.make_buffer_and_pack(
+                datatype, total_count, sendbuf)
 
         if self.remaining_processes_enter == 0:
             tmp = context.controller.client_malloc(datatype.size * total_count)
@@ -792,8 +788,8 @@ class ReduceScatter(OperationWithBuffers):
             for vg_buffer in self.buffers:
                 if vg_buffer:
                     vg_buffer.dec_ref()
-            self.final_buffer = context.generator.new_buffer_and_pack(
-                context.controller, datatype, total_count, tmp)
+            self.final_buffer = context.controller.make_buffer_and_pack(
+                datatype, total_count, tmp)
             context.controller.client_free(tmp)
             self.buffers = []
 

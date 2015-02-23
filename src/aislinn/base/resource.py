@@ -44,19 +44,19 @@ class Resource:
 
     def __repr__(self):
         return "<{0} {1:x} {2} ref={3}>".format(
-                self.manager.resource_name, id(self), self.id, self.ref_count)
+                self.__class__, id(self), self.id, self.ref_count)
 
 
 class ResourceManager:
 
-    def __init__(self, resource_name):
+    def __init__(self, resource_class=Resource):
         self.not_used_resources = None
-        self.resource_name = resource_name
+        self.resource_class = resource_class
         self.resource_count = 0
 
     def new(self, id):
         self.resource_count += 1
-        return Resource(self, id)
+        return self.resource_class(self, id)
 
     def revive(self, resource):
         assert resource.ref_count == 1
