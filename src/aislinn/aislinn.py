@@ -25,6 +25,7 @@ from mpi.generator import Generator
 from base.stream import STREAM_STDOUT, STREAM_STDERR
 import base.utils as utils
 import argparse
+import os
 import sys
 import logging
 import platform
@@ -177,6 +178,7 @@ def parse_args():
 
     logging.basicConfig(format="==AN== %(levelname)s: %(message)s",
                         level=level)
+    logging.info("Aislinn v%s", VERSION_STRING)
 
     if args.p <= 0:
         logging.error("Invalid number of processes (parameter -p)")
@@ -245,12 +247,20 @@ def write_outputs(generator, stream_name, limit, file_prefix):
                      "(files '{3}-{1}-X')" \
                              .format(stream_name, pid, len(outputs), file_prefix))
 
+def check_program(program):
+    if not os.path.isfile(program):
+        logging.error("File '%s' not found", program)
+        sys.exit(1)
+    if not os.access(program, os.X_OK):
+        logging.error("File '%s' not executable", program)
+        sys.exit(1)
+
 def main():
     args, valgrind_args = parse_args()
-    logging.info("Aislinn v%s", VERSION_STRING)
-
+    check_program(args.program)
     run_args = [ args.program ] + args.args
     generator = Generator(run_args,
+                          args.p,
                           valgrind_args,
                           args)
 
@@ -270,7 +280,7 @@ def main():
         import pstats
         pr = cProfile.Profile()
         pr.enable()
-    if not generator.run(args.p):
+    if not generator.run():
         sys.exit(1)
 
     if generator.error_messages:
@@ -279,7 +289,6 @@ def main():
         logging.info("%s error(s) found", len(generator.error_messages))
     else:
         logging.info("No errors found")
-
 
     if args.profile:
         pr.disable()

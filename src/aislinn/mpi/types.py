@@ -55,6 +55,9 @@ class BuildinType(Datatype):
                                      pointer,
                                      self.size * count)
 
+    def pack2(self, controller, pointer, count, callback):
+        callback(controller.read_mem(pointer, self.size * count))
+
     def unpack(self, controller, vg_buffer, count,
                pointer, index=0, check=True):
         controller.write_buffer(
@@ -77,6 +80,7 @@ class BuildinType(Datatype):
         else:
             controller.lock_memory(pointer, self.size * count)
 
+
 class ContiguousType(Datatype):
 
     def __init__(self, datatype, count):
@@ -88,6 +92,10 @@ class ContiguousType(Datatype):
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         self.datatype.pack(
                 controller, pointer, vg_buffer, count * self.count, index)
+
+    def pack2(self, controller, pointer, count, callback):
+        self.datatype.pack2(
+                controller, pointer, count * self.count, callback)
 
     def unpack(self, controller, vg_buffer, count,
                pointer, index=0, check=True):
@@ -126,6 +134,16 @@ class VectorType(Datatype):
                         controller, pointer, vg_buffer, self.blocksize, index)
                 pointer += self.stride
                 index += step_index
+            pointer -= self.stride
+            pointer += step_index
+
+    def pack2(self, controller, pointer, count, callback):
+        step_index = self.datatype.size * self.blocksize
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.pack2(
+                        controller, pointer, self.blocksize, callback)
+                pointer += self.stride
             pointer -= self.stride
             pointer += step_index
 
@@ -187,6 +205,16 @@ class IndexedType(Datatype):
                         self.sizes[j],
                         index)
                 index += self.sizes[j] * self.datatype.size
+            pointer += self.unpack_size
+
+    def pack2(self, controller, pointer, count, callback):
+        for i in xrange(count):
+            for j in xrange(self.count):
+                self.datatype.pack2(
+                        controller,
+                        pointer + self.displs[j],
+                        self.sizes[j],
+                        callback)
             pointer += self.unpack_size
 
     def unpack(self, controller, vg_buffer, count,
@@ -251,6 +279,17 @@ class StructType(Datatype):
                             c,
                             index)
                     index += c * datatype.size
+            pointer += self.unpack_size
+
+    def pack2(self, controller, pointer, count, callback):
+        for i in xrange(count):
+            for datatype, c, displ in \
+                zip(self.datatypes, self.counts, self.displs):
+                    datatype.pack2(
+                            controller,
+                            pointer + displ,
+                            c,
+                            callback)
             pointer += self.unpack_size
 
     def unpack(self, controller, vg_buffer, count,

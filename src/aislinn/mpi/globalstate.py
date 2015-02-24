@@ -29,15 +29,9 @@ import consts
 class GlobalState(EqMixin):
 
     def __init__(self,
-                 vg_state,
                  process_count,
                  send_protocol_thresholds):
-        states = []
-        for i in xrange(process_count):
-            vg_state.inc_ref()
-            state = State(self, i, vg_state)
-            states.append(state)
-        self.states = states
+        self.states = [ State(self, i, None) for i in xrange(process_count) ]
         self.collective_operations = None
         self.send_protocol_thresholds = send_protocol_thresholds
         self.comm_world = make_comm_world(process_count)
@@ -98,7 +92,7 @@ class GlobalState(EqMixin):
                                   op_class,
                                   blocking,
                                   args):
-        assert context.gstate is self
+        assert context.gcontext.gstate is self
         if self.collective_operations is None:
             self.collective_operations = []
         cc_id = context.state.get_cc_id_counter(comm)

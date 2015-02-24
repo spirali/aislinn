@@ -141,20 +141,32 @@ typedef
       ThreadState threadstate;
    } State;
 
+typedef
+  // First two entries has to correspond to VgHashNode
+  struct {
+     struct Buffer *next;
+     UWord id;
+     SizeT size;
+     // data follows ...
+  } Buffer;
+
 static int verbosity_level = 0;
 static SizeT heap_max_size = 128 * 1024 * 1024; // Default: 128M
 static SizeT redzone_size = 16;
 
 static MemorySpace *current_memspace = NULL;
-static VgHashTable states_table;
+static VgHashTable state_table;
+static VgHashTable buffer_table;
 
 static Int control_socket = -1;
+static Int buffer_socket = -1;
 
 #define MAX_MESSAGE_BUFFER_LENGTH 20000
 char message_buffer[MAX_MESSAGE_BUFFER_LENGTH];
 Int message_buffer_size = 0;
 
 Int server_port = -1;
+Int buffer_server_port = -1;
 
 struct {
     Bool syscall_write;
@@ -568,7 +580,7 @@ static void page_dispose(Page *page)
 }
 
 static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
-{   
+{
    AuxMapEnt *nyu, *res;
    Page *page;
 
@@ -824,7 +836,7 @@ static Bool check_is_readable(Addr addr, SizeT size, Addr *first_invalid_addr)
 static
 void set_address_range_perms (
                 Addr a, SizeT lenT, UChar perm)
-{  
+{
    VA* va;
    Page **page_ptr;
    UWord pg_off;
@@ -1071,25 +1083,40 @@ static void memspace_hash(AN_(MD5_CTX) *ctx)
  *  Buffer management
  * --------------------------------------------------------*/
 
-static void* buffer_new(UWord size)
+static Buffer* buffer_new(UWord id, UWord size)
 {
+   tl_assert(!VG_(HT_lookup)(buffer_table, id));
    stats.buffers_size += size;
-   UWord *buffer = VG_(malloc)("an.buffers", sizeof(UWord) + size);
-   *buffer = size;
+   Buffer *buffer = (Buffer*) VG_(malloc)("an.buffers", sizeof(Buffer) + size);
+   buffer->next = NULL;
+   buffer->id = id;
+   buffer->size = size;
+   VG_(HT_add_node(buffer_table, buffer));
    return buffer;
 }
 
-static void buffer_free(void *addr)
+static void buffer_free(Buffer *buffer)
 {
-   UWord *buffer = (UWord*) addr;
-   stats.buffers_size -= *buffer;
-   VG_(free)(addr);
+   stats.buffers_size -= buffer->size;
+   VG_(HT_remove)(buffer_table, buffer->id);
+   VG_(free)(buffer);
 }
 
-static void buffer_hash(void *addr, AN_(MD5_CTX) *ctx)
+static void buffer_hash(Buffer *buffer, AN_(MD5_CTX) *ctx)
 {
-   UWord *buffer = addr;
-   AN_(MD5_Update)(ctx, addr, sizeof(UWord) + *buffer);
+   AN_(MD5_Update)(ctx, (void*) (buffer + 1), buffer->size);
+}
+
+INLINE static Buffer *buffer_lookup(UWord id)
+{
+    Buffer *buffer = (Buffer*) VG_(HT_lookup)(buffer_table, id);
+    tl_assert(buffer);
+    return buffer;
+}
+
+INLINE static Addr buffer_data(Buffer *buffer)
+{
+    return (Addr) (buffer + 1);
 }
 
 /* --------------------------------------------------------
@@ -1239,6 +1266,36 @@ static Int connect_to_server(const HChar *server_addr)
 }
 
 static
+void read_data(SizeT size, Addr out)
+{
+    if (message_buffer_size) {
+        SizeT s;
+        if (message_buffer_size > size) {
+            s = size;
+        } else {
+            s = message_buffer_size;
+        }
+        VG_(memcpy)((void*)out, message_buffer, message_buffer_size);
+        message_buffer_size -= s;
+        size -= s;
+        out += s;
+        if (message_buffer_size) {
+            VG_(memmove(message_buffer,
+                        message_buffer + s,
+                        message_buffer_size));
+            return;
+        }
+    }
+    while (size > 0) {
+        Int len = VG_(read_socket)(control_socket, (void*) out, size);
+        tl_assert(len && len <= size);
+        size -= len;
+        out += len;
+    }
+}
+
+
+static
 Bool read_command(char *command)
 {
    char *s = message_buffer;
@@ -1274,6 +1331,70 @@ ret:
    return True;
 }
 
+static void write_bs_message(const char *str)
+{
+   if (UNLIKELY(buffer_socket == -1)) {
+       VG_(printf)("Not connected to buffer server\n");
+       VG_(exit)(1);
+   }
+   Int len = VG_(strlen)(str);
+   Int r = VG_(write_socket)(buffer_socket, str, len);
+   if (r == -1) {
+      VG_(printf)("Connection closed (buffer server)\n");
+      VG_(exit)(1);
+   }
+   tl_assert(r == len);
+}
+
+static void receive_data(Int socket, Addr addr, SizeT size)
+{
+    while (size > 0) {
+        SizeT len = VG_(read_socket)(socket, (void *) addr, size);
+        if (len == 0) {
+            VG_(printf)("Connection closed while receiving data");
+            VG_(exit)(-1);
+        }
+        size -= len;
+        addr += len;
+    }
+}
+
+static void download_buffer(int buffer_id)
+{
+    char tmp[MAX_MESSAGE_BUFFER_LENGTH+1];
+    SizeT r = MAX_MESSAGE_BUFFER_LENGTH;
+    SizeT s = 0;
+    SizeT i;
+    while(1) {
+        SizeT len = VG_(read_socket)(buffer_socket, tmp, r);
+        for (i = s; i < len + s; i++) {
+            if (tmp[i] == '\n') {
+                s += len;
+                goto ret;
+            }
+        }
+        r -= len;
+        s += len;
+    }
+    ret:
+    tmp[i] = 0;
+    char *end;
+    UWord size = VG_(strtoull10)(tmp, &end);
+    if (*end != '\0') {
+       write_message("Download: invalid size\n");
+       VG_(exit)(1);
+    }
+    Buffer *buffer = buffer_new(buffer_id, size);
+    SizeT already_received = s - (i + 1);
+    tl_assert(already_received <= size);
+    Addr a = buffer_data(buffer);
+    VG_(memcpy)((void*)a, &tmp[i+1], already_received);
+    size -= already_received;
+    a += already_received;
+    receive_data(buffer_socket, a, size);
+}
+
+
 static void write_message(const char *str)
 {
    VPRINT(1, "AN>> %s", str);
@@ -1281,7 +1402,7 @@ static void write_message(const char *str)
    Int len = VG_(strlen)(str);
    Int r = VG_(write_socket)(control_socket, str, len);
    if (r == -1) {
-      VG_(printf)("Connection closed\n");
+      VG_(printf)("Connection closed (server)\n");
       VG_(exit)(1);
    }
    tl_assert(r == len);
@@ -1290,7 +1411,7 @@ static void write_message(const char *str)
 // Same as write_message but with DATA message
 static void write_data(void *ptr, SizeT size)
 {
-   VPRINT(1, "AN>> [[ DATA at=%p size=%lu ]]", ptr, size);
+   VPRINT(1, "AN>> [[ DATA at=%p size=%lu ]]\n", ptr, size);
    char tmp[MAX_MESSAGE_BUFFER_LENGTH];
    /*VG_(snprintf)(tmp, 100, "DATA 1\nX");
    write_message(tmp);*/
@@ -1320,6 +1441,34 @@ static void write_data(void *ptr, SizeT size)
    }
 }
 
+static void write_bs_data(void *ptr, SizeT size)
+{
+   char tmp[MAX_MESSAGE_BUFFER_LENGTH];
+   SizeT sz;
+   int i = VG_(snprintf)(tmp, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", size);
+   if (size > MAX_MESSAGE_BUFFER_LENGTH - i) {
+       sz = MAX_MESSAGE_BUFFER_LENGTH - i;
+   } else {
+       sz = size;
+   }
+   VG_(memcpy)(&tmp[i], ptr, sz);
+   Int r = VG_(write_socket)(buffer_socket, tmp, i + sz);
+   if (r == -1) {
+      VG_(printf)("Connection closed\n");
+      VG_(exit)(1);
+   }
+   tl_assert(r == sz + i);
+
+   if (size - sz > 0) {
+       char *p = (char*)ptr;
+       r = VG_(write_socket)(buffer_socket, &p[sz], size - sz);
+       if (r == -1) {
+          VG_(printf)("Connection closed\n");
+          VG_(exit)(1);
+       }
+       tl_assert(r == size - sz);
+   }
+}
 
 struct BufferCtrl {
    HChar *buffer;
@@ -1421,10 +1570,10 @@ static void process_commands_init(CommandsEnterType cet,
 
 static void debug_compare(UWord state_id1, UWord state_id2)
 {
-    State *state1 = (State*) VG_(HT_lookup(states_table, state_id1));
+    State *state1 = (State*) VG_(HT_lookup(state_table, state_id1));
     MemoryImage *image1 = &state1->memimage;
     Page **pages1 = image1->pages;
-    State *state2 = (State*) VG_(HT_lookup(states_table, state_id2));
+    State *state2 = (State*) VG_(HT_lookup(state_table, state_id2));
     MemoryImage *image2 = &state2->memimage;
     Page **pages2 = image2->pages;
     UWord p1 = 0, p2 = 0, i;
@@ -1543,7 +1692,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!VG_(strcmp(cmd, "SAVE"))) {
          tl_assert(cet != CET_SYSCALL);
          State *state = state_save_current();
-         VG_(HT_add_node(states_table, state));
+         VG_(HT_add_node(state_table, state));
          VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", state->id));
          write_message(command);
          continue;
@@ -1553,7 +1702,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          tl_assert(cet != CET_SYSCALL);
          UWord state_id = next_token_uword();
 
-         State *state = (State*) VG_(HT_lookup(states_table, state_id));
+         State *state = (State*) VG_(HT_lookup(state_table, state_id));
          if (state == NULL) {
             write_message("Error: State not found\n");
          }
@@ -1581,16 +1730,17 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
              extern_write(addr, sizeof(Addr), check);
              *((Addr*) addr) = next_token_uword();
          } else if (!VG_(strcmp(param, "buffer"))) {
-            UWord *buffer = (UWord*) next_token_uword();
-            UWord size = *buffer;
-            extern_write((Addr)addr, size, check);
-            VG_(memcpy((void*) addr, buffer + 1, size));
+            UWord buffer_id = next_token_uword();
+            Buffer *buffer = buffer_lookup(buffer_id);
+            extern_write((Addr)addr, buffer->size, check);
+            VG_(memcpy((void*) addr, (void*) buffer_data(buffer), buffer->size));
          } else if (!VG_(strcmp(param, "buffer-part"))) {
-            Addr buffer = (Addr) next_token_uword();
+            UWord buffer_id = next_token_uword();
+            Buffer *buffer = buffer_lookup(buffer_id);
             UWord index = (UWord) next_token_uword();
             UWord size = (UWord) next_token_uword();
             extern_write((Addr)addr, size, check);
-            VG_(memcpy((void*) addr, (void*) (buffer + sizeof(UWord) + index), size));
+            VG_(memcpy((void*) addr, (void*) (buffer_data(buffer) + index), size));
          } else if (!VG_(strcmp(param, "addr"))) {
             Addr source = (Addr) next_token_uword();
             UWord size = (UWord) next_token_uword();
@@ -1709,26 +1859,65 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "WRITE_BUFFER"))) {
-         Addr buffer = (Addr) next_token_uword();
+         UWord buffer_id = (UWord) next_token_uword();
          UWord index = (UWord) next_token_uword();
          Addr addr = (Addr) next_token_uword();
          UWord size = (UWord) next_token_uword();
-         VG_(memcpy)((void*) (buffer + sizeof(UWord) + index), (void*) addr, size);
+         Buffer *buffer = buffer_lookup(buffer_id);
+         VG_(memcpy)((void*) (buffer_data(buffer) + index), (void*) addr, size);
+         write_message("Ok\n");
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "WRITE_BUFFER_DATA"))) {
+         UWord buffer_id = (UWord) next_token_uword();
+         UWord index = (UWord) next_token_uword();
+         UWord size = (UWord) next_token_uword();
+         Buffer *buffer = buffer_lookup(buffer_id);
+         read_data(size, buffer_data(buffer) + index);
          write_message("Ok\n");
          continue;
       }
 
       if (!VG_(strcmp(cmd, "NEW_BUFFER"))) { // Create buffer
+         UWord id = next_token_uword();
          UWord size = next_token_uword();
-         void* buffer = buffer_new(size);
-         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH,
-                      "%lu\n", (UWord) buffer));
-         write_message(command);
+         buffer_new(id, size);
+         write_message("Ok\n");
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "UPLOAD"))) {
+         Addr addr = (Addr) next_token_uword();
+         SizeT size = (SizeT) next_token_uword();
+         write_bs_data((void*)addr, size);
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "DOWNLOAD"))) {
+         UWord id = next_token_uword();
+         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "GET %lu\n", id));
+         write_bs_message(command);
+         download_buffer(id);
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "START_REMOTE_BUFFER"))) {
+         UWord id = next_token_uword();
+         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "NEW %lu\n", id));
+         write_bs_message(command);
+         continue;
+      }
+
+      if (!VG_(strcmp(cmd, "FINISH_REMOTE_BUFFER"))) {
+         write_bs_message("DONE\n");
+         write_message("Ok\n");
          continue;
       }
 
       if (!VG_(strcmp(cmd, "HASH_BUFFER"))) {
-         void* buffer = (void*) next_token_uword();
+         UWord buffer_id = (UWord) next_token_uword();
+         Buffer *buffer = buffer_lookup(buffer_id);
          MD5_Digest digest;
          char digest_str[33]; // 16 * 2 + 1
          AN_(MD5_CTX) ctx;
@@ -1743,8 +1932,9 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "FREE_BUFFER"))) { // free buffer
-         void* addr = (void*) next_token_uword();
-         buffer_free(addr);
+         UWord buffer_id =  next_token_uword();
+         Buffer *buffer = buffer_lookup(buffer_id);
+         buffer_free(buffer);
          write_message("Ok\n");
          continue;
       }
@@ -1772,12 +1962,12 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!VG_(strcmp)(cmd, "FREE")) {
          UWord state_id = next_token_uword();
 
-         State *state = (State*) VG_(HT_lookup(states_table, state_id));
+         State *state = (State*) VG_(HT_lookup(state_table, state_id));
          if (state == NULL) {
             write_message("Error: State not found\n");
             VG_(exit)(1);
          }
-         VG_(HT_remove)(states_table, state_id);
+         VG_(HT_remove)(state_table, state_id);
          state_free(state);
          write_message("Ok\n");
          continue;
@@ -1834,6 +2024,13 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                         VG_(OSetGen_Size)(current_memspace->auxmap),
                         stats.buffers_size);
           write_message(command);
+          /*
+          Buffer *buffer;
+          VG_(printf)("BUFFERS %d\n", VG_(HT_count_nodes(buffer_table)));
+          VG_(HT_ResetIter(buffer_table));
+          while ((buffer=(Buffer*) VG_(HT_Next)(buffer_table))) {
+            VG_(printf)("BUFFER %p %lu %lu\n", buffer, buffer->id, buffer->size);
+          }*/
           continue;
       }
 
@@ -1852,8 +2049,9 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "CLIENT_MALLOC_FROM_BUFFER"))) {
-         UWord *buffer = (UWord*) next_token_uword();
-         UWord size = *buffer;
+         UWord buffer_id = next_token_uword();
+         Buffer *buffer = buffer_lookup(buffer_id);
+         SizeT size = buffer->size;
          void *mem = client_malloc(0, size);
          extern_write((Addr)mem, size, False);
          VG_(memcpy(mem, buffer + 1, size));
@@ -1894,8 +2092,10 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
             debug_compare(state1, state2);
             write_message("Ok\n");
             continue;
-      }
-      write_message("Error: Unknown command\n");
+      }     
+      write_message("Error: Unknown command:");
+      write_message(command);
+      write_message("\n");
    }
 }
 
@@ -1939,7 +2139,7 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
        } break;
        case VG_USERREQ__AISLINN_FUNCTION_RETURN: {
           answer = (Vg_AislinnCallAnswer*) arg[1];
-          VG_(strcpy)(message, "FUNCTION_FINISH\n");          
+          VG_(strcpy)(message, "FUNCTION_FINISH\n");
           cet = CET_CALL;
         } break;
       default:
@@ -1957,7 +2157,7 @@ void new_mem_mmap (Addr a, SizeT len, Bool rr, Bool ww, Bool xx,
 {
    VPRINT(2, "new_mem_mmap %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
 
-   if (rr && ww) {      
+   if (rr && ww) {
       make_mem_defined(a, len);
    } else {
       make_mem_noaccess(a, len);
@@ -2036,13 +2236,25 @@ static void an_post_clo_init(void)
       VG_(exit)(1);
    }
 
-   states_table = VG_(HT_construct)("an.states");
+   if (buffer_server_port < -1 || buffer_server_port > 65535) {
+      VG_(printf)("Invalid buffer server port\n");
+      VG_(exit)(1);
+   }
+
+   state_table = VG_(HT_construct)("an.states");
+   buffer_table = VG_(HT_construct)("an.buffers");
    memspace_init();
 
    char target[300];
    VG_(snprintf)(target, 300, "127.0.0.1:%u", server_port);
    control_socket = connect_to_server(target);
    tl_assert(control_socket > 0);
+
+   if (buffer_server_port > 0) {
+       VG_(snprintf)(target, 300, "127.0.0.1:%u", buffer_server_port);
+       buffer_socket = connect_to_server(target);
+       tl_assert(buffer_socket > 0);
+   }
 }
 
 static
@@ -2130,6 +2342,10 @@ static Bool process_cmd_line_option(const HChar* arg)
       return True;
    }
 
+   if (VG_INT_CLO(arg, "--bs-port", buffer_server_port)) {
+      return True;
+   }
+
    if (VG_INT_CLO(arg, "--verbose", verbosity_level)) {
       return True;
    }
@@ -2160,7 +2376,7 @@ static void print_debug_usage(void)
 }
 
 static void* client_malloc (ThreadId tid, SizeT n)
-{   
+{
    //memspace_dump();
     Addr addr = memspace_alloc(n, 1);
     VG_(memset)((void*)addr, 0, n);

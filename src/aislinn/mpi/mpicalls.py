@@ -764,7 +764,7 @@ def call_send(context, args,
         context.add_error_and_throw(e)
 
     send_type = get_send_type(
-            context.generator, context.state, mode, datatype, count)
+            context.gcontext.generator, context.state, mode, datatype, count)
     request = context.state.add_send_request(comm.comm_id, target,
                                      tag, buf_ptr, datatype, count, send_type)
     if not persistent:
@@ -855,7 +855,7 @@ class Call:
                             context.state.pid,
                             ",".join(args))
         e.stacktrace = context.controller.get_stacktrace()
-        context.add_event(e)
+        context.gcontext.add_event(e)
         return r
 
 

@@ -19,6 +19,7 @@ REPORT_GALLERY = False
 
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.controller
+import base.bufserver
 
 def set_to_sorted_list(s):
     lst = list(s)
@@ -37,6 +38,17 @@ class TestCase(unittest.TestCase):
         self.output_instance = None
         self.reset_output_on_change = True
         self.counter = None
+        self.bufserver_port = None
+        self.bufserver_process = None
+        self.controllers = []
+
+    def tearDown(self):
+        if self.bufserver_process:
+            self.bufserver_process.terminate()
+            self.bufserver_process.join()
+
+        for c in self.controllers:
+            c.kill()
 
     def read_report(self):
         filename = os.path.join(AISLINN_BUILD, "report.xml")
@@ -189,7 +201,21 @@ class TestCase(unittest.TestCase):
     def controller(self, args=(), verbose=False):
         self.assertTrue(self.program_instance is not None)
         self.report = None
-        return self.program_instance.controller(args, verbose)
+        c = self.program_instance.controller(
+                args, verbose, self.bufserver_port)
+        self.controllers.append(c)
+        return c
+
+    def start_bufserver(self, clients_count):
+        if self.bufserver_process is not None:
+            return
+        self.bufserver_process, \
+            self.bufserver_port \
+                = base.bufserver.start_process(clients_count)
+
+    def connect_to_bufserver(self):
+        assert self.bufserver_process
+        return base.bufserver.connect(self.bufserver_port)
 
 
 def cleanup_build_dir():
@@ -285,8 +311,9 @@ class Program:
         return stdout, stderr
 
 
-    def controller(self, args, verbose):
+    def controller(self, args, verbose, bufserver_port):
         controller = base.controller.Controller(("./a.out",) + args, AISLINN_BUILD)
+        controller.buffer_server_port = bufserver_port
         if verbose:
            controller.valgrind_args = ("--verbose={0}".format(verbose),)
         return controller

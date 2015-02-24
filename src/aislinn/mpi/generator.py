@@ -18,36 +18,33 @@
 #
 
 
-from mpi.controller import Controller
-import errormsg
-from state import State
+from base.controller import BufferManager
 from base.node import Node, Arc
-from base.stream import STREAM_STDOUT, STREAM_STDERR
-from base.statespace import StateSpace
-from collections import deque
 from base.report import Report
+from base.statespace import StateSpace
+from base.stream import STREAM_STDOUT, STREAM_STDERR
 from base.utils import power_set
+from collections import deque
+from gcontext import GlobalContext
+from globalstate import GlobalState
 from mpi.context import Context, ErrorFound
-
+from mpi.controller import Controller
+from state import State
 import consts
+import errormsg
 
 import logging
 import datetime
+import sys
 
 
 class Generator:
 
-    def __init__(self, args, valgrind_args, aislinn_args):
+    def __init__(self, args, process_count, valgrind_args, aislinn_args):
         self.args = args
-        self._controller = Controller(args)
-        self._controller.valgrind_args = valgrind_args
-        if aislinn_args.debug_under_valgrind:
-            self._controller.debug_under_valgrind = True
-        if aislinn_args.profile_under_valgrind:
-            self._controller.profile_under_valgrind = True
         self.statespace = StateSpace()
         self.consts_pool = None
-        self.process_count = None
+        self.process_count = process_count
         self.working_queue = deque()
         self.error_messages = []
         self.message_sizes = set()
@@ -85,6 +82,20 @@ class Generator:
         self.debug_captured_states = None
         self.is_full_statespace = False
 
+        self.buffer_manager = BufferManager()
+        self.controllers = [ Controller(self.args) for i in xrange(process_count) ]
+
+        for i, controller in enumerate(self.controllers):
+            controller.valgrind_args = valgrind_args
+            controller.name = i
+
+        if aislinn_args.debug_under_valgrind:
+            for controller in self.controllers:
+                controller.debug_under_valgrind = True
+        if aislinn_args.profile_under_valgrind:
+            for controller in self.controllers:
+                controller.profile_under_valgrind = True
+
     def get_statistics(self):
         if self.statistics is None:
             return None
@@ -114,27 +125,48 @@ class Generator:
             return self.consts_pool
         raise Exception("Invalid const id")
 
-    def initial_execution(self):
-        initial_node = Node("init", None)
-        self.statespace.add_node(initial_node)
-        self.statespace.initial_node = initial_node
-
-        state = State(None, 0, None)
-        context = Context(self, initial_node, state)
-        return context.initial_run() is not None
-
     def sanity_check(self):
         for node, gstate in self.working_queue:
             gstate.sanity_check()
 
-    def run(self, process_count):
-        self.process_count = process_count
+    def get_controller(self, pid):
+        return self.controllers[pid]
+
+    def start_controllers(self):
+        # We do actions separately to allow parallel initialization
+        for controller in self.controllers:
+            controller.start(capture_syscalls=["write"])
+        for controller in self.controllers:
+            controller.connect()
+
+        initial_node = Node("init", None)
+        self.statespace.add_node(initial_node)
+        self.statespace.initial_node = initial_node
+
+        if self.send_protocol == "dynamic":
+            send_protocol_thresholds = (0, sys.maxint)
+        else:
+            send_protocol_thresholds = None
+
+        gstate = GlobalState(self.process_count,
+                             send_protocol_thresholds)
+        gcontext = GlobalContext(self, initial_node, gstate)
+
+        # TODO: Do it in parallel
+        for i in xrange(self.process_count):
+            context = gcontext.get_context(i)
+            if not context.initial_run():
+                return False
+
+        gcontext.make_node()
+        return True
+
+
+    def run(self):
         self.init_time = datetime.datetime.now()
         try:
-            if not self.initial_execution():
+            if not self.start_controllers():
                 return False
-            if self.error_messages:
-                return True
             tick = self.statistics_tick
             tick_counter = tick
             while self.working_queue:
@@ -162,7 +194,8 @@ class Generator:
         except ErrorFound:
             logging.debug("ErrorFound catched")
         finally:
-            self._controller.kill()
+            for controller in self.controllers:
+                controller.kill()
             self.end_time = datetime.datetime.now()
         return True
 
@@ -176,9 +209,8 @@ class Generator:
         for a in sorted(all_allocations - deterministic):
             for node in final_nodes:
                 if node.allocations and a in node.allocations:
-                    m = errormsg.MemoryLeak(None,
-                                            pid=a.pid,
-                                            node=node,
+                    gcontext = GlobalContext(self, node, None)
+                    m = errormsg.MemoryLeak(gcontext.get_context(a.pid),
                                             address=a.addr,
                                             size=a.size)
                     break
@@ -194,13 +226,18 @@ class Generator:
         if self.debug_compare_states is not None:
             self.debug_compare()
 
-        # Check there is no memory leak
-        assert self._controller.states_count == 0
-        assert self._controller.buffers_count == 0
-        stats = self._controller.get_stats()
-        # All pages are active, i.e. we have freed everyhing else
-        assert stats["pages"] == stats["active-pages"]
-        assert stats["buffers-size"] == 0
+        for controller in self.controllers:
+            controller.make_buffers()
+        self.cleanup()
+
+        assert self.buffer_manager.resource_count == 0
+        for controller in self.controllers:
+            # Check there is no memory leak
+            assert controller.states_count == 0
+            stats = controller.get_stats()
+            # All pages are active, i.e. we have freed everyhing else
+            assert stats["pages"] == stats["active-pages"]
+            assert stats["buffers-size"] == 0
 
     def debug_compare(self):
         if self.debug_captured_states is None:
@@ -224,11 +261,12 @@ class Generator:
         self.cleanup()
 
     def cleanup(self):
-        self._controller.cleanup_states()
-        self._controller.cleanup_buffers()
+        self.buffer_manager.cleanup()
+        for controller in self.controllers:
+            controller.cleanup_states()
 
-    def fast_partial_expand(self, node, gstate):
-        for state in gstate.states:
+    def fast_partial_expand(self, gcontext):
+        for state in gcontext.gstate.states:
             if state.status == State.StatusWaitAll or \
                     state.status == State.StatusWaitAny:
                 if not state.are_requests_deterministic():
@@ -241,15 +279,15 @@ class Generator:
 
                 logging.debug("Fast partial expand pid=%s", state.pid)
 
-                context = self.prepare_context(node, state)
+                context = gcontext.prepare_context(state.pid)
                 context.apply_matching(matches[0])
-                context.make_node()
-                return True
-        return False
+                return context
+        return None
 
-    def fast_expand_node(self, node, gstate):
+    def fast_expand_node(self, gcontext):
         partial_found = False
-        for state in gstate.states:
+
+        for state in gcontext.gstate.states:
             if state.status == State.StatusWaitAll or \
                     state.status == State.StatusWaitAny or \
                     state.status == State.StatusWaitSome:
@@ -274,7 +312,7 @@ class Generator:
                     assert count == 1
 
                 logging.debug("Fast expand status=wait pid=%s", state.pid)
-                context = self.prepare_context(node, state)
+                context = gcontext.prepare_context(state.pid)
                 if state.status == State.StatusWaitAny:
                     for i, request_id in enumerate(state.active_request_ids):
                         if request_id != consts.MPI_REQUEST_NULL:
@@ -295,17 +333,18 @@ class Generator:
 
                 context.apply_matching(matches[0])
                 context.finish_all_active_requests()
-                context.run_and_make_node()
-                return True
+                context.run()
+                return context
 
             if state.status == State.StatusReady:
                 logging.debug("Fast expand status=init pid=%s", state.pid)
-                context = self.prepare_context(node, state)
-                context.run_and_make_node()
-                return True
+                context = gcontext.prepare_context(state.pid)
+                context.run()
+                return context
+
         if partial_found:
-            return self.fast_partial_expand(node, gstate)
-        return False
+            return self.fast_partial_expand(gcontext)
+        return None
 
     def fork_standard_sends(self, node, gstate):
         new_state_created = False
@@ -367,8 +406,16 @@ class Generator:
                 self.debug_captured_states = []
             self.debug_captured_states.append(gstate.copy())
 
-        if self.fast_expand_node(node, gstate):
-            # Do not dispose state because we have reused gstate
+        gcontext = GlobalContext(self, node, gstate)
+        fast = False
+        while True:
+            context = self.fast_expand_node(gcontext)
+            if context is None:
+                break
+            fast = True
+
+        if fast:
+            gcontext.make_node()
             return
 
         if self.fork_standard_sends(node, gstate):
@@ -394,10 +441,11 @@ class Generator:
         if not node.arcs:
             if any(state.status != State.StatusFinished
                    for state in gstate.states):
-                context = Context(self, node, None)
                 active_pids = [ state.pid for state in gstate.states
                                 if state.status != State.StatusFinished ]
-                message = errormsg.Deadlock(context,
+                gcontext = GlobalContext(self, node, gstate)
+                message = errormsg.Deadlock(None,
+                                            gcontext=gcontext,
                                             active_pids=active_pids)
                 self.add_error_message(message)
             else:
@@ -443,20 +491,14 @@ class Generator:
             context.run_and_make_node()
 
     def make_context(self, node, state):
-        # This function exists to avoid importing Context in state.py
-        return Context(self, node, state)
-
-    def prepare_context(self, node, state):
-        context = Context(self, node, state)
-        context.restore_state()
-        return context
+        # This function exists to avoid importing GlobalContext in state.py
+        gcontext = GlobalContext(self, node, state.gstate)
+        return gcontext.get_context(state.pid)
 
     def make_copy_and_prepare_context(self, node, state):
         new_gstate = state.gstate.copy()
-        new_state = new_gstate.get_state(state.pid)
-        context = Context(self, node, new_state)
-        context.restore_state()
-        return context
+        gcontext = GlobalContext(self, node, new_gstate)
+        return gcontext.prepare_context(state.pid)
 
     def process_wait_or_test_all(self, node, state, test):
         if test:

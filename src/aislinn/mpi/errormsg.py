@@ -33,7 +33,8 @@ class ErrorMessage(object):
     stdout = None
     stderr = None
 
-    def __init__(self, context, pid=None, node=None, **kw):
+    def __init__(self, context, pid=None, gcontext=None, **kw):
+        assert context or gcontext
         for name in self.optional_arg_names:
             if name not in kw:
                 kw[name] = None
@@ -48,12 +49,12 @@ class ErrorMessage(object):
         self.args = kw
         if context is None:
             self.pid = pid
-            self.node = node
+            self.node = gcontext.node
         else:
             if context.state:
                 self.pid = context.state.pid
             context.make_fail_node()
-            self.node = context.node
+            self.node = context.gcontext.node
             if context.controller:
                 self.stacktrace = context.controller.get_stacktrace()
             if context.fn_name:

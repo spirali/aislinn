@@ -19,7 +19,7 @@ class BaseTests(TestCase):
         self.assertEquals(self.report.number_of_nodes, 3)
 
         self.execute(3, check_output=False)
-        self.assertEquals(self.report.number_of_nodes, 5)
+        self.assertEquals(self.report.number_of_nodes, 3)
 
     def test_(self):
         self.program("exitcode")

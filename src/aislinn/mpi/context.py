@@ -18,19 +18,13 @@
 #
 
 from base.stream import STREAM_STDOUT, STREAM_STDERR
-from base.stream import StreamChunk
-from globalstate import GlobalState
 from base.utils import convert_type
-from base.node import Arc
 import errormsg
 import consts
 import ops
 import logging
 import mpicalls
 import event
-
-import copy
-import sys
 
 
 class ErrorFound(Exception):
@@ -52,62 +46,25 @@ class Allocation:
 
 class Context:
 
-    def __init__(self, generator, node, state):
-        self.generator = generator
+    def __init__(self, gcontext, state):
+        self.gcontext = gcontext
         self.controller = None
-        self.node = node
         self.state = state
-        if state is not None:
-            self.gstate = state.gstate
-        else:
-            self.gstate = None
-
         self.fn_name = None
-        self.events = []
-        self.stream_chunks = []
 
-    def make_node(self):
-        if (self.state and
-                self.state.status != self.state.StatusFinished):
-            self.state.vg_state = self.controller.save_state_with_hash()
-        node = self.generator.add_node(self.node, self.gstate)
-        arc = Arc(node, self.events, self.get_compact_stream_chunks())
-        self.node.add_arc(arc)
-        self.node = node
-        self.events = None
-        self.stream_chunks = None
-        self.state = None
-        self.gstate = None
+    @property
+    def gstate(self):
+        return self.gcontext.gstate
 
-    def make_fail_node(self):
-        if not self.events or not self.stream_chunks:
-            # There is no visible change, so no new node is made
-            return
-        node = self.generator.add_node(self.node, self.gstate, do_hash=False)
-        arc = Arc(node, self.events, self.get_compact_stream_chunks())
-        self.node.add_arc(arc)
+    @property
+    def generator(self):
+        return self.gcontext.generator
 
-    def add_event(self, event):
-        self.events.append(event)
-
-    def add_stream_chunk(self, stream_name, pid, data):
-        self.stream_chunks.append(((stream_name, pid), data))
-
-    def get_compact_stream_chunks(self):
-        if not self.stream_chunks:
-            return None
-        streams = {}
-        for key, data in self.stream_chunks:
-            lst = streams.get(key)
-            if lst is None:
-                lst = []
-                streams[key] = lst
-            lst.append(data)
-        return [ StreamChunk(key[0], key[1], "".join(streams[key]))
-                 for key in streams ]
+    def save_state_with_hash(self):
+        self.state.vg_state = self.controller.save_state_with_hash()
 
     def add_error_message(self, error_message):
-        self.generator.add_error_message(error_message)
+        self.gcontext.generator.add_error_message(error_message)
 
     def add_error_and_throw(self, error_message):
         self.add_error_message(error_message)
@@ -115,20 +72,23 @@ class Context:
 
     def process_syscall(self, commands):
         if commands[1] == "write":
+            gcontext = self.gcontext
             fd, data_ptr, size = commands[2:]
-            if fd == "2" and self.generator.stderr_mode != "stdout":
-                if self.generator.stderr_mode == "capture":
-                    self.add_stream_chunk(STREAM_STDERR, self.state.pid,
-                                             self.controller.read_mem(data_ptr,
-                                                                      size))
-                return self.generator.stderr_mode == "print"
+            if fd == "2" and self.gcontext.generator.stderr_mode != "stdout":
+                if gcontext.generator.stderr_mode == "capture":
+                    gcontext.add_stream_chunk(
+                            STREAM_STDERR, self.state.pid,
+                            self.controller.read_mem(data_ptr,
+                                                     size))
+                return self.gcontext.generator.stderr_mode == "print"
             if fd == "1" or (fd == "2"
-                             and self.generator.stderr_mode == "stdout"):
-                if self.generator.stdout_mode == "capture":
-                    self.add_stream_chunk(STREAM_STDOUT, self.state.pid,
-                                             self.controller.read_mem(data_ptr,
-                                                                      size))
-                return self.generator.stdout_mode == "print"
+                             and gcontext.generator.stderr_mode == "stdout"):
+                if gcontext.generator.stdout_mode == "capture":
+                    gcontext.add_stream_chunk(
+                            STREAM_STDOUT, self.state.pid,
+                            self.controller.read_mem(data_ptr,
+                                                     size))
+                return gcontext.generator.stdout_mode == "print"
             return True
         else:
             raise Exception("Invalid syscall" + commands[1])
@@ -183,7 +143,7 @@ class Context:
         # Restore the state and forget about the restored state
         # The state is forgotten because we are going to modify it
         assert self.controller is None
-        self.controller = self.generator._controller
+        self.controller = self.gcontext.generator.get_controller(self.state.pid)
         # Register context into controller to capture unexpected outputs
         self.controller.context = self
         self.controller.restore_state(self.state.vg_state)
@@ -209,11 +169,10 @@ class Context:
             if result[0] == "EXIT":
                 exitcode = convert_type(result[1], "int")
                 e = event.ExitEvent("Exit", self.state.pid, exitcode)
-                self.add_event(e)
-                logging.debug("XXX %s", self.state)
+                self.gcontext.add_event(e)
                 self.state.set_finished()
                 if exitcode != 0:
-                    self.add_error_message(
+                    self.add_error_and_throw(
                             errormsg.NonzeroExitCode(self, exitcode=exitcode))
                 self.state.allocations = \
                     [ Allocation(self.state.pid, addr, size)
@@ -243,18 +202,23 @@ class Context:
         else:
             raise Exception("Unknown runtime error: " + name)
 
+    def make_node(self):
+        self.gcontext.make_node()
+
+    def make_fail_node(self):
+        self.gcontext.make_fail_node()
+
     def run_and_make_node(self):
         self.run()
-        self.make_node()
+        self.gcontext.make_node()
 
     def initial_run(self):
-        controller = self.generator._controller
+        controller = self.gcontext.generator.get_controller(self.state.pid)
         controller.context = self
         self.controller = controller
-        controller.start(capture_syscalls=["write"])
-        result = controller.connect()
+        result = controller.receive_line()
         if result is None:
-            return None
+            return False
 
         while True:
             result = result.split()
@@ -266,11 +230,11 @@ class Context:
                     return True
                 else:
                     e = errormsg.NoMpiCall(self)
-                    self.add_error_message(e)
+                    self.add_error_and_throw(e)
                 return True
             elif result[0] == "REPORT":
                 e = self.make_error_message_from_report(result)
-                self.add_error_message(e)
+                self.add_error_and_throw(e)
                 return True
             elif result[0] == "SYSCALL":
                 if self.process_syscall(result):
@@ -286,59 +250,36 @@ class Context:
                     continue
                 elif result[1] != "MPI_Init":
                     e = errormsg.NoMpiInit(self)
-                    self.add_error_message(e)
+                    self.add_error_and_throw(e)
                     return True
                 break
             else:
                 assert 0, "Invalid reposponse " + result
 
-        self.generator.consts_pool = convert_type(result[4], "ptr")
-        controller.write_int(self.generator.get_const_ptr(consts.MPI_TAG_UB),
-                             0xFFFF)
+        # FIXME: Consts pool
+        self.gcontext.generator.consts_pool = convert_type(result[4], "ptr")
+        controller.write_int(self.gcontext.generator.get_const_ptr(
+            consts.MPI_TAG_UB), 0xFFFF)
         function_ptrs = result[5:] # skip CALL MPI_Init argc argv consts_pool
 
-        # The order of the ops is important!
+        # The order of the ops is important,
+        # because it has to be synchronous with code in MPI_Init
         operations = [ consts.MPI_SUM,
-                    consts.MPI_PROD,
-                    consts.MPI_MIN,
-                    consts.MPI_MAX,
-                    consts.MPI_LAND,
-                    consts.MPI_LOR,
-                    consts.MPI_BAND,
-                    consts.MPI_BOR,
-                    consts.MPI_MINLOC,
-                    consts.MPI_MAXLOC ]
+                       consts.MPI_PROD,
+                       consts.MPI_MIN,
+                       consts.MPI_MAX,
+                       consts.MPI_LAND,
+                       consts.MPI_LOR,
+                       consts.MPI_BAND,
+                       consts.MPI_BOR,
+                       consts.MPI_MINLOC,
+                       consts.MPI_MAXLOC ]
 
         assert len(function_ptrs) == len(ops.buildin_operations)
         assert len(function_ptrs) == len(operations)
 
         for ptr, op_id in zip(function_ptrs, operations):
             ops.buildin_operations[op_id].fn_ptr = ptr
-
-        vg_state = self.controller.save_state_with_hash()
-
-        if self.generator.send_protocol == "dynamic":
-            send_protocol_thresholds = (0, sys.maxint)
-        else:
-            send_protocol_thresholds = None
-
-        gstate = GlobalState(vg_state,
-                             self.generator.process_count,
-                             send_protocol_thresholds)
-        vg_state.dec_ref()
-        assert vg_state.ref_count == self.generator.process_count
-
-        chunks = self.get_compact_stream_chunks()
-        new_chunks = []
-        if chunks is not None:
-            for chunk in chunks:
-                for i in xrange(self.generator.process_count):
-                    c = copy.copy(chunk)
-                    c.pid = i
-                    new_chunks.append(c)
-
-        start_node = self.generator.add_node(self.node, gstate, True)
-        self.node.add_arc(Arc(start_node, streams=new_chunks))
         return True
 
     def run_function(self, fn_pointer, fn_type, *args):
@@ -376,3 +317,23 @@ class Context:
                 self.state.set_attr(self, new_comm, keyval,
                                     controller.read_pointer(value_out_ptr))
             controller.client_free(tmp)
+
+    def make_buffer(self, pointer, datatype, count):
+        data = []
+        datatype.pack2(self.controller, pointer, count, data.append)
+        return self.gcontext.generator.buffer_manager.new_buffer("".join(data))
+
+    def make_buffer_for_one(self, pid, pointer, datatype, count):
+        buffer = self.make_buffer(pointer, datatype, count)
+        buffer.remaining_controllers = 1
+        controller = self.gcontext.generator.get_controller(pid)
+        controller.add_buffer(buffer)
+        return buffer
+
+    def make_buffer_for_more(self, pids, pointer, datatype, count):
+        buffer = self.make_buffer(pointer, datatype, count)
+        buffer.remaining_controllers = len(pids)
+        for pid in pids:
+            controller = self.gcontext.generator.get_controller(pid)
+            controller.add_buffer(buffer)
+        return buffer

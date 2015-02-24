@@ -17,12 +17,15 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import base.resource
+from base.resource import ResourceManager, Resource
+from socketwrapper import SocketWrapper
 
 import socket
 import subprocess
 import paths
 import logging
+import hashlib
+
 
 class UnexpectedOutput(Exception):
 
@@ -54,10 +57,13 @@ class Controller:
     profile_under_valgrind = False
 
     stdout_arg = None
+    buffer_server_port = None
+
+    name = "" # For debug purpose
 
     def __init__(self, args, cwd=None):
         self.process = None
-        self.conn = None
+        self.socket = None
         self.recv_buffer = ""
         self.args = tuple(args)
         self.cwd = cwd
@@ -66,7 +72,7 @@ class Controller:
 
     def start(self, capture_syscalls=()):
         assert self.process is None # Nothing is running
-        assert self.conn is None
+        assert self.socket is None
 
         self.server_socket = self._start_server()
         port = self.server_socket.getsockname()[1]
@@ -74,18 +80,23 @@ class Controller:
 
     def start_and_connect(self, *args, **kw):
         self.start(*args, **kw)
-        return self.connect()
+        self.connect()
+        return self.receive_line()
 
     def connect(self):
         self.server_socket.settimeout(0.3)
         try:
-            self.conn, addr = self.server_socket.accept()
+            sock, addr = self.server_socket.accept()
+            self.socket = SocketWrapper(sock)
         except socket.timeout:
             logging.error("Aislinn client was not started")
-            return None
+            return False
         self.server_socket.close()
         self.server_socket = None
-        return self.receive_line()
+        return True
+        # User has to call receive_line after calling this method
+        # But it may take some time to initialize vgclient, hence
+        # it is not build in in connect to allow polling
 
     def kill(self):
         if self.process and self.process.poll() is None:
@@ -118,8 +129,24 @@ class Controller:
                 .format(check_str(check), addr, source, size))
 
     def write_into_buffer(self, buffer_addr, index, addr, size):
+        # Copy a memory from client addres to the buffer
         self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n" \
                     .format(buffer_addr, index, addr, size))
+
+    def write_data_into_buffer(self, buffer_addr, index, data):
+        # Write a literal data into the buffer
+        size = len(data)
+        if size == 0:
+            return
+        # TODO: the following constant should be benchmarked
+        if size < 8192:
+            self.send_data_and_receive_ok(
+                    "WRITE_BUFFER_DATA {0} {1} {2}\n{3}" \
+                            .format(buffer_addr, index, len(data), data))
+        else:
+            self.send_command("WRITE_BUFFER_DATA {0} {1} {2}\n" \
+                        .format(buffer_addr, index, len(data)))
+            self.send_data_and_receive_ok(data)
 
     def write_buffer(self, addr, buffer_addr,
                      index=None, size=None, check=True):
@@ -216,48 +243,26 @@ class Controller:
 
     ### Semi-internal functions
 
-    def receive_line(self):
-        b = self.recv_buffer
-        while True:
-            p = b.find("\n")
-            if p != -1:
-                self.recv_buffer = b[p + 1:]
-                return b[:p]
-            new = self.conn.recv(4096)
-            if not new:
-                raise Exception("Connection closed")
-            b += new
-            if len(b) > 40960:
-                raise Exception("Message too long")
-
-    def receive_data(self):
-        args = self.receive_result().split()
-        keyword, size = args
-        data_size = int(size)
-        data = self.recv_buffer[:data_size]
-        self.recv_buffer = self.recv_buffer[data_size:]
-        remaining = data_size - len(data)
-        while remaining > 0:
-            self.recv_buffer = self.conn.recv(4096)
-            data += self.recv_buffer[:remaining]
-            self.recv_buffer = self.recv_buffer[remaining:]
-            remaining = data_size - len(data)
-        assert len(data) == data_size
-        return data
-
     def send_command(self, command):
         assert command[-1] == "\n", "Command does not end with new line"
-        self.conn.sendall(command)
+        self.socket.send_data(command)
 
-    def receive_result(self):
-        line = self.receive_line()
+    def send_data(self, data):
+       self.socket.send_data(data)
+
+    def receive_line(self):
+        line = self.socket.read_line()
         if line.startswith("Error:"):
             raise Exception("Received line: " + line)
         return line
 
+    def receive_data(self):
+        args = self.socket.read_line().split()
+        return self.socket.read_data(int(args[1]))
+
     def send_and_receive(self, command):
         self.send_command(command)
-        return self.receive_result()
+        return self.receive_line()
 
     def send_and_receive_data(self, command):
         self.send_command(command)
@@ -265,6 +270,12 @@ class Controller:
 
     def send_and_receive_ok(self, command):
         self.send_command(command)
+        r = self.receive_line()
+        if r != "Ok":
+            raise self.on_unexpected_output(r)
+
+    def send_data_and_receive_ok(self, data):
+        self.send_data(data)
         r = self.receive_line()
         if r != "Ok":
             raise self.on_unexpected_output(r)
@@ -297,8 +308,21 @@ class Controller:
     def restore_state(self, state_id):
         self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
 
-    def make_buffer(self, size):
-        return self.send_and_receive_int("NEW_BUFFER {0}\n".format(size))
+    def make_buffer(self, buffer_id, size):
+        self.send_and_receive_ok(
+             "NEW_BUFFER {0} {1}\n".format(buffer_id, size))
+
+    def start_remote_buffer(self, buffer_id):
+        self.send_command("START_REMOTE_BUFFER {0}\n".format(buffer_id))
+
+    def finish_remote_buffer(self):
+        self.send_and_receive_ok("FINISH_REMOTE_BUFFER\n")
+
+    def remote_buffer_upload(self, addr, size):
+        self.send_command("UPLOAD {0} {1}\n".format(addr, size))
+
+    def remote_buffer_download(self, buffer_id):
+        self.send_command("DOWNLOAD {0}\n".format(buffer_id))
 
     def free_state(self, state_id):
         self.send_and_receive_ok("FREE {0}\n".format(state_id))
@@ -312,8 +336,12 @@ class Controller:
             "-q",
             "--tool=aislinn",
             "--port={0}".format(port)
-        ) + tuple([ "--capture-syscall=" + name for name in capture_syscalls ]) \
-          + tuple(self.valgrind_args) + tuple(self.args)
+        ) + tuple([ "--capture-syscall=" + name for name in capture_syscalls ])
+
+        if self.buffer_server_port is not None:
+            args += ("--bs-port={0}".format(self.buffer_server_port),)
+
+        args += tuple(self.valgrind_args) + tuple(self.args)
 
         if self.debug_under_valgrind or self.profile_under_valgrind:
             if self.profile_under_valgrind:
@@ -340,31 +368,102 @@ class Controller:
         s.listen(1)
         return s
 
+    def __repr__(self):
+        return "<Controller '{0}'>".format(self.name)
 
 
-class VgState(base.resource.Resource):
+class ControllerResourceManager(ResourceManager):
+    controller = None
+
+
+class VgState(Resource):
     hash = None
 
-class VgBuffer(base.resource.Resource):
-    hash = None
+    @property
+    def controller(self):
+        return self.manager.controller
+
+
+class BufferManager(ResourceManager):
+
+    def __init__(self):
+        ResourceManager.__init__(self, VgBuffer)
+        self.buffer_id_counter = 10
+
+    def cleanup(self):
+        if self.not_used_resources:
+            for b in self.pickup_resources_to_clean():
+                b.cleanup()
+
+    def new_buffer(self, data):
+        buffer_id = self.buffer_id_counter
+        self.buffer_id_counter += 1
+        buffer = self.new(buffer_id)
+        buffer.set_data(data)
+        # We add a special referece, this refence is
+        # removed when buffer is written into all controllers
+        # It may happen that state are disposed before this,
+        # (usually when an error is detected)
+        buffer.inc_ref()
+        return buffer
+
+
+class VgBuffer(Resource):
+
+    def __init__(self, manager, id):
+        Resource.__init__(self, manager, id)
+        self.data = None
+        self.hash = None
+        self.controllers = []
+        self.remaining_controllers = None
+
+    def cleanup(self):
+        for controller in self.controllers:
+            controller.free_buffer(self.id)
+
+    def set_data(self, data):
+        self.data = data
+        hashthread = hashlib.md5()
+        hashthread.update(self.data)
+        self.hash = hashthread.hexdigest()
+
+
+    @property
+    def size(self):
+        if self.data is None:
+            return None
+        return len(self.data)
+
+    def write_data(self, controller):
+        logging.debug("Writing buffer %s into %s", self, controller)
+        controller.make_buffer(self.id, self.size)
+        controller.write_data_into_buffer(self.id, 0, self.data)
+        self.controllers.append(controller)
+        self.remaining_controllers -= 1
+        if self.remaining_controllers <= 0:
+            assert self.remaining_controllers == 0
+            self.data = None
+            # Remove reference added in BufferManager.new_buffer()
+            self.dec_ref()
+
+    def __repr__(self):
+        return "<VgBuffer id={0.id} size={0.size} " \
+               "ref_count={0.ref_count}>".format(self)
 
 
 class ControllerWithResources(Controller):
 
     def __init__(self, args, cwd=None):
         Controller.__init__(self, args, cwd)
-        self.states = base.resource.ResourceManager(VgState)
-        self.buffers = base.resource.ResourceManager(VgBuffer)
+        self.states = ControllerResourceManager(VgState)
+        self.states.controller = self
         self.state_cache = {}
+        self.buffers_to_make = []
 
     @property
     def states_count(self):
         assert len(self.state_cache) == self.states.resource_count
         return self.states.resource_count
-
-    @property
-    def buffers_count(self):
-        return self.buffers.resource_count
 
     def cleanup_states(self):
         if self.states.not_used_resources:
@@ -373,10 +472,6 @@ class ControllerWithResources(Controller):
                     del self.state_cache[state.hash]
                 self.free_state(state.id)
 
-    def cleanup_buffers(self):
-        if self.buffers.not_used_resources:
-            for b in self.buffers.pickup_resources_to_clean():
-                self.free_buffer(b.id)
 
     def save_state(self, hash=None):
         if hash:
@@ -397,5 +492,11 @@ class ControllerWithResources(Controller):
     def restore_state(self, state):
         Controller.restore_state(self, state.id)
 
-    def make_buffer(self, size):
-        return self.buffers.new(Controller.make_buffer(self, size))
+    def add_buffer(self, buffer):
+        self.buffers_to_make.append(buffer)
+
+    def make_buffers(self):
+        if self.buffers_to_make:
+            for buffer in self.buffers_to_make:
+                buffer.write_data(self)
+            self.buffers_to_make = []

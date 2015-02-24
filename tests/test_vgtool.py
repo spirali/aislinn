@@ -49,7 +49,6 @@ class VgToolTests(TestCase):
         stats = c.get_stats()
         # All pages are active
         self.assertEquals(stats["pages"], stats["active-pages"])
-        c.kill()
 
     def test_local(self):
         self.program("local")
@@ -62,7 +61,6 @@ class VgToolTests(TestCase):
         c.write_int(arg, 210);
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
-        c.kill()
 
     def test_global(self):
         self.program("global")
@@ -75,7 +73,6 @@ class VgToolTests(TestCase):
         c.write_int(arg, 210);
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
-        c.kill()
 
     def test_restore_after_quit(self):
         self.program("simple")
@@ -102,7 +99,6 @@ class VgToolTests(TestCase):
         self.assertNotEquals(h1, h2)
         self.assertNotEquals(h2, h3)
         self.assertNotEquals(h2, h3)
-        c.kill()
 
     def test_function_call(self):
         self.program("function")
@@ -122,7 +118,6 @@ class VgToolTests(TestCase):
         c.restore_state(s)
         self.assertEquals(c.run_function(fn_b, 0, 40), "CALL B 40")
         self.assertEquals(c.run_process(), "FUNCTION_FINISH")
-        c.kill()
 
     def test_syscall(self):
         self.program("syscall")
@@ -150,8 +145,6 @@ class VgToolTests(TestCase):
         c.set_capture_syscall("write", False)
         self.assertEquals(c.run_process(), "CALL Second")
 
-        c.kill()
-
     def test_syscall2(self):
         self.program("syscall")
         c = self.controller()
@@ -162,7 +155,6 @@ class VgToolTests(TestCase):
         c.run_drop_syscall()
         self.assertEquals(c.run_process(), "CALL Second")
         self.assertEquals(c.process.stdout.readline(), "Hello 2!\n")
-        c.kill()
 
     def test_access(self):
         INT_SIZE = 4
@@ -222,6 +214,110 @@ class VgToolTests(TestCase):
         self.assertEquals(args[1], name)
         return int(args[2])
 
+    def test_write_into_buffer(self):
+        self.program("two_allocations")
+        c = self.controller()
+        mem1 = int(c.start_and_connect().split()[2])
+        mem2 = int(c.run_process().split()[2])
+        # buffer 500 - small buffer
+        # buffer 600 - big buffer
+        c.make_buffer(500, 10);
+        c.make_buffer(600, 100000);
+        data1 = "abc123"
+        data2 = "abcABCwxyz" * 10000
+        c.write_data_into_buffer(500, 2, data1)
+        c.write_data_into_buffer(600, 0, data2)
+        c.write_buffer(mem1, 500)
+        c.write_buffer(mem2, 600)
+        self.assertEquals(data1, c.read_mem(mem1 + 2, 6))
+        self.assertEquals(data2, c.read_mem(mem2, 100000))
+        self.assertEquals("EXIT 0", c.run_process())
+        c.free_buffer(500)
+        c.free_buffer(600)
+
+    def test_download_buffer(self):
+        self.program("two_allocations")
+        self.start_bufserver(3)
+        c1 = self.controller()
+        c2 = self.controller()
+        mem1 = int(c1.start_and_connect().split()[2])
+        mem2 = int(c1.run_process().split()[2])
+        c2.start_and_connect()
+        c2.run_process()
+        s = self.connect_to_bufserver()
+
+        # Make remote buffer
+        c1.start_remote_buffer(100)
+        c1.finish_remote_buffer()
+
+        # Make remote buffer
+        c1.start_remote_buffer(101)
+        c1.remote_buffer_upload(mem2, 60000)
+        c1.remote_buffer_upload(mem1, 3)
+        c1.finish_remote_buffer()
+
+        s.send_data("STATS\n")
+        self.assertEquals(s.read_line().split()[0], "2")
+
+        # Download buffers
+        c2.remote_buffer_download(100)
+        c2.remote_buffer_download(101)
+
+        # Write downloaded buffer
+        out = c2.client_malloc(70000)
+        c2.write_buffer(out, 101)
+        self.assertEquals(c2.read_mem(out, 60003), "Y" * 60000 + "XXX")
+
+        s.send_data("STATS\n")
+        self.assertEquals(s.read_line().split()[0], "2")
+
+        self.assertEquals("EXIT 0", c2.run_process())
+
+
+    def test_bufserver(self):
+        self.start_bufserver(1)
+        s = self.connect_to_bufserver()
+
+        # Check stats
+        s.send_data("STATS\n")
+        self.assertEquals(s.read_line(), "0 0")
+
+        # Create new buffer
+        s.send_data("NEW 123\n10\n")
+        s.send_data("1234567890")
+        s.send_data("10\nA23456789B")
+        s.send_data("2\nXYDONE\n")
+
+        # Create new buffer
+        s.send_data("NEW 124\n35000\n")
+        s.send_data("J" * 35000)
+        s.send_data("DONE\n")
+
+        # Get buffer
+        s.send_data("GET 123\n")
+        size = int(s.read_line())
+        self.assertEquals(size, 22)
+        data = s.read_data(size)
+        self.assertEquals(data, "1234567890A23456789BXY")
+
+        # Get buffer
+        s.send_data("GET 124\n")
+        size = int(s.read_line())
+        self.assertEquals(size, 35000)
+        data = s.read_data(size)
+        self.assertEquals(data, "J" * 35000)
+
+        # Check stats
+        s.send_data("STATS\n")
+        self.assertEquals(s.read_line().split()[0], "2")
+
+        # Destroy buffers
+        s.send_data("FREE 123\n")
+        s.send_data("FREE 124\n")
+
+        # Check stats
+        s.send_data("STATS\n")
+        self.assertEquals(s.read_line(), "0 0")
 
 
 if __name__ == "__main__":

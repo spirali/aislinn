@@ -780,7 +780,10 @@ class State:
             i += 1
 
     def __repr__(self):
-        return "<state {0:x} pid={1}>".format(id(self), self.pid)
+        info = ""
+        if self.vg_state is None:
+            info = " no_vg_state"
+        return "<state {0:x} pid={1}{2}>".format(id(self), self.pid, info)
 
 # Used for message normalization
 # Matching cannot depenend on order messages according to

@@ -74,16 +74,15 @@ class SendRequest(Request):
         if self.target == consts.MPI_PROC_NULL:
             return
         sz = self.count * self.datatype.size
-        vg_buffer = context.controller.make_buffer_and_pack(self.datatype,
-                                                            self.count,
-                                                            self.data_ptr)
-
         comm = context.state.get_comm(self.comm_id)
         target_pid = comm.group.rank_to_pid(self.target)
+        vg_buffer = context.make_buffer_for_one(
+                target_pid, self.data_ptr, self.datatype, self.count)
         message = Message(comm.comm_id, context.state.get_rank(comm),
                           self.target, self.tag, vg_buffer, sz)
-        context.gstate.get_state(target_pid).add_message(message)
-        context.generator.message_sizes.add(sz)
+        gcontext = context.gcontext
+        gcontext.gstate.get_state(target_pid).add_message(message)
+        gcontext.generator.message_sizes.add(sz)
         self.message = message
 
     def is_standard_send(self):

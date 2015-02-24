@@ -137,10 +137,8 @@ class OperationWithBuffers(CollectiveOperation):
 
     def compute_hash_data(self, hashthread):
         for vg_buffer in self.buffers:
-            if vg_buffer is not None:
+            if vg_buffer:
                 hashthread.update(vg_buffer.hash)
-            else:
-                hashthread.update("-")
 
     def sanity_check(self):
         CollectiveOperation.sanity_check(self)
@@ -148,26 +146,15 @@ class OperationWithBuffers(CollectiveOperation):
             assert vg_buffer is None or vg_buffer.ref_count > 0, \
                 "Zero reference in " + repr(vg_buffer)
 
+    def make_buffer_for_all(self, context, rank, comm, pointer, datatype, count):
+        assert self.buffers[rank] is None
+        self.buffers[rank] = context.make_buffer_for_more(
+              comm.group.pids(), pointer, datatype, count)
 
-class OperationWithSingleBuffer(CollectiveOperation):
-
-    def __init__(self, gstate, comm, blocking, cc_id):
-        CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
-        self.buffer = None
-
-    def after_copy(self):
-        if self.buffer:
-            self.buffer.inc_ref()
-
-    def dispose(self):
-        if self.buffer:
-            self.buffer.dec_ref()
-
-    def compute_hash_data(self, hashthread):
-        if self.buffer is not None:
-            hashthread.update(self.buffer.hash)
-        else:
-            hashthread.update("-")
+    def make_buffer_for_root(self, context, rank, comm, pointer, datatype, count):
+        assert self.buffers[rank] is None
+        self.buffers[rank] = context.make_buffer_for_one(
+              self.root_pid, pointer, datatype, count)
 
 
 class Barrier(CollectiveOperation):
@@ -212,9 +199,8 @@ class Gatherv(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.check_root(context, comm, root)
 
-        assert self.buffers[rank] is None
-        self.buffers[rank] = context.controller.make_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
+        self.make_buffer_for_root(
+                context, rank, comm, sendbuf, sendtype, sendcount)
 
         if root == rank:
             recvtype = check.check_datatype(context, recvtype, 7)
@@ -284,8 +270,8 @@ class Gather(OperationWithBuffers):
             if rank != root:
                 context.add_error_and_throw(errormsg.InvalidInPlace(context))
         else:
-            self.buffers[rank] = context.controller.make_buffer_and_pack(
-                    sendtype, sendcount, sendbuf)
+            self.make_buffer_for_root(
+                    context, rank, comm, sendbuf, sendtype, sendcount)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
@@ -331,13 +317,8 @@ class Allgather(OperationWithBuffers):
         self.recvtypes[rank] = check.check_datatype(context, recvtype, 7)
         check.check_count(context, recvcount, 5)
         self.recvcounts[rank] = recvcount
-
-        self.sendtype = sendtype
-        self.sendcount = sendcount
-
-        assert self.buffers[rank] is None
-        self.buffers[rank] = context.controller.make_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
+        self.make_buffer_for_all(
+                context, rank, comm, sendbuf, sendtype, sendcount)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -378,9 +359,8 @@ class Allgatherv(OperationWithBuffers):
                recvbuf, recvcounts, displs, recvtype = args
         rank = context.state.get_rank(comm)
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.controller.make_buffer_and_pack(
-                sendtype, sendcount, sendbuf)
-
+        self.make_buffer_for_all(
+                context, rank, comm, sendbuf, sendtype, sendcount)
         recvtype = check.check_datatype(context, recvtype, 7)
         self.recvtypes[rank] = recvtype
         self.recvbufs[rank] = recvbuf
@@ -412,12 +392,12 @@ class Allgatherv(OperationWithBuffers):
         hashthread.update(str(self.displs))
 
 
-class Scatterv(OperationWithSingleBuffer):
+class Scatterv(OperationWithBuffers):
 
     name = "scatterv"
 
     def __init__(self, gstate, comm, blocking, cc_id):
-        OperationWithSingleBuffer.__init__(self, gstate, comm, blocking, cc_id)
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.recvbufs = [ None ] * self.process_count
         self.recvcounts = [ None ] * self.process_count
         self.recvtypes = [ None ] * self.process_count
@@ -426,7 +406,7 @@ class Scatterv(OperationWithSingleBuffer):
         self.displs = None
 
     def after_copy(self):
-        OperationWithSingleBuffer.after_copy(self)
+        OperationWithBuffers.after_copy(self)
         self.recvbufs = copy.copy(self.recvbufs)
         self.recvcounts = copy.copy(self.recvcounts)
         self.recvtypes = copy.copy(self.recvtypes)
@@ -451,24 +431,24 @@ class Scatterv(OperationWithSingleBuffer):
             self.displs = context.controller.read_ints(
                     displs, self.process_count)
             sendcount = max(s + d for s, d in zip(self.sendcounts, self.displs))
-            assert self.buffer is None
-            self.buffer = context.controller.make_buffer_and_pack(
-                    sendtype, sendcount, sendbuf)
+            self.make_buffer_for_all(
+                    context, rank, comm,
+                    sendbuf, sendtype, sendcount)
 
     def can_be_completed(self, state):
-        return self.buffer is not None
+        return self.buffers[self.root] is not None
 
     def complete_main(self, context, comm):
         rank = context.state.get_rank(comm)
         index =  self.sendtype.size * self.displs[rank]
         self.recvtypes[rank].unpack(context.controller,
-                                    self.buffer,
+                                    self.buffers[self.root],
                                     self.recvcounts[rank],
                                     self.recvbufs[rank],
                                     index)
 
     def compute_hash_data(self, hashthread):
-        OperationWithSingleBuffer.compute_hash_data(self, hashthread)
+        OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.sendcounts))
         hashthread.update(str(self.recvbufs))
         hashthread.update(str(t.type_id if t else None for t in self.recvtypes))
@@ -478,12 +458,12 @@ class Scatterv(OperationWithSingleBuffer):
         hashthread.update(str(self.sendtype.type_id if self.sendtype else None))
 
 
-class Scatter(OperationWithSingleBuffer):
+class Scatter(OperationWithBuffers):
 
     name = "scatter"
 
     def __init__(self, gstate, comm, blocking, cc_id):
-        OperationWithSingleBuffer.__init__(self, gstate, comm, blocking, cc_id)
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.sendcount = None
         self.recvbufs = [ None ] * self.process_count
@@ -491,7 +471,7 @@ class Scatter(OperationWithSingleBuffer):
         self.recvtypes = [ None ] * self.process_count
 
     def after_copy(self):
-        OperationWithSingleBuffer.after_copy(self)
+        OperationWithBuffers.after_copy(self)
         self.recvbufs = copy.copy(self.recvbufs)
         self.recvcounts = copy.copy(self.recvcounts)
         self.recvtypes = copy.copy(self.recvtypes)
@@ -514,16 +494,13 @@ class Scatter(OperationWithSingleBuffer):
             sendtype = check.check_datatype(context, sendtype, 3)
             self.sendtype = sendtype
             self.sendcount = sendcount
-            assert self.buffer is None
-            self.buffer = context.controller.make_buffer_and_pack(
-                    sendtype,
-                    sendcount * self.process_count,
-                    sendbuf)
+            self.make_buffer_for_all(
+                    context, rank, comm, sendbuf, sendtype, sendcount * self.process_count)
         elif recvbuf == consts.MPI_IN_PLACE:
             context.add_error_and_throw(errormsg.InvalidInPlace(context))
 
     def can_be_completed(self, state):
-        return self.buffer is not None
+        return self.buffers[self.root] is not None
 
     def complete_main(self, context, comm):
         rank = context.state.get_rank(comm)
@@ -531,32 +508,32 @@ class Scatter(OperationWithSingleBuffer):
         recvbuf = self.recvbufs[rank]
         if recvbuf != consts.MPI_IN_PLACE:
             self.recvtypes[rank].unpack(context.controller,
-                                        self.buffer,
+                                        self.buffers[self.root],
                                         self.recvcounts[rank],
                                         self.recvbufs[rank],
                                         index)
 
     def compute_hash_data(self, hashthread):
-        OperationWithSingleBuffer.compute_hash_data(self, hashthread)
+        OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.sendtype.type_id if self.sendtype else None))
         hashthread.update(str(self.sendcount))
         hashthread.update(str(self.recvbufs))
         hashthread.update(str(t.type_id if t else None for t in self.recvtypes))
         hashthread.update(str(self.recvcounts))
 
-class Bcast(OperationWithSingleBuffer):
+class Bcast(OperationWithBuffers):
 
     name = "bcast"
 
     def __init__(self, gstate, comm, blocking, cc_id):
-        OperationWithSingleBuffer.__init__(self, gstate, comm, blocking, cc_id)
+        OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.recvbufs = [ None ] * self.process_count
         self.counts = [ None ] * self.process_count
         self.datatypes = [ None ] * self.process_count
         self.root = None
 
     def after_copy(self):
-        OperationWithSingleBuffer.after_copy(self)
+        OperationWithBuffers.after_copy(self)
         self.recvbufs = copy.copy(self.recvbufs)
         self.counts = copy.copy(self.counts)
         self.datatypes = copy.copy(self.datatypes)
@@ -571,27 +548,26 @@ class Bcast(OperationWithSingleBuffer):
         rank = context.state.get_rank(comm)
         if self.root == rank:
             self.count = count
-            assert self.buffer is None
-            self.buffer = context.controller.make_buffer_and_pack(
-                    datatype, count, buffer)
+            self.make_buffer_for_all(
+                    context, rank, comm, buffer, datatype, count)
         else:
             self.recvbufs[rank] = buffer
             self.datatypes[rank] = datatype
             self.counts[rank] = count
 
     def can_be_completed(self, state):
-        return self.buffer is not None
+        return self.buffers[self.root] is not None
 
     def complete_main(self, context, comm):
         rank = context.state.get_rank(comm)
         if self.root != rank:
             self.datatypes[rank].unpack(context.controller,
-                                        self.buffer,
+                                        self.buffers[self.root],
                                         self.counts[rank],
                                         self.recvbufs[rank])
 
     def compute_hash_data(self, hashthread):
-        OperationWithSingleBuffer.compute_hash_data(self, hashthread)
+        OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.recvbufs))
         hashthread.update(str(self.counts))
         hashthread.update(str([t.type_id if t else None
@@ -658,8 +634,8 @@ class Reduce(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.recvbuf = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.controller.make_buffer_and_pack(
-            datatype, count, sendbuf)
+        self.make_buffer_for_root(
+                context, rank, comm, sendbuf, datatype, count)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
@@ -714,8 +690,9 @@ class AllReduce(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         assert self.buffers[rank] is None
-        self.buffers[rank] = context.controller.make_buffer_and_pack(
-                datatype, count, sendbuf)
+        self.make_buffer_for_all(
+                context, rank, comm, sendbuf, datatype, count)
+
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -777,21 +754,20 @@ class ReduceScatter(OperationWithBuffers):
 
         rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
-        assert self.buffers[rank] is None
-        self.buffers[rank] = context.controller.make_buffer_and_pack(
-                datatype, total_count, sendbuf)
-
+        self.make_buffer_for_all(
+                context, rank, comm, sendbuf, datatype, total_count)
         if self.remaining_processes_enter == 0:
-            tmp = context.controller.client_malloc(datatype.size * total_count)
+            context.controller.make_buffers()
+            tmp = context.controller.client_malloc(self.datatype.size * total_count)
             execute_reduce_op(context, comm, rank,
                               self, tmp, self.buffers, total_count)
-            for vg_buffer in self.buffers:
-                if vg_buffer:
-                    vg_buffer.dec_ref()
-            self.final_buffer = context.controller.make_buffer_and_pack(
-                datatype, total_count, tmp)
+            self.final_buffer = context.make_buffer_for_more(
+                comm.group.pids(), tmp, datatype, total_count)
             context.controller.client_free(tmp)
+            for b in self.buffers:
+                b.dec_ref()
             self.buffers = []
+
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0

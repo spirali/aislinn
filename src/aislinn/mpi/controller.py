@@ -20,6 +20,7 @@
 
 import base.controller
 
+
 class Controller(base.controller.ControllerWithResources):
 
     STATUS_SIZE = 4 * base.controller.Controller.INT_SIZE
@@ -32,9 +33,3 @@ class Controller(base.controller.ControllerWithResources):
 
     def on_unexpected_output(self, line):
         self.context.on_unexpected_output(line)
-
-    def make_buffer_and_pack(self, datatype, count, addr):
-        vg_buffer = self.make_buffer(datatype.size * count)
-        datatype.pack(self, addr, vg_buffer, count)
-        vg_buffer.hash = self.hash_buffer(vg_buffer.id)
-        return vg_buffer

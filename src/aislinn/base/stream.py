@@ -28,3 +28,9 @@ class StreamChunk:
         self.stream_name = stream_name
         self.pid = pid
         self.data = data
+
+    def add_event(self, event):
+        self.events.append(event)
+
+    def add_stream_chunk(self, stream_name, pid, data):
+        self.stream_chunks.append(((stream_name, pid), data))
