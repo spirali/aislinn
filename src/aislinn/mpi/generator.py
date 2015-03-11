@@ -108,12 +108,16 @@ class Generator:
                     self.statistics_tick)
 
     def record_statistics(self):
-        stats = self._controller.get_stats()
+        pages = 0
+        active_pages = 0
+        buffers_size = 0
+        for controller in self.controllers:
+            stats = controller.get_stats()
+            pages += stats["pages"]
+            active_pages = stats["active-pages"]
+            buffers_size = stats["buffers-size"]
         self.statistics.append((
-            len(self.working_queue),
-            stats["pages"],
-            stats["active-pages"],
-            stats["buffers-size"]))
+            len(self.working_queue), pages, active_pages, buffers_size))
 
     def add_error_message(self, error_message):
         if error_message.name in [ e.name for e in self.error_messages ]:
