@@ -211,7 +211,8 @@ class BaseTests(TestCase):
     def test_request_leak(self):
         self.program("request_leak")
         self.execute(1, "send", error="mpi/pending-request")
-        self.execute(1, "recv", error="mpi/pending-request")
+        self.execute(1, "recv1", error="mpi/pending-request")
+        self.execute(1, "recv2", error="mpi/pending-request")
 
     def test_request_invalid(self):
         self.program("request_invalid")

@@ -413,6 +413,7 @@ class VgBuffer(Resource):
     def __init__(self, manager, id):
         Resource.__init__(self, manager, id)
         self.data = None
+        self.size = None
         self.hash = None
         self.controllers = []
         self.remaining_controllers = None
@@ -426,13 +427,7 @@ class VgBuffer(Resource):
         hashthread = hashlib.md5()
         hashthread.update(self.data)
         self.hash = hashthread.hexdigest()
-
-
-    @property
-    def size(self):
-        if self.data is None:
-            return None
-        return len(self.data)
+        self.size = len(data)
 
     def write_data(self, controller):
         logging.debug("Writing buffer %s into %s", self, controller)
@@ -448,7 +443,7 @@ class VgBuffer(Resource):
 
     def __repr__(self):
         return "<VgBuffer id={0.id} size={0.size} " \
-               "ref_count={0.ref_count}>".format(self)
+               "ref_count={0.ref_count} rc={0.remaining_controllers}>".format(self)
 
 
 class ControllerWithResources(Controller):

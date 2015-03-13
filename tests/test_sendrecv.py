@@ -8,13 +8,13 @@ class SendRecvTests(TestCase):
 
     def test_send_and_receive(self):
         self.program("send_and_receive")
-        self.execute(2, "1 ssend", stdout="Receive\nSend\n")
-        self.execute(2, "1 bsend", stdout="Send\nReceive\n")
-        self.execute(2, "0 bsend", error="mpi/deadlock")
-        self.execute(2, "1 rsend", stdout="Send\nReceive\n")
-
         self.output(0, "Send\n")
         self.output(1, "Receive\n")
+        self.execute(2, "1 ssend")
+        self.execute(2, "1 bsend")
+        self.execute(2, "0 bsend", error="mpi/deadlock")
+        self.execute(2, "1 rsend")
+
         self.execute(2, "1 send")
         self.execute(2, "0 send", error="mpi/deadlock")
 
@@ -28,8 +28,8 @@ class SendRecvTests(TestCase):
         self.output(1, "Receive\n")
         self.execute(2, "1 send")
         self.execute(2, "0 send", error="mpi/deadlock")
-        self.execute(2, "1 ssend", stdout="Receive\nSend\n")
-        self.execute(2, "1 bsend", stdout="Send\nReceive\n")
+        self.execute(2, "1 ssend")
+        self.execute(2, "1 bsend")
         self.execute(2, "0 bsend", error="mpi/deadlock")
         self.execute(2, "1 rsend")
 
@@ -44,6 +44,16 @@ class SendRecvTests(TestCase):
         self.execute(3)
         self.output(0, "0 0 1\n")
         self.execute(1)
+
+    def test_ssend(self):
+        self.program("ssend")
+        self.output(2, "200\n100\n")
+        self.execute(3, "ssend")
+        self.output(2, "100\n200\n")
+        self.output(2, "200\n100\n")
+        self.execute(3, "bsend")
+        self.execute(3, "waitall")
+
 
     def test_persistent(self):
         self.program("persistent")
@@ -214,6 +224,14 @@ class SendRecvTests(TestCase):
                            "First3 2 333\nSecond 0 111\n")
         self.execute(3, "probe", send_protocol="rendezvous")
         self.execute(3, "iprobe", send_protocol="rendezvous")
+
+    def test_probe(self):
+        self.program("probe")
+        self.output(1, "Found1\n")
+        self.output(1, "Not found1\nFound2\n")
+        self.output(1, "Not found1\nNot found2\nFound3\n")
+        self.output(1, "Not found1\nNot found2\nNot found3\n")
+        self.execute(2)
 
     def test_tag(self):
         self.program("tag")

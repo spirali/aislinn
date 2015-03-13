@@ -25,9 +25,9 @@ from base.statespace import StateSpace
 from base.stream import STREAM_STDOUT, STREAM_STDERR
 from base.utils import power_set
 from collections import deque
-from gcontext import GlobalContext
+from gcontext import GlobalContext, ErrorFound
 from globalstate import GlobalState
-from mpi.context import Context, ErrorFound
+from mpi.context import Context
 from mpi.controller import Controller
 from state import State
 import consts
@@ -165,7 +165,6 @@ class Generator:
         gcontext.make_node()
         return True
 
-
     def run(self):
         self.init_time = datetime.datetime.now()
         try:
@@ -269,86 +268,122 @@ class Generator:
         for controller in self.controllers:
             controller.cleanup_states()
 
-    def fast_partial_expand(self, gcontext):
-        for state in gcontext.gstate.states:
-            if state.status == State.StatusWaitAll or \
-                    state.status == State.StatusWaitAny:
-                if not state.are_requests_deterministic():
-                    continue
-                matches = state.check_requests(upto_active=True)
-                len(matches) == 1 # Active request are deterministic here
+    def check_collective_requests(self, gcontext):
+        gstate = gcontext.gstate
+        for state in gstate.states:
+            for r in state.active_requests:
+                if r.is_collective():
+                    if gstate.get_operation_by_cc_id(r.comm.comm_id, r.cc_id) \
+                            .can_be_completed(state):
+                        state.finish_collective_request(r)
 
-                if not matches[0]:
-                    continue
+    def continue_waitany(self, gcontext, state):
+        logging.debug("Continue waitsome %s", state)
+        context = gcontext.prepare_context(state.pid)
+        context.controller.write_int(context.state.index_ptr, state.select)
+        context.close_requests((state.select,))
+        context.run()
+        return context
 
-                logging.debug("Fast partial expand pid=%s", state.pid)
+    def continue_waitsome(self, gcontext, state):
+        logging.debug("Continue waitsome %s", state)
+        context = gcontext.prepare_context(state.pid)
+        index_ptr, outcounts_ptr = context.state.index_ptr
+        indices = state.select
+        context.controller.write_int(outcounts_ptr, len(indices))
+        context.controller.write_ints(index_ptr, indices)
+        context.close_requests(indices)
+        context.run()
+        return context
 
-                context = gcontext.prepare_context(state.pid)
-                context.apply_matching(matches[0])
-                return context
-        return None
+    def continue_ready(self, gcontext, state):
+        logging.debug("Continue ready %s", state)
+        context = gcontext.prepare_context(state.pid)
+        if state.flag_ptr is not None:
+            context.controller.write_int(state.flag_ptr, 0)
+        context.run()
+        return context
+
+    def continue_waitall(self, gcontext, state):
+        logging.debug("Continue waitall %s", state)
+        context = gcontext.prepare_context(state.pid)
+        context.close_all_requests()
+        context.run()
+        return context
+
+    def continue_testall(self, gcontext, state):
+        logging.debug("Continue testall %s", state)
+        context = gcontext.prepare_context(state.pid)
+        context.controller.write_int(state.flag_ptr, 1)
+        context.close_all_requests()
+        context.run()
+        return context
+
+    def continue_probe(self, gcontext, state, rank):
+        logging.debug("Continue probe %s", state)
+        comm_id, source, tag, status_ptr = state.probe_data
+        pid, request = state.probe_deterministic(comm_id, rank, tag)
+        context = gcontext.prepare_context(state.pid)
+        if state.flag_ptr:
+            context.controller.write_int(state.flag_ptr, 1)
+        context.controller.write_status(
+                status_ptr, rank, request.tag, request.vg_buffer.size)
+        context.run()
+        return context
 
     def fast_expand_node(self, gcontext):
-        partial_found = False
+        matching = gcontext.find_deterministic_match()
+        if matching:
+            gcontext.apply_matching(matching)
+            return True
+
+        if gcontext.gstate.collective_operations:
+            self.check_collective_requests(gcontext)
 
         for state in gcontext.gstate.states:
-            if state.status == State.StatusWaitAll or \
-                    state.status == State.StatusWaitAny or \
-                    state.status == State.StatusWaitSome:
-                if not state.are_requests_deterministic():
-                    continue
-                matches = state.check_requests(upto_active=True)
-                len(matches) == 1 # Active request are deterministic here
-
-                if not state.is_matching_covering_active_requests(matches[0]):
-                   partial_found = True
-                   continue
-
-                if state.status == State.StatusWaitAny \
-                        or state.status == State.StatusWaitSome:
-                    count = len(state.active_request_ids) - \
-                                state.active_request_ids.count(consts.MPI_COMM_NULL)
-                    if count > 1:
-                        # We cannot continue because we need branching,
-                        # so the best we can hope
-                        # for is "partial_found"
-                        continue
-                    assert count == 1
-
-                logging.debug("Fast expand status=wait pid=%s", state.pid)
-                context = gcontext.prepare_context(state.pid)
-                if state.status == State.StatusWaitAny:
-                    for i, request_id in enumerate(state.active_request_ids):
-                        if request_id != consts.MPI_REQUEST_NULL:
-                            context.controller.write_int(state.index_ptr, i)
-                            break
-                    else:
-                        raise Exception("Internal error")
-
-                if state.status == State.StatusWaitSome:
-                    for i, request_id in enumerate(state.active_request_ids):
-                        if request_id != consts.MPI_REQUEST_NULL:
-                            index_ptr, outcounts_ptr = state.index_ptr
-                            context.controller.write_int(index_ptr, i)
-                            context.controller.write_int(outcounts_ptr, 1)
-                            break
-                    else:
-                        raise Exception("Internal error")
-
-                context.apply_matching(matches[0])
-                context.finish_all_active_requests()
-                context.run()
-                return context
+            if (state.status == State.StatusWaitAll
+                and state.are_tested_requests_finished()):
+                   self.continue_waitall(gcontext, state)
+                   return True
 
             if state.status == State.StatusReady:
-                logging.debug("Fast expand status=init pid=%s", state.pid)
-                context = gcontext.prepare_context(state.pid)
-                context.run()
-                return context
+                self.continue_ready(gcontext, state)
+                return True
 
-        if partial_found:
-            return self.fast_partial_expand(gcontext)
-        return None
+            if state.status == State.StatusWaitSome:
+                if state.select is not None:
+                    self.continue_waitsome(gcontext, state)
+                    return True
+                elif state.waits_for_single_non_null_request() and \
+                    state.are_tested_requests_finished():
+                    state.select = [ state.index_of_first_non_null_request() ]
+                    self.continue_waitsome(gcontext, state)
+                    return True
+
+            if state.status == State.StatusWaitAny:
+                if state.select is not None:
+                    self.continue_waitany(gcontext, state)
+                    return True
+
+            if state.status == State.StatusProbe:
+                comm_id, source, tag, status_ptr = state.probe_data
+                rank = state.get_probe_promise(comm_id, source, tag)
+                if rank is not None:
+                    self.continue_probe(gcontext, state, rank)
+                    return True
+                elif state.probe_data[1] != consts.MPI_ANY_SOURCE and state.flag_ptr is None:
+                    probed = state.probe_deterministic(comm_id, source, tag)
+                    if probed:
+                        pid, request = probed
+                        rank = request.comm.group.pid_to_rank(pid)
+                        state.add_probe_promise(comm_id, source, tag, rank)
+                        self.continue_probe(gcontext, state, rank)
+                        return True
+
+            if state.status == State.StatusTest and state.select:
+                self.continue_testall(gcontext, state)
+                return True
+        return False
 
     def fork_standard_sends(self, node, gstate):
         new_state_created = False
@@ -359,7 +394,7 @@ class Generator:
                 requests = state.fork_standard_sends()
                 if requests is None:
                     continue
-                logging.debug("Forking because of standard send {0}", requests)
+                logging.debug("Forking because of standard send %s", requests)
                 for buffered, synchronous in requests:
                     if self.send_protocol == "dynamic":
                        eager_threshold, rendezvous_threshold = \
@@ -367,14 +402,14 @@ class Generator:
                        assert eager_threshold <= rendezvous_threshold
                        if buffered:
                            buffered_size = \
-                               max(max(r.message.size for r in buffered),
+                               max(max(r.vg_buffer.size for r in buffered),
                                    eager_threshold)
                        else:
                            buffered_size = eager_threshold
 
                        if synchronous:
                            synchronous_size = \
-                               min(min(r.message.size for r in synchronous),
+                               min(min(r.vg_buffer.size for r in synchronous),
                                    rendezvous_threshold)
                        else:
                            synchronous_size = rendezvous_threshold
@@ -391,7 +426,7 @@ class Generator:
                                                               synchronous_size)
 
                     for r in buffered:
-                        new_state.set_request_as_completed(r)
+                        new_state.set_request_as_buffered(r)
                     for r in synchronous:
                         new_state.set_request_as_synchronous(r)
                     new_node = self.add_node(node, new_gstate)
@@ -400,6 +435,84 @@ class Generator:
                 if new_state_created:
                     return True
         return False
+
+    def setup_select_and_make_node(self, gcontext, state, select):
+        gstate = gcontext.gstate.copy()
+        gstate.states[state.pid].select = select
+        g = GlobalContext(self, gcontext.node, gstate)
+        g.make_node()
+
+    def set_flag0_and_make_node(self, gcontext, state):
+        gstate = gcontext.gstate.copy()
+        gstate.states[state.pid].set_ready_flag0()
+        g = GlobalContext(self, gcontext.node, gstate)
+        g.make_node()
+
+    def set_probe_promise_and_make_node(
+            self, gcontext, state, comm_id, source, t, rank):
+        gstate = gcontext.gstate.copy()
+        gstate.states[state.pid].add_probe_promise(comm_id, source, t, rank)
+        g = GlobalContext(self, gcontext.node, gstate)
+        g.make_node()
+
+    def expand_waitsome(self, gcontext, state):
+        indices = state.get_indices_of_tested_and_finished_requests()
+        if not indices:
+            return
+        for indices in power_set(indices):
+            if not indices:
+                continue # skip empty set
+            self.setup_select_and_make_node(gcontext, state, indices)
+
+    def expand_testall(self, gcontext, state):
+        self.set_flag0_and_make_node(gcontext, state)
+        if state.are_tested_requests_finished():
+            self.setup_select_and_make_node(gcontext, state, True)
+
+    def expand_waitany(self, gcontext, state):
+        indices = state.get_indices_of_tested_and_finished_requests()
+        if not indices:
+            return
+        for i in indices:
+            self.setup_select_and_make_node(gcontext, state, i)
+
+    def expand_probe(self, gcontext, state):
+        comm_id, source, tag, status_ptr = state.probe_data
+        if state.get_probe_promise(comm_id, source, tag) is not None:
+            return
+
+        if state.flag_ptr:
+            self.set_flag0_and_make_node(gcontext, state)
+            if source != consts.MPI_ANY_SOURCE:
+                 probed = state.probe_deterministic(comm_id, source, tag)
+                 if probed:
+                     pid, request = probed
+                     rank = request.comm.group.pid_to_rank(pid)
+                     self.set_probe_promise_and_make_node(
+                          gcontext, state, comm_id, source, tag, rank)
+        if source != consts.MPI_ANY_SOURCE:
+            return
+        for pid, request in state.probe_nondeterministic(comm_id, tag):
+            rank = request.comm.group.pid_to_rank(pid)
+            self.set_probe_promise_and_make_node(
+                    gcontext, state, comm_id, source, tag, rank)
+
+    def slow_expand(self, gcontext):
+        for matching in gcontext.find_nondeterministic_matches():
+            logging.debug("Slow expand matching = %s", matching)
+            g = GlobalContext(self, gcontext.node, gcontext.gstate.copy())
+            g.apply_matching(matching)
+            g.make_node()
+
+        for state in gcontext.gstate.states:
+            if state.status == State.StatusWaitAny:
+                self.expand_waitany(gcontext, state)
+            elif state.status == State.StatusWaitSome:
+                self.expand_waitsome(gcontext, state)
+            elif state.status == State.StatusProbe:
+                self.expand_probe(gcontext, state)
+            elif state.status == State.StatusTest:
+                self.expand_testall(gcontext, state)
 
     def expand_node(self, node, gstate):
         logging.debug("--------- Expanding node %s %s ------------", node.uid, gstate)
@@ -411,10 +524,10 @@ class Generator:
             self.debug_captured_states.append(gstate.copy())
 
         gcontext = GlobalContext(self, node, gstate)
+
         fast = False
         while True:
-            context = self.fast_expand_node(gcontext)
-            if context is None:
+            if not self.fast_expand_node(gcontext):
                 break
             fast = True
 
@@ -426,21 +539,7 @@ class Generator:
             gstate.dispose()
             return
 
-        for state in gstate.states:
-            if state.status == State.StatusWaitAll:
-                self.process_wait_or_test_all(node, state, False)
-            elif state.status == State.StatusWaitAny:
-                self.process_wait_or_test_any(node, state, False)
-            elif state.status == State.StatusWaitSome:
-                self.process_wait_or_test_some(node, state, False)
-            elif state.status == State.StatusTest:
-                self.process_wait_or_test_all(node, state, True)
-            elif state.status == State.StatusProbe:
-                self.process_probe(node, state)
-            elif state.status == State.StatusFinished:
-                continue
-            else:
-                raise Exception("Unknown status")
+        self.slow_expand(gcontext)
 
         if not node.arcs:
             if any(state.status != State.StatusFinished
@@ -451,136 +550,17 @@ class Generator:
                 message = errormsg.Deadlock(None,
                                             gcontext=gcontext,
                                             active_pids=active_pids)
-                self.add_error_message(message)
+                gcontext.add_error_and_throw(message)
             else:
                 gstate.mpi_leak_check(self, node)
                 node.allocations = sum((state.allocations
                                         for state in gstate.states), [])
         gstate.dispose()
 
-    def process_probe(self, node, state):
-        # TODO: Move deterministic (no ANY_SOURCE or flag=0) probe into fast expand
-
-        comm_id, source, tag, flag_ptr, status_ptr = state.probe_data
-
-        for request in state.requests:
-            if request is not None and \
-                    request.is_receive() and \
-                    request.comm_id == comm_id:
-                raise Exception("Probe with pending recv request in the same"
-                                "communicator is not supported now. Sorry")
-                # TODO: To make it correct, we need finish all compatible recv
-                # first
-
-        messages, already_probed = state.probe_messages(comm_id, source, tag)
-
-        if flag_ptr is not None and not already_probed: # It is Iprobe
-            context = self.make_copy_and_prepare_context(node, state)
-            context.controller.write_int(flag_ptr, 0)
-            context.run_and_make_node()
-            if status_ptr:
-                # TODO: Set status as undefined
-                pass
-
-        for message in messages:
-            context = self.make_copy_and_prepare_context(node, state)
-            if flag_ptr is not None:
-                context.controller.write_int(flag_ptr, 1)
-            if status_ptr:
-                context.controller.write_status(status_ptr,
-                                                message.source,
-                                                message.tag,
-                                                message.size)
-            context.state.add_probed_message(comm_id, source, tag, message)
-            context.run_and_make_node()
-
     def make_context(self, node, state):
         # This function exists to avoid importing GlobalContext in state.py
         gcontext = GlobalContext(self, node, state.gstate)
         return gcontext.get_context(state.pid)
-
-    def make_copy_and_prepare_context(self, node, state):
-        new_gstate = state.gstate.copy()
-        gcontext = GlobalContext(self, node, new_gstate)
-        return gcontext.prepare_context(state.pid)
-
-    def process_wait_or_test_all(self, node, state, test):
-        if test:
-            context = self.make_copy_and_prepare_context(node, state)
-            context.controller.write_int(state.flag_ptr, 0)
-            context.run_and_make_node()
-
-        matches = state.check_requests()
-        logging.debug("Wait or test all: state=%s matches=%s", state, matches)
-        for matching in matches:
-            covered = state.is_matching_covering_active_requests(matching)
-            if not covered and not any(r.is_receive() for r, m in matching):
-                # Not all request is completed and no new receive request
-                # matched so there is no reason to create new state
-                continue
-            logging.debug("covered=%s", covered)
-            context = self.make_copy_and_prepare_context(node, state)
-            context.apply_matching(matching)
-            if not covered:
-                # Not all active requests are ready, so just apply matchings
-                # and create new state
-                context.make_node()
-                return
-            context.state.finish_all_active_requests(context)
-            if test:
-                context.controller.write_int(state.flag_ptr, 1)
-            context.run_and_make_node()
-
-    def process_wait_or_test_any(self, node, state, test):
-        assert not test # Test not supported yet
-        matches = state.check_requests()
-        logging.debug("Wait or test any: state=%s matches=%s", state, matches)
-        for matching in matches:
-            for i, request in \
-                state.active_requests_covered_by_matching(matching):
-
-                logging.debug("Wait any choice: request=%s", request)
-                context = self.make_copy_and_prepare_context(node, state)
-                context.apply_matching(matching)
-                context.controller.write_int(context.state.index_ptr, i)
-
-                # We need to refresh request, from new state
-                request = context.state.get_request(request.id)
-                context.state.finish_active_request(context, request)
-                #if test:
-                #    self.controller.write_int(state.flag_ptr, 1)
-                context.run_and_make_node()
-
-    def process_wait_or_test_some(self, node, state, test):
-        #if test:
-        #    new_gstate = state.gstate.copy()
-        #    new_state = new_gstate.get_state(state.pid)
-        #    new_state.reinit_active_requests()
-        #    self.controller.restore_state(new_state.vg_state.id)
-        #    self.controller.write_int(state.flag_ptr, 0)
-        #    self.execute_state_and_add_node(node, new_state)
-
-        matches = state.check_requests()
-        logging.debug("Wait or test any: state=%s matches=%s", state, matches)
-        for matching in matches:
-            for requests in \
-                power_set(state.active_requests_covered_by_matching(matching)):
-
-                if not requests:
-                    continue
-
-                logging.debug("Wait some choice: request=%s", requests)
-                context = self.make_copy_and_prepare_context(node, state)
-                context.apply_matching(matching)
-                index_ptr, outcounts_ptr = context.state.index_ptr
-                context.controller.write_int(outcounts_ptr, len(requests))
-                indices = [ i for i, request in requests ]
-                context.controller.write_ints(index_ptr, indices)
-                # We need to refresh request, from new state
-                context.state.finish_active_requests(context, indices)
-                #if test:
-                #    self.controller.write_int(state.flag_ptr, 1)
-                context.run_and_make_node()
 
     def add_node(self, prev, gstate, do_hash=True):
         if do_hash:

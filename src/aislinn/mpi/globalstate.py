@@ -24,6 +24,7 @@ from comm import Communicator, Group, make_comm_world
 import copy
 from state import State
 import consts
+import logging
 
 
 class GlobalState(EqMixin):
@@ -38,6 +39,7 @@ class GlobalState(EqMixin):
         self.comm_id_counter = consts.MPI_COMM_USERDEF
 
     def copy(self):
+        logging.debug("Copying gstate %s", self)
         gstate = copy.copy(self)
         gstate.states = [ state.copy(gstate) for state in self.states ]
         if self.collective_operations is not None:
@@ -133,12 +135,5 @@ class GlobalState(EqMixin):
                 op.sanity_check()
 
     def mpi_leak_check(self, generator, node):
-        found = False
         for state in self.states:
-            found |= state.request_leak_check(generator, node)
-
-        if found:
-            return
-
-        for state in self.states:
-            state.message_leak_check(generator, node)
+            state.mpi_leak_check(generator, node)

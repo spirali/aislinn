@@ -27,12 +27,6 @@ import mpicalls
 import event
 
 
-class ErrorFound(Exception):
-
-    def __init__(self, context):
-        self.context = context
-
-
 class Allocation:
 
     def __init__(self, pid, addr, size):
@@ -64,11 +58,10 @@ class Context:
         self.state.vg_state = self.controller.save_state_with_hash()
 
     def add_error_message(self, error_message):
-        self.gcontext.generator.add_error_message(error_message)
+        self.gcontext.add_error_message(error_message)
 
     def add_error_and_throw(self, error_message):
-        self.add_error_message(error_message)
-        raise ErrorFound(self)
+        self.gcontext.add_error_and_throw(error_message)
 
     def process_syscall(self, commands):
         if commands[1] == "write":
@@ -93,9 +86,6 @@ class Context:
         else:
             raise Exception("Invalid syscall" + commands[1])
 
-    def finish_all_active_requests(self):
-        self.state.finish_all_active_requests(self)
-
     def handle_call(self, name, args, callback=False):
         self.fn_name = name
         call = mpicalls.calls_non_communicating.get(name)
@@ -108,36 +98,6 @@ class Context:
             return call.run(self, args)
         else:
             raise Exception("Unkown function call: {0} {1}".format(name, repr(args)))
-
-    def apply_matching(self, matching):
-        logging.debug("Applying matching state=%s matching=%s", self.state, matching)
-        for request, message in matching:
-            assert not request.is_receive() or \
-                   message is not None or \
-                   request.source == consts.MPI_PROC_NULL
-            logging.debug("Matching pid=%s request=%s message=%s",
-                          self.state.pid, request, message)
-            self.state.set_request_as_completed(request, message)
-            if message:
-                count = request.datatype.get_count(message.size)
-                # count cannot be None because
-                # datatype check should be already performed
-                if count > request.count:
-                    e = errormsg.MessageTruncated(self,
-                                                  message_size=count,
-                                                  buffer_size=request.count)
-                    self.add_error_and_throw(e)
-                request.datatype.unpack(self.controller,
-                                        message.vg_buffer,
-                                        count,
-                                        request.data_ptr,
-                                        check=False)
-                self.state.remove_message(message)
-            if request.is_collective():
-                op = self.gstate.get_operation_by_cc_id(request.comm_id,
-                                                         request.cc_id)
-                op.complete(self)
-        return True
 
     def restore_state(self):
         # Restore the state and forget about the restored state
@@ -337,3 +297,67 @@ class Context:
             controller = self.gcontext.generator.get_controller(pid)
             controller.add_buffer(buffer)
         return buffer
+
+    def close_all_requests(self):
+        if not self.state.tested_request_ids:
+            return
+        self.close_requests(range(len(self.state.tested_request_ids)))
+
+    def close_requests(self, indices):
+        for i, index in enumerate(indices):
+            request_id = self.state.tested_request_ids[index]
+            if request_id == consts.MPI_REQUEST_NULL: # requests was MPI_REQUEST_NULL
+                continue
+            request = self.state.get_finished_request(request_id)
+            self._close_request(request, index, i)
+        self.tested_request_ids = None
+
+    def _close_request(self, request, index_pointer, index_status):
+        logging.debug("Closing request %s", request)
+        if not self.state.immediate_wait and \
+            ((request.is_send() and request.target != consts.MPI_PROC_NULL)
+              or (request.is_receive() and request.source != consts.MPI_PROC_NULL)):
+            request.datatype.lock_memory(self.controller,
+                                         request.data_ptr,
+                                         request.count, unlock=True)
+
+        if self.state.tested_requests_pointer is not None and \
+                self.state.get_persistent_request(request.id) is None:
+            self.controller.write_int(
+                    self.state.tested_requests_pointer + \
+                    self.controller.REQUEST_SIZE * index_pointer,
+                    consts.MPI_REQUEST_NULL)
+
+        if self.state.tested_requests_status_ptr is not None and request.is_receive():
+            status_ptr = self.state.tested_requests_status_ptr + \
+                         self.controller.STATUS_SIZE * index_status
+            if request.source == consts.MPI_PROC_NULL:
+                self.controller.write_status(status_ptr,
+                                             consts.MPI_PROC_NULL,
+                                             consts.MPI_ANY_TAG,
+                                             0)
+            else:
+                self.controller.write_status(status_ptr,
+                                             request.source_rank,
+                                             request.source_tag,
+                                             request.vg_buffer.size)
+
+        if request.is_receive() and request.source != consts.MPI_PROC_NULL:
+            count = request.datatype.get_count(request.vg_buffer.size)
+            if count > request.count:
+                e = errormsg.MessageTruncated(self,
+                                              message_size=count,
+                                              buffer_size=request.count)
+                self.add_error_and_throw(e)
+            request.datatype.unpack(self.controller,
+                                    request.vg_buffer,
+                                    count,
+                                    request.data_ptr,
+                                    check=False)
+
+        if request.is_collective():
+            op = self.gstate.get_operation_by_cc_id(request.comm.comm_id,
+                                                    request.cc_id)
+            op.complete(self)
+
+        self.state.remove_finished_request(request)

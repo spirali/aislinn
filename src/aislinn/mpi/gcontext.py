@@ -22,6 +22,12 @@ from state import State
 from base.node import Arc
 
 from base.stream import StreamChunk
+import logging
+
+
+class ErrorFound(Exception):
+    pass
+
 
 class GlobalContext:
 
@@ -56,6 +62,13 @@ class GlobalContext:
                     context.state.status != State.StatusFinished):
                 context.save_state_with_hash()
 
+    def add_error_message(self, error_message):
+        self.generator.add_error_message(error_message)
+
+    def add_error_and_throw(self, error_message):
+        self.add_error_message(error_message)
+        raise ErrorFound()
+
     def make_node(self):
         self.save_states()
         node = self.generator.add_node(self.node, self.gstate)
@@ -64,7 +77,6 @@ class GlobalContext:
         self.node = node
         self.events = None
         self.stream_data = None
-        self.state = None
         self.gstate = None
 
     def make_fail_node(self):
@@ -94,3 +106,24 @@ class GlobalContext:
             lst.append(data)
         return [ StreamChunk(key[0], key[1], "".join(streams[key]))
                  for key in streams ]
+
+    def find_deterministic_match(self):
+        for state in self.gstate.states:
+            match = state.find_deterministic_match()
+            if match:
+                return match
+        return None
+
+    def find_nondeterministic_matches(self):
+        results = []
+        for state in self.gstate.states:
+            results.extend(state.find_nondeterministic_matches())
+        return results
+
+    def apply_matching(self, matching):
+        logging.debug("Apply matching: %s", matching)
+        source_pid, s, receive_pid, r = matching
+        # Receive has to be handled FIRST, otherwise buffer could be freed
+        self.gstate.states[receive_pid].finish_receive_request(
+                r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)
+        self.gstate.states[source_pid].finish_send_request(s)

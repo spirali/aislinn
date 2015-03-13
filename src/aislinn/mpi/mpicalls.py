@@ -26,9 +26,11 @@ import types
 import ops
 import misc
 import atypes as at
-from request import SendRequest
+from request import SendRequest, ReceiveRequest
 from comm import comm_compare, group_compare, Group
 from keyval import Keyval
+
+import copy
 
 
 def MPI_Initialized(context, args):
@@ -194,7 +196,7 @@ def MPI_Rsend_init(context, args):
 def MPI_Start(context, args):
     request_id = context.controller.read_int(args[0])
     request = check.check_persistent_request(context, request_id, True, 1)
-    context.state.start_persistent_request(context, request)
+    context.state.activate_request(context, copy.copy(request), False)
     return False
 
 def MPI_Startall(context, args):
@@ -203,7 +205,7 @@ def MPI_Startall(context, args):
     requests = [ check.check_persistent_request(context, request_id, True, 2, i)
                  for i, request_id in enumerate(request_ids) ]
     for request in requests:
-        context.state.start_persistent_request(context, request)
+        context.state.activate_request(context, copy.copy(request), False)
     return False
 
 def MPI_Request_free(context, args):
@@ -468,7 +470,7 @@ def MPI_Comm_split(context, args):
     args = args[1:]
     op = context.state.gstate.call_collective_operation(
                 context, comm, collectives.CommSplit, True, args)
-    request_id = context.state.add_collective_request(comm.comm_id, op.cc_id)
+    request_id = context.state.add_collective_request(comm, op.cc_id)
     context.state.set_wait((request_id,))
     return True
 
@@ -476,7 +478,7 @@ def MPI_Comm_dup(context, args):
     comm, new_comm_ptr = args
     op = context.state.gstate.call_collective_operation(
                 context, comm, collectives.CommDup, True, new_comm_ptr)
-    request_id = context.state.add_collective_request(comm.comm_id, op.cc_id)
+    request_id = context.state.add_collective_request(comm, op.cc_id)
     context.state.set_wait((request_id,))
     return True
 
@@ -712,7 +714,7 @@ def call_collective_operation(context,
 
     op = context.state.gstate.call_collective_operation(
                 context, comm, op_class, blocking, args)
-    request_id = context.state.add_collective_request(comm.comm_id, op.cc_id)
+    request_id = context.state.add_collective_request(comm, op.cc_id)
     if blocking:
         context.state.set_wait((request_id,))
     else:
@@ -752,29 +754,21 @@ def call_send(context, args,
               blocking, mode, name, persistent=False, return_request=False):
     context.state = context.state
     if blocking:
-        buf_ptr, count, datatype, target, tag, comm = args
+        data_ptr, count, datatype, target, tag, comm = args
     else:
-        buf_ptr, count, datatype, target, tag, comm, request_ptr = args
+        data_ptr, count, datatype, target, tag, comm, request_ptr = args
 
     check.check_rank(context, comm, target, 4, False, True)
 
-    r = datatype.check(context.controller, buf_ptr, count, read=True)
-    if r is not None:
-        e = errormsg.InvalidSendBuffer(context, address=int(r))
-        context.add_error_and_throw(e)
-
     send_type = get_send_type(
             context.gcontext.generator, context.state, mode, datatype, count)
-    request = context.state.add_send_request(comm.comm_id, target,
-                                     tag, buf_ptr, datatype, count, send_type)
-    if not persistent:
-        request.create_message(context)
-
-        if send_type == SendRequest.Buffered or target == consts.MPI_PROC_NULL:
-            context.state.set_request_as_completed(request)
-    else:
+    request = SendRequest(context.state.new_request_id(), send_type,
+                          comm, target, tag, data_ptr, datatype, count)
+    if persistent:
         assert not blocking
-        context.state.make_request_persistent(request.id)
+        context.state.add_persistent_request(request)
+    else:
+        context.state.activate_request(context, request, blocking)
 
     if return_request:
         return request
@@ -782,22 +776,12 @@ def call_send(context, args,
     if blocking:
         context.state.set_wait((request.id,), immediate=True)
     else:
-        if not persistent:
-            request.stacktrace = context.controller.get_stacktrace()
-            datatype.lock_memory(context.controller, buf_ptr, count)
         context.controller.write_int(request_ptr, request.id)
-
-    # TODO: Optimization : If message use eager protocol then nonblock
     return blocking
 
 def call_recv(context, args, blocking, name, persistent=False, return_request=False):
-    buf_ptr, count, datatype, source, tag, comm, ptr = args
+    data_ptr, count, datatype, source, tag, comm, ptr = args
     check.check_rank(context, comm, source, 4, True, True)
-
-    r = datatype.check(context.controller, buf_ptr, count, write=True)
-    if r is not None:
-        e = errormsg.InvalidReceiveBuffer(context, address=int(r))
-        context.add_error_and_throw(e)
 
     if blocking:
         status_ptr = ptr
@@ -807,17 +791,19 @@ def call_recv(context, args, blocking, name, persistent=False, return_request=Fa
     if blocking and source == consts.MPI_PROC_NULL:
         if status_ptr:
             context.controller.write_status(status_ptr,
-                                              consts.MPI_PROC_NULL,
-                                              consts.MPI_ANY_TAG,
-                                              0)
+                                            consts.MPI_PROC_NULL,
+                                            consts.MPI_ANY_TAG,
+                                            0)
         return False
 
-    request = context.state.add_recv_request(
-                           comm.comm_id, source, tag, buf_ptr, datatype, count)
+    request = ReceiveRequest(
+            context.state.new_request_id(), comm, source, tag, data_ptr, datatype, count)
 
     if persistent:
-       assert not blocking
-       context.state.make_request_persistent(request.id)
+        assert not blocking
+        context.state.add_persistent_request(request)
+    else:
+        context.state.activate_request(context, request, blocking)
 
     if return_request:
         return request
@@ -825,13 +811,7 @@ def call_recv(context, args, blocking, name, persistent=False, return_request=Fa
     if blocking:
         context.state.set_wait((request.id,), None, status_ptr, immediate=True)
     else:
-        if not persistent:
-            request.stacktrace = context.controller.get_stacktrace()
-            datatype.lock_memory(context.controller, buf_ptr, count)
         context.controller.write_int(request_ptr, request.id)
-
-    # TODO: Optimization : If message is already here,
-    # then non block and continue
     return blocking
 
 
