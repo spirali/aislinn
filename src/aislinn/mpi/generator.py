@@ -543,6 +543,7 @@ class Generator:
             if not self.fast_expand_node(gcontext):
                 break
             fast = True
+            self.buffer_manager.cleanup()
 
         if fast:
             gcontext.make_node()
