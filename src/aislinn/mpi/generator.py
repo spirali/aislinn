@@ -369,6 +369,11 @@ class Generator:
                 if state.select is not None:
                     self.continue_waitany(gcontext, state)
                     return True
+                elif state.waits_for_single_non_null_request() and \
+                    state.are_tested_requests_finished():
+                    state.select = state.index_of_first_non_null_request()
+                    self.continue_waitany(gcontext, state)
+                    return True
 
             if state.status == State.StatusProbe:
                 comm_id, source, tag, status_ptr = state.probe_data
