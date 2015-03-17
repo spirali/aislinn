@@ -251,13 +251,18 @@ class Generator:
 
         gstate1 = self.debug_captured_states[0]
         gstate2 = self.debug_captured_states[1]
-
+        logging.info("Hashes %s, %s", gstate1.compute_hash(), gstate2.compute_hash())
         for i, (s1, s2) in enumerate(zip(gstate1.states, gstate2.states)):
             if s1.vg_state and s2.vg_state:
+                logging.info("Pids %s %s %s", i, s1.vg_state.hash, s2.vg_state.hash)
                 if s1.vg_state.id == s2.vg_state.id:
                     logging.info("States of rank %s are the same", i)
-                    continue
-                self._controller.debug_compare(s1.vg_state.id, s2.vg_state.id)
+                else:
+                    self._controller.debug_compare(s1.vg_state.id, s2.vg_state.id)
+                for name in s1.__dict__.keys():
+                    if getattr(s1, name) != getattr(s2, name):
+                        logging.info("stateA: %s %s", name, getattr(s1, name))
+                        logging.info("stateB: %s %s", name, getattr(s2, name))
 
         for gstate in self.debug_captured_states:
             gstate.dispose()
@@ -456,6 +461,7 @@ class Generator:
         g.make_node()
 
     def expand_waitsome(self, gcontext, state):
+        logging.debug("Expanding waitsome %s", state)
         indices = state.get_indices_of_tested_and_finished_requests()
         if not indices:
             return
@@ -465,11 +471,13 @@ class Generator:
             self.setup_select_and_make_node(gcontext, state, indices)
 
     def expand_testall(self, gcontext, state):
+        logging.debug("Expanding testall %s", state)
         self.set_flag0_and_make_node(gcontext, state)
         if state.are_tested_requests_finished():
             self.setup_select_and_make_node(gcontext, state, True)
 
     def expand_waitany(self, gcontext, state):
+        logging.debug("Expanding waitany %s", state)
         indices = state.get_indices_of_tested_and_finished_requests()
         if not indices:
             return
@@ -573,8 +581,20 @@ class Generator:
         else:
             hash = None
 
-        uid = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
-                 for state in gstate.states ])
+        uid = []
+        for state in gstate.states:
+            if state.vg_state is not None:
+                u = str(state.vg_state.id)
+            else:
+                u = "F"
+            if state.select is not None:
+                u += "s"
+            uid.append(u)
+
+        uid = ",".join(uid)
+
+        #uid = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
+        #         for state in gstate.states ])
         #uids += [ [ m.vg_buffer.id for m in s.messages ] for s in gstate.states ]
 
         node = Node(uid, hash)
