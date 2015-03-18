@@ -233,6 +233,11 @@ class SendRecvTests(TestCase):
         self.output(1, "Not found1\nNot found2\nNot found3\n")
         self.execute(2)
 
+    def test_probe2(self):
+        self.program("probe2")
+        self.output(1, "12\n12\n11\n14\n14\n13\n")
+        self.execute(2)
+
     def test_tag(self):
         self.program("tag")
         self.execute(2, "10 20", stdout="100 200\n")

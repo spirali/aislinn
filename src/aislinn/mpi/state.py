@@ -538,7 +538,17 @@ class State:
                         r.tag == consts.MPI_ANY_TAG):
                             return ((pid, s, self.pid, r))
 
-
+    def probe_is_possible(self, comm_id, rank, tag):
+        for request in self.active_requests:
+            if not request.is_receive():
+                continue
+            if (request.source == consts.MPI_ANY_SOURCE \
+                    or request.source == rank) \
+                and (request.tag == tag or
+                     request.tag == consts.MPI_ANY_TAG) \
+                             and (request.comm.comm_id == comm_id):
+                return False
+        return True
 
     def find_nondeterministic_matches(self):
         results = []
@@ -570,7 +580,8 @@ class State:
                     continue
                 if s.comm.group.rank_to_pid(s.target) == self.pid and \
                    (tag == s.tag or
-                    tag == consts.MPI_ANY_TAG):
+                    tag == consts.MPI_ANY_TAG) and \
+                   self.probe_is_possible(comm_id, s.target, s.tag):
                        results.append((state.pid, s))
                        break
         return results
@@ -582,7 +593,8 @@ class State:
                 continue
             if s.comm.group.rank_to_pid(s.target) == self.pid and \
                (tag == s.tag or
-                tag == consts.MPI_ANY_TAG):
+                tag == consts.MPI_ANY_TAG) and \
+                self.probe_is_possible(comm_id, s.target, s.tag):
                     return (pid, s)
 
     def fork_standard_sends(self):

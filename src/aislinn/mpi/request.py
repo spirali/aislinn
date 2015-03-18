@@ -110,8 +110,9 @@ class SendRequest(Request):
         return addr >= self.data_ptr and addr < self.data_ptr + sz
 
     def __repr__(self):
-        return "<SendRqst id={0} type={1} target={2} tag={3}>" \
-                .format(self.id, self.send_type, self.target, self.tag)
+        return "<SendRqst id={0} type={1} comm_id={2} target={3} tag={4}>" \
+                .format(self.id, self.send_type,
+                        self.comm.comm_id, self.target, self.tag)
 
 
 class ReceiveRequest(Request):
@@ -142,7 +143,8 @@ class ReceiveRequest(Request):
 
     def is_suppressed_by(self, r):
         return (self.source == r.source or r.source == consts.MPI_ANY_SOURCE) \
-               and (self.tag == r.tag or r.tag == consts.MPI_ANY_TAG)
+               and (self.tag == r.tag or r.tag == consts.MPI_ANY_TAG) and \
+               (self.comm.comm_id == r.comm.comm_id)
 
     def inc_ref(self):
         if self.vg_buffer:
