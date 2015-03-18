@@ -66,7 +66,7 @@ class State:
         self.attrs = {} # <-- Copy on write!
         self.cc_id_counters = None
         self.probe_data = None
-        self.probe_promises = [] # <-- Copy on write!
+        self.probe_promise = None
         self.finalized = False
         self.immediate_wait = False
         self.select = None # Used for WaitAny and WaitSome
@@ -300,9 +300,8 @@ class State:
         if self.select is not None:
             hashthread.update(str(self.select))
 
-        if self.probe_promises:
-            self.probe_promises.sort()
-            hashthread.update(str(self.probe_promises))
+        if self.probe_promise:
+            hashthread.update(str(self.probe_promise))
 
     def add_request(self, request):
         self.active_requests = copy.copy(self.active_requests)
@@ -331,21 +330,10 @@ class State:
                 request.inc_ref()
                 self.add_finished_request(request)
         elif request.is_receive():
+            self.probe_promise = None
             if request.source == consts.MPI_PROC_NULL:
                 self.add_finished_request(request)
                 return
-            if request.source == consts.MPI_ANY_SOURCE and self.probe_promises:
-                probed = self.get_probe_promise(
-                        request.comm.comm_id, request.source, request.tag)
-                if probed is not None:
-                   logging.debug("Probe promise used: %s %s %s", request)
-                   self.probe_promises = copy.copy(self.probe_promises)
-                   self.probe_promises.remove(
-                           (request.comm.comm_id,
-                            request.source,
-                            request.tag,
-                            probed))
-                   request.source = probed
             r = request.datatype.check(
                 context.controller, request.data_ptr, request.count, write=True)
             if r is not None:
@@ -450,13 +438,6 @@ class State:
         assert flag_ptr
         self.set_ready()
         self.flag_ptr = flag_ptr
-
-    def get_probe_promise(self, comm_id, source, tag):
-        if not self.probe_promises:
-            return None
-        for id, s, t, rank in self.probe_promises:
-            if comm_id == id and s == source and t == tag:
-                return rank
 
     def set_probe(self, comm, source, tag, flag_ptr, status_ptr):
         self.reset_state()
@@ -691,10 +672,15 @@ class State:
         self.finished_requests = copy.copy(self.finished_requests)
         self.finished_requests.remove(request)
 
-    def add_probe_promise(self, comm_id, source, tag, rank):
-        if self.get_probe_promise(comm_id, source, tag) is None:
-            self.probe_promises = copy.copy(self.probe_promises)
-            self.probe_promises.append((comm_id, source, tag, rank))
+    def set_probe_promise(self, comm_id, source, tag, rank):
+        self.probe_promise = (comm_id, source, tag, rank)
+
+    def get_probe_promise(self, comm_id, source, tag):
+        if self.probe_promise is None:
+            return None
+        c, s, t, rank = self.probe_promise
+        if c == comm_id and s == source and t == tag:
+            return rank
 
     def new_request_id(self):
         i = 10

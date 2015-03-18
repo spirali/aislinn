@@ -225,6 +225,17 @@ class SendRecvTests(TestCase):
         self.execute(3, "probe", send_protocol="rendezvous")
         self.execute(3, "iprobe", send_protocol="rendezvous")
 
+        self.output(1, "First1 0 111\nFirst2 0 111 1\n"
+                           "First3 0 111\nSecond 2 333\n")
+        self.output(1, "First1 2 333\nFirst2 2 333 1\n"
+                           "First3 2 333\nSecond 0 111\n")
+        self.output(1, "First1 0 111\nFirst2 0 111 1\n"
+                           "First3 2 333\nSecond 0 111\n")
+        self.output(1, "First1 2 333\nFirst2 2 333 1\n"
+                           "First3 0 111\nSecond 2 333\n")
+        self.execute(3, "invalid-probe", send_protocol="rendezvous")
+        self.execute(3, "invalid-iprobe", send_protocol="rendezvous")
+
     def test_probe(self):
         self.program("probe")
         self.output(1, "Found1\n")
@@ -237,6 +248,12 @@ class SendRecvTests(TestCase):
         self.program("probe2")
         self.output(1, "12\n12\n11\n14\n14\n13\n")
         self.execute(2)
+
+    def test_probe3(self):
+        self.program("probe3")
+        self.output(1, "0\n0\n2\n")
+        self.output(1, "2\n2\n0\n")
+        self.execute(3)
 
     def test_tag(self):
         self.program("tag")

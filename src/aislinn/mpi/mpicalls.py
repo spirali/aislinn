@@ -31,6 +31,7 @@ from comm import comm_compare, group_compare, Group
 from keyval import Keyval
 
 import copy
+import logging
 
 
 def MPI_Initialized(context, args):
@@ -835,6 +836,7 @@ class Call:
                             context.state.pid,
                             ",".join(args))
         e.stacktrace = context.controller.get_stacktrace()
+        logging.debug("Stacktrace %s", e.stacktrace)
         context.gcontext.add_event(e)
         return r
 

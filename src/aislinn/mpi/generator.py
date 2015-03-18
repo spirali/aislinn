@@ -386,7 +386,6 @@ class Generator:
                     if probed:
                         pid, request = probed
                         rank = request.comm.group.pid_to_rank(pid)
-                        state.add_probe_promise(comm_id, source, tag, rank)
                         self.continue_probe(gcontext, state, rank)
                         return True
 
@@ -461,7 +460,8 @@ class Generator:
     def set_probe_promise_and_make_node(
             self, gcontext, state, comm_id, source, t, rank):
         gstate = gcontext.gstate.copy()
-        gstate.states[state.pid].add_probe_promise(comm_id, source, t, rank)
+        state = gstate.states[state.pid]
+        state.set_probe_promise(comm_id, source, t, rank)
         g = GlobalContext(self, gcontext.node, gstate)
         g.make_node()
 
@@ -490,6 +490,7 @@ class Generator:
             self.setup_select_and_make_node(gcontext, state, i)
 
     def expand_probe(self, gcontext, state):
+        logging.debug("Expanding probe %s", state)
         comm_id, source, tag, status_ptr = state.probe_data
         if state.get_probe_promise(comm_id, source, tag) is not None:
             return
@@ -586,7 +587,7 @@ class Generator:
                     return node
         else:
             hash = None
-
+        """
         uid = []
         for state in gstate.states:
             if state.vg_state is not None:
@@ -598,7 +599,8 @@ class Generator:
             uid.append(u)
 
         uid = ",".join(uid)
-
+        """
+        uid = str(self.statespace.nodes_count)
         #uid = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
         #         for state in gstate.states ])
         #uids += [ [ m.vg_buffer.id for m in s.messages ] for s in gstate.states ]
