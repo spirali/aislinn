@@ -256,10 +256,11 @@ class Report:
             root.append(ev)
             if error.events is not None:
                 for event in error.events:
-                    e = self.entries_to_xml("event", event.get_entries())
+                    e = xml.Element("event")
                     e.set("name", event.name)
                     e.set("pid", str(event.pid))
                     ev.append(e)
+
         if self.outputs:
             streams = xml.Element("streams")
             root.append(streams)
@@ -312,8 +313,10 @@ class Report:
                 name = e.name
                 data[r] = name
                 titles[r] = ""
-                if e.args:
+                if hasattr(e, "args"):
                     titles[r] += "Args: {0}\n".format(e.args)
+                if hasattr(e, "exitcode"):
+                    titles[r] += "Exitcode: {0}\n".format(e.exitcode)
                 if e.stacktrace:
                     titles[r] += e.stacktrace.replace("|", "\n")
                 if name in collective_operations:

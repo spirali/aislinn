@@ -821,7 +821,6 @@ class Call:
     def __init__(self, fn, args):
         self.fn = fn
         self.args = args
-        self.event_name = self.name[4:]
 
     @property
     def name(self):
@@ -829,15 +828,16 @@ class Call:
 
     def run(self, context, args):
         assert len(args) == len(self.args)
-        r = self.fn(context,
-                    [ self.args[i].make_conversion(args[i], i + 1, context)
-                      for i in xrange(len(args)) ])
-        e = event.CallEvent(self.event_name,
+        e = event.CallEvent(self.name,
                             context.state.pid,
                             ",".join(args))
         e.stacktrace = context.controller.get_stacktrace()
-        logging.debug("Stacktrace %s", e.stacktrace)
+        context.event = e
         context.gcontext.add_event(e)
+        r = self.fn(context,
+                    [ self.args[i].make_conversion(args[i], i + 1, context)
+                      for i in xrange(len(args)) ])
+        context.event = None
         return r
 
 

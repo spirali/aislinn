@@ -45,6 +45,7 @@ class Context:
         self.controller = None
         self.state = state
         self.fn_name = None
+        self.event = None
 
     @property
     def gstate(self):
@@ -87,7 +88,6 @@ class Context:
             raise Exception("Invalid syscall" + commands[1])
 
     def handle_call(self, name, args, callback=False):
-        self.fn_name = name
         call = mpicalls.calls_non_communicating.get(name)
         if call is None:
             call = mpicalls.calls_communicating.get(name)
@@ -128,7 +128,7 @@ class Context:
                 continue
             if result[0] == "EXIT":
                 exitcode = convert_type(result[1], "int")
-                e = event.ExitEvent("Exit", self.state.pid, exitcode)
+                e = event.ExitEvent(self.state.pid, exitcode)
                 self.gcontext.add_event(e)
                 self.state.set_finished()
                 if exitcode != 0:

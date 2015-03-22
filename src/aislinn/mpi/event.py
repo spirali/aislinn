@@ -18,27 +18,23 @@
 #
 
 
-from base.report import EntryList
-
-
 class Event:
 
     stacktrace = None
-    args = None
+
+
+class CallEvent(Event):
 
     def __init__(self, name, pid, args=None):
         self.name = name
-        self.pid = pid
         self.args = args
+        self.pid = pid
 
-    def get_entries(self):
-        return EntryList()
-
-class CallEvent(Event):
-    pass
 
 class ExitEvent(Event):
 
-    def __init__(self, name, pid, exitcode):
-        Event.__init__(self, name, pid)
+    name = "Exit"
+
+    def __init__(self, pid, exitcode):
+        self.pid = pid
         self.exitcode = exitcode

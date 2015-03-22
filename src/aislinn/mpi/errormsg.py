@@ -18,6 +18,7 @@
 #
 
 import consts
+import event
 
 
 class ErrorMessage(object):
@@ -55,10 +56,11 @@ class ErrorMessage(object):
                 self.pid = context.state.pid
             context.make_fail_node()
             self.node = context.gcontext.node
-            if context.controller:
-                self.stacktrace = context.controller.get_stacktrace()
-            if context.fn_name:
-                self.fn_name = context.fn_name
+            if context.event:
+                if context.event.stacktrace:
+                    self.stacktrace = context.event.stacktrace
+                if isinstance(context.event, event.CallEvent):
+                    self.fn_name = context.event.name
 
     @property
     def description(self):
