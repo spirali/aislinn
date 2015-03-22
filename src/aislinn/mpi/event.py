@@ -38,3 +38,12 @@ class ExitEvent(Event):
     def __init__(self, pid, exitcode):
         self.pid = pid
         self.exitcode = exitcode
+
+
+class MatchEvent(Event):
+
+    name = "Match"
+
+    def __init__(self, source_pid, target_pid):
+        self.source_pid = source_pid
+        self.target_pid = target_pid

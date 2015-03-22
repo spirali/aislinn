@@ -29,7 +29,7 @@ class Arc:
     def label(self):
         if not self.events and not self.streams:
             return "no-events"
-        pids = list(set(e.pid for e in self.events))
+        pids = list(set(e.pid for e in self.events if hasattr(e, "pid")))
         l = ",".join(map(str, pids))
         if self.streams:
             l += "+s"

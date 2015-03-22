@@ -17,11 +17,12 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from context import Context
-from state import State
 from base.node import Arc
-
 from base.stream import StreamChunk
+from context import Context
+from event import MatchEvent
+from state import State
+
 import logging
 
 
@@ -122,8 +123,9 @@ class GlobalContext:
 
     def apply_matching(self, matching):
         logging.debug("Apply matching: %s", matching)
-        source_pid, s, receive_pid, r = matching
+        source_pid, s, target_pid, r = matching
+        self.add_event(MatchEvent(source_pid, target_pid))
         # Receive has to be handled FIRST, otherwise buffer could be freed
-        self.gstate.states[receive_pid].finish_receive_request(
+        self.gstate.states[target_pid].finish_receive_request(
                 r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)
         self.gstate.states[source_pid].finish_send_request(s)

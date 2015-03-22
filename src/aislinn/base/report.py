@@ -258,7 +258,8 @@ class Report:
                 for event in error.events:
                     e = xml.Element("event")
                     e.set("name", event.name)
-                    e.set("pid", str(event.pid))
+                    if hasattr(e, "pid"):
+                        e.set("pid", str(event.pid))
                     ev.append(e)
 
         if self.outputs:
@@ -299,7 +300,8 @@ class Report:
         tbody = table.child("tbody")
         pids = [ [] for x in xrange(process_count) ]
         for e in events:
-            pids[e.pid].append(e)
+            if hasattr(e, "pid"):
+                pids[e.pid].append(e)
 
         step = 0
         while True:
