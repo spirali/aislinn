@@ -342,7 +342,7 @@ class State:
 
         self.add_request(request)
         if not immediate:
-            request.stacktrace = context.controller.get_stacktrace()
+            request.stacktrace = context.event.stacktrace
             request.datatype.lock_memory(
                 context.controller, request.data_ptr, request.count)
 
