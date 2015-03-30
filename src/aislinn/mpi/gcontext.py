@@ -129,3 +129,7 @@ class GlobalContext:
         self.gstate.states[target_pid].finish_receive_request(
                 r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)
         self.gstate.states[source_pid].finish_send_request(s)
+
+    def is_running(self, pid):
+        context = self.contexts[pid]
+        return context and context.controller.running

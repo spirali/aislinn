@@ -18,7 +18,7 @@
 #
 
 
-from base.controller import BufferManager
+from base.controller import BufferManager, poll_controllers
 from base.node import Node, Arc
 from base.report import Report
 from base.statespace import StateSpace
@@ -274,13 +274,14 @@ class Generator:
             controller.cleanup_states()
 
     def check_collective_requests(self, gcontext):
-        gstate = gcontext.gstate
-        for state in gstate.states:
+        for state in gcontext.gstate.states:
             for r in state.active_requests:
                 if r.is_collective():
-                    if gstate.get_operation_by_cc_id(r.comm.comm_id, r.cc_id) \
-                            .can_be_completed(state):
+                    if state.gstate.get_operation_by_cc_id(
+                            r.comm.comm_id, r.cc_id).can_be_completed(state):
                         state.finish_collective_request(r)
+                        return True
+        return False
 
     def continue_waitany(self, gcontext, state):
         logging.debug("Continue waitsome %s", state)
@@ -288,7 +289,6 @@ class Generator:
         context.controller.write_int(context.state.index_ptr, state.select)
         context.close_requests((state.select,))
         context.run()
-        return context
 
     def continue_waitsome(self, gcontext, state):
         logging.debug("Continue waitsome %s", state)
@@ -299,22 +299,19 @@ class Generator:
         context.controller.write_ints(index_ptr, indices)
         context.close_requests(indices)
         context.run()
-        return context
 
     def continue_ready(self, gcontext, state):
-        logging.debug("Continue ready %s", state)
+        logging.debug("Continue ready with flag %s", state)
         context = gcontext.prepare_context(state.pid)
-        if state.flag_ptr is not None:
+        if state.flag_ptr:
             context.controller.write_int(state.flag_ptr, 0)
         context.run()
-        return context
 
     def continue_waitall(self, gcontext, state):
         logging.debug("Continue waitall %s", state)
         context = gcontext.prepare_context(state.pid)
         context.close_all_requests()
         context.run()
-        return context
 
     def continue_testall(self, gcontext, state):
         logging.debug("Continue testall %s", state)
@@ -322,7 +319,6 @@ class Generator:
         context.controller.write_int(state.flag_ptr, 1)
         context.close_all_requests()
         context.run()
-        return context
 
     def continue_probe(self, gcontext, state, rank):
         logging.debug("Continue probe %s", state)
@@ -334,65 +330,93 @@ class Generator:
         context.controller.write_status(
                 status_ptr, rank, request.tag, request.vg_buffer.size)
         context.run()
-        return context
 
-    def fast_expand_node(self, gcontext):
-        matching = gcontext.find_deterministic_match()
-        if matching:
-            gcontext.apply_matching(matching)
+    def fast_expand_state(self, gcontext, state):
+        if (state.status == State.StatusWaitAll
+            and state.are_tested_requests_finished()):
+               self.continue_waitall(gcontext, state)
+               return True
+
+        if state.status == State.StatusReady:
+            self.continue_ready(gcontext, state)
             return True
 
-        if gcontext.gstate.collective_operations:
-            self.check_collective_requests(gcontext)
-
-        for state in gcontext.gstate.states:
-            if (state.status == State.StatusWaitAll
-                and state.are_tested_requests_finished()):
-                   self.continue_waitall(gcontext, state)
-                   return True
-
-            if state.status == State.StatusReady:
-                self.continue_ready(gcontext, state)
+        if state.status == State.StatusWaitSome:
+            if state.select is not None:
+                self.continue_waitsome(gcontext, state)
+                return True
+            elif state.waits_for_single_non_null_request() and \
+                state.are_tested_requests_finished():
+                state.select = [ state.index_of_first_non_null_request() ]
+                self.continue_waitsome(gcontext, state)
                 return True
 
-            if state.status == State.StatusWaitSome:
-                if state.select is not None:
-                    self.continue_waitsome(gcontext, state)
-                    return True
-                elif state.waits_for_single_non_null_request() and \
-                    state.are_tested_requests_finished():
-                    state.select = [ state.index_of_first_non_null_request() ]
-                    self.continue_waitsome(gcontext, state)
-                    return True
+        if state.status == State.StatusWaitAny:
+            if state.select is not None:
+                self.continue_waitany(gcontext, state)
+                return True
+            elif state.waits_for_single_non_null_request() and \
+                state.are_tested_requests_finished():
+                state.select = state.index_of_first_non_null_request()
+                self.continue_waitany(gcontext, state)
+                return True
 
-            if state.status == State.StatusWaitAny:
-                if state.select is not None:
-                    self.continue_waitany(gcontext, state)
-                    return True
-                elif state.waits_for_single_non_null_request() and \
-                    state.are_tested_requests_finished():
-                    state.select = state.index_of_first_non_null_request()
-                    self.continue_waitany(gcontext, state)
-                    return True
-
-            if state.status == State.StatusProbe:
-                comm_id, source, tag, status_ptr = state.probe_data
-                rank = state.get_probe_promise(comm_id, source, tag)
-                if rank is not None:
+        if state.status == State.StatusProbe:
+            comm_id, source, tag, status_ptr = state.probe_data
+            rank = state.get_probe_promise(comm_id, source, tag)
+            if rank is not None:
+                self.continue_probe(gcontext, state, rank)
+                return True
+            elif state.probe_data[1] != consts.MPI_ANY_SOURCE and state.flag_ptr is None:
+                probed = state.probe_deterministic(comm_id, source, tag)
+                if probed:
+                    pid, request = probed
+                    rank = request.comm.group.pid_to_rank(pid)
                     self.continue_probe(gcontext, state, rank)
                     return True
-                elif state.probe_data[1] != consts.MPI_ANY_SOURCE and state.flag_ptr is None:
-                    probed = state.probe_deterministic(comm_id, source, tag)
-                    if probed:
-                        pid, request = probed
-                        rank = request.comm.group.pid_to_rank(pid)
-                        self.continue_probe(gcontext, state, rank)
-                        return True
 
-            if state.status == State.StatusTest and state.select:
-                self.continue_testall(gcontext, state)
-                return True
+        if state.status == State.StatusTest and state.select:
+            self.continue_testall(gcontext, state)
+            return True
         return False
+
+    def poll_controllers(self, gcontext):
+        controllers = [ c for c in self.controllers if c.running ]
+        logging.debug("Running controllers %s", controllers)
+        if not controllers:
+            return False
+        controllers = poll_controllers(controllers)
+        for c in controllers:
+            context = gcontext.get_context(c.name)
+            logging.debug("Ready controller %s", context)
+            result = c.finish_async()
+            context.process_run_result(result)
+        return True
+
+
+    def fast_expand_node(self, gcontext):
+        modified = False
+        while True:
+            matching = gcontext.find_deterministic_match()
+            if matching:
+                gcontext.apply_matching(matching)
+                modified = True
+                continue
+
+            if gcontext.gstate.collective_operations \
+               and self.check_collective_requests(gcontext):
+                   modified = True
+                   continue
+
+            for state in gcontext.gstate.states:
+                if not gcontext.is_running(state.pid):
+                    self.fast_expand_state(gcontext, state)
+
+            if self.poll_controllers(gcontext):
+                modified = True
+                continue
+            self.buffer_manager.cleanup()
+            return modified
 
     def fork_standard_sends(self, node, gstate):
         new_state_created = False
@@ -539,14 +563,7 @@ class Generator:
 
         gcontext = GlobalContext(self, node, gstate)
 
-        fast = False
-        while True:
-            if not self.fast_expand_node(gcontext):
-                break
-            fast = True
-            self.buffer_manager.cleanup()
-
-        if fast:
+        if self.fast_expand_node(gcontext):
             gcontext.make_node()
             return
 

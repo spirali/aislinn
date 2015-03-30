@@ -57,7 +57,7 @@ class CollectiveOperation:
 
     def enter(self, context, comm, args):
         logging.debug("Entering collective operation %s", self)
-        assert self.remaining_processes_enter >= 0
+        assert self.remaining_processes_enter > 0
         assert self.remaining_processes_complete >= 0
         self.remaining_processes_enter -= 1
         self.enter_main(context, comm, args)

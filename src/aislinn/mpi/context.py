@@ -110,38 +110,39 @@ class Context:
         self.state.vg_state.dec_ref()
         self.state.vg_state = None
 
-    def run(self):
-        controller = self.controller
-        result = controller.run_process().split()
-        while True:
-            if result[0] == "CALL":
-                if self.handle_call(result[1], result[2:]):
-                    break
-                else:
-                    result = controller.run_process().split()
-                    continue
-            if result[0] == "SYSCALL":
-                if self.process_syscall(result):
-                    result = controller.run_process().split()
-                else:
-                    result = controller.run_drop_syscall().split()
-                continue
-            if result[0] == "EXIT":
-                exitcode = convert_type(result[1], "int")
-                e = event.ExitEvent(self.state.pid, exitcode)
-                self.gcontext.add_event(e)
-                self.state.set_finished()
-                if exitcode != 0:
-                    self.add_error_and_throw(
-                            errormsg.NonzeroExitCode(self, exitcode=exitcode))
-                self.state.allocations = \
-                    [ Allocation(self.state.pid, addr, size)
-                      for addr, size in self.controller.get_allocations() ]
-                return
-            if result[0] == "REPORT":
+    def process_run_result(self, result):
+        result = result.split()
+        if result[0] == "CALL":
+            if self.handle_call(result[1], result[2:]):
+                return False
+            else:
+                self.controller.run_process_async()
+                return True
+        if result[0] == "SYSCALL":
+            if self.process_syscall(result):
+                self.controller.run_process_async()
+            else:
+                self.controller.run_drop_syscall_async()
+            return True
+        if result[0] == "EXIT":
+            exitcode = convert_type(result[1], "int")
+            e = event.ExitEvent(self.state.pid, exitcode)
+            self.gcontext.add_event(e)
+            self.state.set_finished()
+            if exitcode != 0:
                 self.add_error_and_throw(
-                        self.make_error_message_from_report(result))
-            raise Exception("Invalid command " + result[0])
+                        errormsg.NonzeroExitCode(self, exitcode=exitcode))
+            self.state.allocations = \
+                [ Allocation(self.state.pid, addr, size)
+                  for addr, size in self.controller.get_allocations() ]
+            return False
+        if result[0] == "REPORT":
+            self.add_error_and_throw(
+                    self.make_error_message_from_report(result))
+        raise Exception("Invalid command " + result[0])
+
+    def run(self):
+        self.controller.run_process_async()
 
     def make_error_message_from_report(self, parts):
         assert parts[0] == "REPORT"
@@ -361,3 +362,6 @@ class Context:
             op.complete(self)
 
         self.state.remove_finished_request(request)
+
+    def __repr__(self):
+        return "<Controller pid={0.state.pid}>".format(self)

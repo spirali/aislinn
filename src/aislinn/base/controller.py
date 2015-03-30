@@ -25,6 +25,7 @@ import subprocess
 import paths
 import logging
 import hashlib
+import select
 
 
 class UnexpectedOutput(Exception):
@@ -69,6 +70,7 @@ class Controller:
         self.cwd = cwd
         self.valgrind_args = ()
         self.server_socket = None
+        self.running = False
 
     def start(self, capture_syscalls=()):
         assert self.process is None # Nothing is running
@@ -108,6 +110,14 @@ class Controller:
 
     def run_drop_syscall(self):
         return self.send_and_receive("RUN_DROP_SYSCALL\n")
+
+    def run_process_async(self):
+        self.running = True
+        self.send_command("RUN\n")
+
+    def run_drop_syscall_async(self):
+        self.running = True
+        self.send_command("RUN_DROP_SYSCALL\n")
 
     def run_function(self, fn_pointer, fn_type, *args):
         command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(
@@ -256,26 +266,35 @@ class Controller:
             raise Exception("Received line: " + line)
         return line
 
+    def finish_async(self):
+        assert self.running
+        self.running = False
+        return self.receive_line()
+
     def receive_data(self):
         args = self.socket.read_line().split()
         return self.socket.read_data(int(args[1]))
 
     def send_and_receive(self, command):
         self.send_command(command)
+        assert not self.running
         return self.receive_line()
 
     def send_and_receive_data(self, command):
         self.send_command(command)
+        assert not self.running
         return self.receive_data()
 
     def send_and_receive_ok(self, command):
         self.send_command(command)
+        assert not self.running
         r = self.receive_line()
         if r != "Ok":
             raise self.on_unexpected_output(r)
 
     def send_data_and_receive_ok(self, data):
         self.send_data(data)
+        assert not self.running
         r = self.receive_line()
         if r != "Ok":
             raise self.on_unexpected_output(r)
@@ -495,3 +514,13 @@ class ControllerWithResources(Controller):
             for buffer in self.buffers_to_make:
                 buffer.write_data(self)
             self.buffers_to_make = []
+
+    def fileno(self):
+        return self.socket.socket.fileno()
+
+def poll_controllers(controllers):
+    for c in controllers:
+        if c.socket.recv_buffer:
+            return [ c ]
+    rlist, wlist, xlist = select.select(controllers, (), ())
+    return rlist
