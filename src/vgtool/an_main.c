@@ -1298,37 +1298,44 @@ void read_data(SizeT size, Addr out)
 static
 Bool read_command(char *command)
 {
-   char *s = message_buffer;
-   Int rest = MAX_MESSAGE_BUFFER_LENGTH;
-   Int len = message_buffer_size;
-   Int total_len = 0;
-   Int i;
+    char *s = message_buffer;
+    Int rest = MAX_MESSAGE_BUFFER_LENGTH;
+    Int last_read_len = message_buffer_size;
+    Int buffer_len = 0;
+    Int command_len;
 
-   for(;;) {
-      for (i = 0; i < len; i++) {
-            if (*s == '\n') {
-               goto ret;
-            }
-            s++;
-      }
+    for(;;) {
+       Int i;
+       for (i = 0; i < last_read_len; i++) {
+             if (*s == '\n') {
+                command_len = buffer_len + i;
+                buffer_len += last_read_len;
+                goto ret;
+             }
+             s++;
+       }
 
-      total_len += len;
-      rest -= len;
-      tl_assert(rest > 0); // If fail, command was to long
-      len = VG_(read_socket)(control_socket, s, rest);
-      if (len == 0) {
-         return False; // Connection closed
-      }
-   }
+       buffer_len += last_read_len;
+       rest -= last_read_len;
 
-ret:
-   VG_(memcpy(command, message_buffer, total_len + i));
-   command[total_len + i] = 0;
-   message_buffer_size = len - i - 1;
-   VG_(memmove(message_buffer,
-               message_buffer + total_len + i + 1,
-               message_buffer_size));
-   return True;
+       tl_assert(rest > 0); // If fail, command was to long
+       last_read_len = VG_(read_socket)(control_socket, s, rest);
+       if (UNLIKELY(last_read_len == 0)) {
+          return False; // Connection closed
+       }
+    }
+
+ ret:
+    VG_(memcpy(command, message_buffer, command_len));
+    command[command_len] = 0;
+    message_buffer_size = buffer_len - command_len - 1;
+    if (message_buffer_size > 0) {
+         VG_(memmove(message_buffer,
+                     s + 1,
+                     message_buffer_size));
+         message_buffer[message_buffer_size] = 0;
+    }
+    return True;
 }
 
 static void write_bs_message(const char *str)
