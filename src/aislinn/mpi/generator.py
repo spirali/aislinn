@@ -95,6 +95,7 @@ class Generator:
         if aislinn_args.profile_under_valgrind:
             for controller in self.controllers:
                 controller.profile_under_valgrind = True
+        self.debug_seq = aislinn_args.debug_seq
 
     def get_statistics(self):
         if self.statistics is None:
@@ -393,7 +394,6 @@ class Generator:
             context.process_run_result(result)
         return True
 
-
     def fast_expand_node(self, gcontext):
         modified = False
         while True:
@@ -408,9 +408,17 @@ class Generator:
                    modified = True
                    continue
 
-            for state in gcontext.gstate.states:
-                if not gcontext.is_running(state.pid):
-                    self.fast_expand_state(gcontext, state)
+            if self.debug_seq: # DEBUG --debug-seq
+                for state in gcontext.gstate.states:
+                    if not gcontext.is_running(state.pid):
+                        if self.fast_expand_state(gcontext, state):
+                            break
+                    else:
+                        break
+            else: # Normal run
+                for state in gcontext.gstate.states:
+                    if not gcontext.is_running(state.pid):
+                        self.fast_expand_state(gcontext, state)
 
             if self.poll_controllers(gcontext):
                 modified = True

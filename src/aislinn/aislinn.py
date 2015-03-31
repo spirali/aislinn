@@ -150,6 +150,8 @@ def parse_args():
                        default=None)
     parser.add_argument("--debug-statespace",
                        action="store_true")
+    parser.add_argument("--debug-seq",
+                       action="store_true")
     args = parser.parse_args()
 
     if args.verbose == 0:
