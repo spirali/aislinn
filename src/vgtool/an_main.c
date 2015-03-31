@@ -1942,7 +1942,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          UWord buffer_id =  next_token_uword();
          Buffer *buffer = buffer_lookup(buffer_id);
          buffer_free(buffer);
-         write_message("Ok\n");
+         //write_message("Ok\n");
          continue;
       }
 
@@ -1976,7 +1976,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          }
          VG_(HT_remove)(state_table, state_id);
          state_free(state);
-         write_message("Ok\n");
+         //write_message("Ok\n");
          continue;
       }
 

@@ -420,10 +420,10 @@ class Generator:
                     if not gcontext.is_running(state.pid):
                         self.fast_expand_state(gcontext, state)
 
+            self.buffer_manager.cleanup()
             if self.poll_controllers(gcontext):
                 modified = True
                 continue
-            self.buffer_manager.cleanup()
             return modified
 
     def fork_standard_sends(self, node, gstate):

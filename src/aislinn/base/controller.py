@@ -345,10 +345,10 @@ class Controller:
         self.send_command("DOWNLOAD {0}\n".format(buffer_id))
 
     def free_state(self, state_id):
-        self.send_and_receive_ok("FREE {0}\n".format(state_id))
+        self.send_command("FREE {0}\n".format(state_id))
 
     def free_buffer(self, buffer_id):
-        self.send_and_receive_ok("FREE_BUFFER {0}\n".format(buffer_id))
+        self.send_command("FREE_BUFFER {0}\n".format(buffer_id))
 
     def _start_valgrind(self, port, capture_syscalls):
         args = (
