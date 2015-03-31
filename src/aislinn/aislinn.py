@@ -297,7 +297,9 @@ def main():
         with open("aislinn.stats", "w") as f:
             ps = pstats.Stats(pr, stream=f).sort_stats("cumulative")
             ps.print_stats()
-        logging.info("Profile written into 'aislinn.stats'")
+        pr.dump_stats("aislinn.pstats")
+        logging.info("Profile written into "
+                     "'aislinn.stats' and 'aislinn.pstats'")
 
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
