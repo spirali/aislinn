@@ -17,6 +17,7 @@
 #    along with Kaira.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import socket
 
 class SocketWrapper:
 
@@ -62,3 +63,6 @@ class SocketWrapper:
 
     def send_data(self, data):
         self.socket.sendall(data)
+
+    def set_no_delay(self):
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)

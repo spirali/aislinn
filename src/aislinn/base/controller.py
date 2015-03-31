@@ -89,10 +89,11 @@ class Controller:
         self.server_socket.settimeout(0.3)
         try:
             sock, addr = self.server_socket.accept()
-            self.socket = SocketWrapper(sock)
         except socket.timeout:
             logging.error("Aislinn client was not started")
             return False
+        self.socket = SocketWrapper(sock)
+        self.socket.set_no_delay()
         self.server_socket.close()
         self.server_socket = None
         return True
