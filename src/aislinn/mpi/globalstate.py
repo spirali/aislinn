@@ -99,7 +99,7 @@ class GlobalState(EqMixin):
             self.collective_operations = []
         cc_id = context.state.get_cc_id_counter(comm)
         op = self.get_operation_by_cc_id(comm.comm_id, cc_id)
-        if op is not None:
+        if op is not None and comm.comm_id != consts.MPI_COMM_SELF:
             op.check_compatability(context, op_class, blocking)
         else:
             op = op_class(self, comm, blocking, cc_id)
