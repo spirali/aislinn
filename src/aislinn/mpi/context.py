@@ -110,6 +110,14 @@ class Context:
         self.state.vg_state.dec_ref()
         self.state.vg_state = None
 
+    def get_allocations(self):
+        result = []
+        for s in self.controller.get_allocations().split("|"):
+            if s:
+                addr, size = s.split()
+                result.append(Allocation(self.state.pid, int(addr), int(size)))
+        return result
+
     def process_run_result(self, result):
         result = result.split()
         if result[0] == "CALL":
@@ -132,9 +140,7 @@ class Context:
             if exitcode != 0:
                 self.add_error_and_throw(
                         errormsg.NonzeroExitCode(self, exitcode=exitcode))
-            self.state.allocations = \
-                [ Allocation(self.state.pid, addr, size)
-                  for addr, size in self.controller.get_allocations() ]
+            self.state.allocations = self.get_allocations()
             return False
         if result[0] == "REPORT":
             self.add_error_and_throw(

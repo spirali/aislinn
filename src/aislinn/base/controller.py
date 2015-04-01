@@ -245,12 +245,7 @@ class Controller:
         self.send_and_receive_ok("UNLOCK {0} {1}\n".format(addr, size))
 
     def get_allocations(self):
-        self.send_command("ALLOCATIONS\n");
-        result = []
-        for line in self.receive_until_ok():
-            addr, size = line.split()
-            result.append((int(addr), int(size)))
-        return result
+        return self.send_and_receive("ALLOCATIONS\n");
 
     ### Semi-internal functions
 

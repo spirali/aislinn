@@ -1652,21 +1652,55 @@ static void debug_compare(UWord state_id1, UWord state_id2)
     VG_(printf)("------ End of comparison -----------\n");
 }
 
+static void finish_send_buffer(char *buffer, char **position)
+{
+    SizeT s = ((Addr) *position - (Addr) buffer);
+    if (s >= 0) {
+        tl_assert(VG_(write_socket)(control_socket, buffer, s) == s);
+    }
+}
+
+static void add_to_send_buffer(char *buffer, char **position, void *data, SizeT size)
+{
+    SizeT s = ((Addr) *position - (Addr) buffer);
+    if (s + size <= MAX_MESSAGE_BUFFER_LENGTH) {
+        VG_(memcpy)(*position, data, size);
+        *position += size;
+        return;
+    }
+
+    if (s >= 0) {
+        finish_send_buffer(buffer, position);
+    }
+    tl_assert(VG_(write_socket)(control_socket, data, size) == size);
+    *position = buffer;
+}
+
+static void add_string_to_send_buffer(char *buffer, char **position, char *str)
+{
+    SizeT size = VG_(strlen)(str);
+    add_to_send_buffer(buffer, position, str, size);
+}
+
+
 static void write_allocations(void)
 {
     char output[MAX_MESSAGE_BUFFER_LENGTH];
+    char *p = output;
     XArray *a = current_memspace->allocation_blocks;
     SizeT size = VG_(sizeXA)(a) - 1;
     SizeT i;
     for (i = 0; i < size; i++) {
         AllocationBlock *block = VG_(indexXA)(a, i);
+        char tmp[100];
         if (block->type == BLOCK_USED) {
-            VG_(snprintf(output, MAX_MESSAGE_BUFFER_LENGTH,
-                         "%lu %lu\n", block->address, block->requested_size));
-            write_message(output);
+            VG_(snprintf(tmp, 100,
+                         "%lu %lu|", block->address, block->requested_size));
+            add_string_to_send_buffer(output, &p, tmp);
         }
     }
-    write_message("Ok\n");
+    add_string_to_send_buffer(output, &p, "\n");
+    finish_send_buffer(output, &p);
 }
 
 static Bool set_capture_syscalls_by_name(const char *name, Bool value)
