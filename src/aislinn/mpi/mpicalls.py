@@ -31,7 +31,6 @@ from comm import comm_compare, group_compare, Group
 from keyval import Keyval
 
 import copy
-import logging
 
 
 def MPI_Initialized(context, args):
@@ -128,45 +127,45 @@ def MPI_Type_size(context, args):
     return False
 
 def MPI_Send(context, args):
-    return call_send(context, args, True, "Send", "Send")
+    return call_send(context, args, True, "Send")
 
 def MPI_Ssend(context, args):
-    return call_send(context, args, True, "Ssend", "Ssend")
+    return call_send(context, args, True, "Ssend")
 
 def MPI_Rsend(context, args):
     # TODO: Handle Rsend properly, now it is handled like a Ssend
-    return call_send(context, args, True, "Ssend", "Rsend")
+    return call_send(context, args, True, "Ssend")
 
 def MPI_Bsend(context, args):
-    return call_send(context, args, True, "Bsend", "Bsend")
+    return call_send(context, args, True, "Bsend")
 
 def MPI_Recv(context, args):
-    return call_recv(context, args, True, "Recv")
+    return call_recv(context, args, True)
 
 def MPI_Isend(context, args):
-    return call_send(context, args, False, "Send", "Isend")
+    return call_send(context, args, False, "Send")
 
 def MPI_Issend(context, args):
-    return call_send(context, args, False, "Ssend", "Issend")
+    return call_send(context, args, False, "Ssend")
 
 def MPI_Irsend(context, args):
     # TODO: Handle Rsend properly, now it is handled like a Ssend
-    return call_send(context, args, False, "Ssend", "Irsend")
+    return call_send(context, args, False, "Ssend")
 
 def MPI_Ibsend(context, args):
-    return call_send(context, args, False, "Bsend", "Ibsend")
+    return call_send(context, args, False, "Bsend")
 
 def MPI_Irecv(context, args):
-    return call_recv(context, args, False, "Irecv")
+    return call_recv(context, args, False)
 
 def MPI_Sendrecv(context, args):
     send_args = args[:5]
     send_args.append(args[-2]) # Add communicator
     recv_args = args[5:]
     send_request = call_send(context, send_args,
-                             True, "Send", "Send", return_request=True)
+                             True, "Send", return_request=True)
     recv_request = call_recv(context, recv_args,
-                             True, "Recv", return_request=True)
+                             True, return_request=True)
     context.state.set_wait((send_request.id, recv_request.id),
                    None, # request pointer
                    args[-1], # status pointer
@@ -175,24 +174,24 @@ def MPI_Sendrecv(context, args):
 
 def MPI_Recv_init(context, args):
     return call_recv(
-            context, args, False, "MPI_Recv_init", True)
+            context, args, False, True)
 
 def MPI_Send_init(context, args):
     return call_send(
-            context, args, False, "Send", "Send_init", True)
+            context, args, False, "Send", True)
 
 def MPI_Bsend_init(context, args):
     return call_send(
-            context, args, False, "Bsend", "Bsend_init", True)
+            context, args, False, "Bsend", True)
 
 def MPI_Ssend_init(context, args):
     return call_send(
-            context, args, False, "Ssend", "Ssend_init", True)
+            context, args, False, "Ssend", True)
 
 def MPI_Rsend_init(context, args):
     # TODO: Handle Rsend properly, now it is handled like a Ssend
     return call_send(
-            context, args, False, "Ssend", "Rsend_init", True)
+            context, args, False, "Ssend", True)
 
 def MPI_Start(context, args):
     request_id = context.controller.read_int(args[0])
@@ -752,7 +751,7 @@ def get_send_type(generator, state, mode, datatype, count):
         return SendRequest.Standard
 
 def call_send(context, args,
-              blocking, mode, name, persistent=False, return_request=False):
+              blocking, mode, persistent=False, return_request=False):
     context.state = context.state
     if blocking:
         data_ptr, count, datatype, target, tag, comm = args
@@ -780,7 +779,7 @@ def call_send(context, args,
         context.controller.write_int(request_ptr, request.id)
     return blocking
 
-def call_recv(context, args, blocking, name, persistent=False, return_request=False):
+def call_recv(context, args, blocking, persistent=False, return_request=False):
     data_ptr, count, datatype, source, tag, comm, ptr = args
     check.check_rank(context, comm, source, 4, True, True)
 
