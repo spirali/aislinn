@@ -2352,7 +2352,7 @@ IRSB* an_instrument ( VgCallbackClosure* closure,
             IRExpr* data = st->Ist.Store.data;
             IRType  type = typeOfIRExpr(tyenv, data);
             tl_assert(type != Ity_INVALID);
-            event_write(sb_out, st->Ist.Store.addr, sizeofIRType(type) );
+            event_write(sb_out, st->Ist.Store.addr, sizeofIRType(type));
             addStmtToIRSB(sb_out, st);
             break;
          }
@@ -2360,6 +2360,22 @@ IRSB* an_instrument ( VgCallbackClosure* closure,
          case Ist_StoreG: {
             VG_(printf)("Ist_StoreG not implemented yet\n");
             VG_(exit)(0);
+         }
+
+         case Ist_CAS: {
+              IRType type;
+              IRCAS* cas = st->Ist.CAS.details;
+              tl_assert(cas->addr != NULL);
+              tl_assert(cas->dataLo != NULL);
+              type = typeOfIRExpr(tyenv, cas->dataLo);
+              event_write(sb_out, cas->addr, sizeofIRType(type));
+              addStmtToIRSB(sb_out, st);
+              break;
+         }
+
+         case Ist_LLSC: {
+              VG_(printf)("Ist_StoreG not implemented yet\n");
+              VG_(exit)(0);
          }
 
          default:
