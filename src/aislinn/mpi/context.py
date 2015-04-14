@@ -156,16 +156,16 @@ class Context:
         if name == "heaperror":
             assert len(parts) == 2
             return errormsg.HeapExhausted(self)
+        elif name == "invalidread":
+            assert len(parts) == 4
+            addr = int(parts[2], 16)
+            size = int(parts[3])
+            return errormsg.InvalidRead(self, address=addr, size=size)
         elif name == "invalidwrite":
             assert len(parts) == 4
             addr = int(parts[2], 16)
             size = int(parts[3])
             return errormsg.InvalidWrite(self, address=addr, size=size)
-        elif name == "invalidwrite-locked":
-            assert len(parts) == 4
-            addr = int(parts[2], 16)
-            size = int(parts[3])
-            return errormsg.InvalidWriteLocked(self, address=addr, size=size)
         else:
             raise Exception("Unknown runtime error: " + name)
 

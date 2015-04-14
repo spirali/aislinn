@@ -66,15 +66,23 @@ class MemTests(TestCase):
 
     def test_lockedmem(self):
         self.program("lockedmem")
-        self.execute(2, "1", error="mem/invalid-write-locked")
-        self.execute(2, "2", error="mem/invalid-write-locked")
+        self.execute(2, "1", error="mem/invalid-write")
+        self.execute(2, "2", error="mem/invalid-write")
 
     def test_lockedmem_persistent(self):
         self.program("lockedmem-persistent")
         self.execute(2, "1")
-        self.execute(2, "2", error="mem/invalid-write-locked")
+        self.execute(2, "2", error="mem/invalid-write")
         self.execute(2, "3")
-        self.execute(2, "4", error="mem/invalid-write-locked")
+        self.execute(2, "4", error="mem/invalid-write")
+
+    def test_invalidread(self):
+        self.program("invalidread")
+        self.execute(1, error="mem/invalid-read")
+
+    def test_heapread(self):
+        self.program("heapread")
+        self.execute(1, error="mem/invalid-read")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,8 @@ class ErrorMessage(object):
                     self.stacktrace = context.event.stacktrace
                 if isinstance(context.event, event.CallEvent):
                     self.fn_name = context.event.name
+            elif context.controller:
+                self.stacktrace = context.controller.get_stacktrace()
 
     @property
     def description(self):
@@ -311,6 +313,24 @@ class HeapExhausted(ErrorMessage):
                          "Use argument --heapsize to bigger value."
 
 
+class InvalidRead(ErrorMessage):
+
+    key = "mem/invalid-read"
+    name = "Invalid read"
+    arg_names = ("address", "size")
+    description_format = \
+        "Invalid read of size {size} at address 0x{address:08X}"
+
+    def __init__(self, context, **kw):
+        ErrorMessage.__init__(self, context, **kw)
+        if context.state:
+            address = kw["address"]
+            stacktrace = context.state.get_locked_memory_stacktrace(address)
+            if stacktrace:
+                self.other_stacktraces = \
+                        (("MPI call that locked the memory", stacktrace),)
+
+
 class InvalidWrite(ErrorMessage):
 
     key = "mem/invalid-write"
@@ -327,11 +347,6 @@ class InvalidWrite(ErrorMessage):
             if stacktrace:
                 self.other_stacktraces = \
                         (("MPI call that locked the memory", stacktrace),)
-
-
-class InvalidWriteLocked(InvalidWrite):
-    key = "mem/invalid-write-locked"
-    name = "Invalid write into locked memory"
 
 
 class RootMismatch(ErrorMessage):

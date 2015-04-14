@@ -21,7 +21,7 @@ class BaseTests(TestCase):
         self.execute(3, check_output=False)
         self.assertEquals(self.report.number_of_nodes, 3)
 
-    def test_(self):
+    def test_exitcode(self):
         self.program("exitcode")
         self.execute(1, error="base/exitcode")
         self.check_error("exitcode", pid="0", exitcode="21")

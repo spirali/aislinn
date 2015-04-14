@@ -191,7 +191,7 @@ class VgToolTests(TestCase):
         self.assertEquals(int(ptr), int(c.is_writable(ptr, 11 * INT_SIZE)))
         self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
         self.assertTrue(
-                c.run_process().startswith("REPORT invalidwrite-locked"))
+                c.run_process().startswith("REPORT invalidwrite"))
 
         s = 1000000 * INT_SIZE # 1M integers
         c = self.controller((str(s), "9"))
@@ -273,6 +273,26 @@ class VgToolTests(TestCase):
 
         self.assertEquals("EXIT 0", c2.run_process())
 
+    def test_lock_and_restore(self):
+        self.program("two_allocations")
+        c = self.controller()
+        mem1 = int(c.start_and_connect().split()[2])
+        c.write_int(mem1, 10)
+        hash1 = c.hash_state()
+        c.lock_memory(mem1, c.INT_SIZE)
+        hash2 = c.hash_state()
+        assert hash1 != hash2
+        state2 = c.save_state()
+        c.unlock_memory(mem1, c.INT_SIZE)
+        c.write_int(mem1, 20)
+        c.lock_memory(mem1, c.INT_SIZE)
+        hash3 = c.hash_state()
+        assert hash3 != hash1
+        assert hash3 != hash2
+        c.restore_state(state2)
+        hash4 = c.hash_state()
+        assert hash4 == hash2
+        self.assertEquals(10, c.read_int(mem1))
 
     def test_bufserver(self):
         self.start_bufserver(1)
