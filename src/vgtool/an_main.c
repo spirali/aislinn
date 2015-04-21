@@ -171,6 +171,7 @@ Int message_buffer_size = 0;
 
 Int server_port = -1;
 Int buffer_server_port = -1;
+Int identification = 0; // For debugging purpose when verbose > 0
 
 struct {
     Bool syscall_write;
@@ -1496,7 +1497,7 @@ static void download_buffer(int buffer_id)
 
 static void write_message(const char *str)
 {
-   VPRINT(1, "AN>> %s", str);
+   VPRINT(1, "AN%d>> %s", identification, str);
 
    Int len = VG_(strlen)(str);
    Int r = VG_(write_socket)(control_socket, str, len);
@@ -1510,7 +1511,7 @@ static void write_message(const char *str)
 // Same as write_message but with DATA message
 static void write_data(void *ptr, SizeT size)
 {
-   VPRINT(1, "AN>> [[ DATA at=%p size=%lu ]]\n", ptr, size);
+   VPRINT(1, "AN%d>> [[ DATA at=%p size=%lu ]]\n", identification, ptr, size);
    char tmp[MAX_MESSAGE_BUFFER_LENGTH];
    /*VG_(snprintf)(tmp, 100, "DATA 1\nX");
    write_message(tmp);*/
@@ -1819,7 +1820,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!read_command(command)) {
          VG_(exit)(1);
       }
-      VPRINT(1, "AN<< %s\n", command);
+      VPRINT(1, "AN%d<< %s\n", identification, command);
       char *cmd = VG_(strtok(command, " "));
 
       if (!VG_(strcmp(cmd, "SAVE"))) {
@@ -2540,6 +2541,10 @@ static Bool process_cmd_line_option(const HChar* arg)
    }
 
    if (VG_INT_CLO(arg, "--verbose", verbosity_level)) {
+      return True;
+   }
+
+   if (VG_INT_CLO(arg, "--identification", identification)) {
       return True;
    }
 

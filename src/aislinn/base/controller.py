@@ -350,7 +350,8 @@ class Controller:
             paths.VALGRIND_BIN,
             "-q",
             "--tool=aislinn",
-            "--port={0}".format(port)
+            "--port={0}".format(port),
+            "--identification={0}".format(self.name),
         ) + tuple([ "--capture-syscall=" + name for name in capture_syscalls ])
 
         if self.buffer_server_port is not None:
