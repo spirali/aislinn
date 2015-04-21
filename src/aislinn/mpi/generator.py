@@ -409,12 +409,11 @@ class Generator:
                    continue
 
             if self.debug_seq: # DEBUG --debug-seq
-                for state in gcontext.gstate.states:
-                    if not gcontext.is_running(state.pid):
+                if all(not gcontext.is_running(state.pid)
+                       for state in gcontext.gstate.states):
+                    for state in gcontext.gstate.states:
                         if self.fast_expand_state(gcontext, state):
                             break
-                    else:
-                        break
             else: # Normal run
                 for state in gcontext.gstate.states:
                     if not gcontext.is_running(state.pid):
