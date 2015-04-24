@@ -208,6 +208,9 @@ class Generator:
         allocations = [ frozenset(node.allocations)
                         if node.allocations else frozenset()
                         for node in final_nodes ]
+        self.deterministic_unallocated_memory = 0
+        if not allocations:
+            return
         all_allocations = frozenset.union(*allocations)
         deterministic = frozenset.intersection(*allocations)
         for a in sorted(all_allocations - deterministic):
@@ -222,7 +225,6 @@ class Generator:
                 assert 0 # This shoud not happen
             self.add_error_message(m)
 
-        self.deterministic_unallocated_memory = 0
         for a in deterministic:
             self.deterministic_unallocated_memory += a.size
 
