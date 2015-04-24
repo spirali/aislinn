@@ -86,7 +86,7 @@ class Controller:
         return self.receive_line()
 
     def connect(self):
-        self.server_socket.settimeout(0.3)
+        self.server_socket.settimeout(5.0)
         try:
             sock, addr = self.server_socket.accept()
         except socket.timeout:
