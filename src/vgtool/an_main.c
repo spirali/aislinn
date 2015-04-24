@@ -155,7 +155,7 @@ typedef
   } Buffer;
 
 static int verbosity_level = 0;
-static SizeT heap_max_size = 128 * 1024 * 1024; // Default: 128M
+static SizeT heap_max_size = 512 * 1024 * 1024; // Default: 512M
 static SizeT redzone_size = 16;
 
 static MemorySpace *current_memspace = NULL;

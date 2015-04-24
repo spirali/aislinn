@@ -307,8 +307,8 @@ class NotReceivedMessage(ErrorMessage):
 
 class HeapExhausted(ErrorMessage):
 
-    key = "mem/heap-exhausted"
-    name = "Heap exhausted"
+    key = "mem/heap-limit-reached"
+    name = "Heap limit reached"
     description_format = "Process allocated more memory on heap than limit. "\
                          "Use argument --heapsize to bigger value."
 

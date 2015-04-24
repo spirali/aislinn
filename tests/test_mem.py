@@ -21,7 +21,7 @@ class MemTests(TestCase):
         self.assertEquals(self.report.determinisic_nonfreed_memory, 100)
         self.execute(1, "100", heap_size="1M")
         self.assertEquals(self.report.determinisic_nonfreed_memory, 100)
-        self.execute(1, "10000000", heap_size="1M", error="mem/heap-exhausted")
+        self.execute(1, "10000000", heap_size="1M", error="mem/heap-limit-reached")
         self.execute(1, ("10000000",), heap_size="100M")
         self.assertEquals(self.report.determinisic_nonfreed_memory, 10000000)
 
