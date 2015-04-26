@@ -285,8 +285,6 @@ def MPI_Waitall(context, args):
 
 def MPI_Waitany(context, args):
     count, requests_ptr, index_ptr, status_ptr = args
-    import logging
-    logging.info("COUNT = %s", count)
     request_ids = context.controller.read_ints(requests_ptr, count)
 
     for i, request_id in enumerate(request_ids):
