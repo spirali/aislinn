@@ -424,6 +424,14 @@ class CommunicationInCallback(ErrorMessage):
     description_format = "Communication function was called in a callback."
 
 
+class GroupMismatch(ErrorMessage):
+    key = "mpi/invalid-arg/group-mismatch"
+    name = "Group mismatch"
+    description_format = "All processes were not called with a same group argument"
+
+
+## Debugging messages
+
 class StateCaptured(ErrorMessage):
     key = "internal/state-captured"
     name = "Internal: State captured"

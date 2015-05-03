@@ -18,6 +18,7 @@
 #
 
 import consts
+import base.utils
 
 class Communicator:
 
@@ -30,7 +31,7 @@ class Communicator:
         hashthread.update(str(self.group.table))
 
 
-class Group:
+class Group(base.utils.EqMixin):
 
     def __init__(self, table):
         self.table = table

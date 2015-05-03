@@ -917,3 +917,48 @@ class CommDup(CollectiveOperation):
     def compute_hash_data(self, hashthread):
         hashthread.update(str(self.newcomm_ptrs))
         hashthread.update(str(self.newcomm_id))
+
+
+class CommCreate(CollectiveOperation):
+
+    name = "comm_create"
+
+    def __init__(self, gstate, comm, blocking, cc_id):
+        CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
+        self.newcomm_ptrs = [ None ] * self.process_count
+        self.group = None
+        self.newcomm_id = None
+
+    def after_copy(self):
+        self.newcomm_ptrs = copy.copy(self.newcomm_ptrs)
+
+    def enter_main(self,
+                   context,
+                   comm,
+                   args):
+        group, newcomm_ptr = args
+        if self.group is None:
+            self.group = group
+        elif self.group != group:
+            e = errormsg.GroupMismatch(context)
+            context.add_error_and_throw(e)
+
+        rank = context.state.get_rank(comm)
+        assert self.newcomm_ptrs[rank] is None
+        self.newcomm_ptrs[rank] = newcomm_ptr
+
+        if self.newcomm_id is None:
+            self.newcomm_id = context.gstate.create_new_communicator \
+                (comm, group=group).comm_id
+
+    def can_be_completed(self, state):
+        return True
+
+    def complete_main(self, context, comm):
+        rank = context.state.get_rank(comm)
+        context.controller.write_int(self.newcomm_ptrs[rank],
+                                       self.newcomm_id)
+
+    def compute_hash_data(self, hashthread):
+        hashthread.update(str(self.newcomm_ptrs))
+        hashthread.update(str(self.newcomm_id))

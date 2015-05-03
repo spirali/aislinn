@@ -111,13 +111,15 @@ class GlobalState(EqMixin):
     def finish_collective_operation(self, op):
         self.collective_operations.remove(op)
 
-    def create_new_communicator(self, comm, ranks):
-        pids = [ comm.group.rank_to_pid(r) for r in ranks ]
+    def create_new_communicator(self, comm, ranks=None, group=None):
+        assert ranks or group
+        if ranks:
+            pids = [ comm.group.rank_to_pid(r) for r in ranks ]
+            group = Group(pids)
         self.comm_id_counter += 1
         new_comm_id = self.comm_id_counter
-        group = Group(pids)
         new_comm = Communicator(new_comm_id, group)
-        for pid in pids:
+        for pid in group.pids():
             self.states[pid].add_comm(new_comm)
         return new_comm
 

@@ -482,6 +482,15 @@ def MPI_Comm_dup(context, args):
     context.state.set_wait((request_id,))
     return True
 
+def MPI_Comm_create(context, args):
+    comm, group, new_comm_ptr = args
+    op = context.state.gstate.call_collective_operation(
+                context, comm, collectives.CommCreate, True, (group, new_comm_ptr))
+    request_id = context.state.add_collective_request(comm, op.cc_id)
+    context.state.set_wait((request_id,))
+    return True
+
+
 def MPI_Comm_compare(context, args):
     comm1, comm2, result_ptr = args
     context.controller.write_int(result_ptr,
@@ -842,6 +851,7 @@ class Call:
 
 calls_communicating = dict((c.name, c) for c in [
      Call(MPI_Comm_dup, (at.Comm, at.Pointer)),
+     Call(MPI_Comm_create, (at.Comm, at.Group, at.Pointer)),
      Call(MPI_Comm_split, (at.Comm, at.Int, at.Int, at.Pointer)),
      Call(MPI_Send, (at.Pointer, at.Count, at.Datatype,
                      at.Rank, at.Tag, at.Comm)),

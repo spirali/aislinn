@@ -70,6 +70,14 @@ class CommTests(TestCase):
         self.program("compare")
         self.execute(5)
 
+    def test_create(self):
+        self.program("create")
+        self.execute(3)
+
+    def test_create_invalid(self):
+        self.program("create-invalid")
+        self.execute(3, error="mpi/invalid-arg/group-mismatch")
+
 
 if __name__ == "__main__":
     unittest.main()
