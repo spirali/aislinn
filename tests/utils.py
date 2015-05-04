@@ -99,7 +99,7 @@ class TestCase(unittest.TestCase):
             verbose=None,
             stdout=None,
             check_output=True,
-            send_protocol=None,
+            send_protocol="full",
             heap_size=None,
             redzone_size=None,
             ):
