@@ -159,8 +159,8 @@ static SizeT heap_max_size = 512 * 1024 * 1024; // Default: 512M
 static SizeT redzone_size = 16;
 
 static MemorySpace *current_memspace = NULL;
-static VgHashTable state_table;
-static VgHashTable buffer_table;
+static VgHashTable *state_table;
+static VgHashTable *buffer_table;
 
 static Int control_socket = -1;
 static Int buffer_socket = -1;
@@ -1579,8 +1579,10 @@ static void write_stacktrace_helper(UInt n, Addr ip, void *opaque)
 {
    struct BufferCtrl *bc = opaque;
    tl_assert(bc->size > 1);
-   VG_(describe_IP)(ip, bc->buffer, bc->size - 1, NULL);
-   SizeT s = VG_(strlen)(bc->buffer);
+   const HChar *buf = VG_(describe_IP)(ip, NULL);
+   SizeT s = VG_(strlen)(buf);
+   tl_assert(s < bc->size);
+   VG_(memcpy)(bc->buffer, buf, s);
    bc->buffer[s] = '|';
    s += 1;
    bc->buffer += s;
@@ -1753,7 +1755,7 @@ static void finish_send_buffer(char *buffer, char **position)
     }
 }
 
-static void add_to_send_buffer(char *buffer, char **position, void *data, SizeT size)
+static void add_to_send_buffer(char *buffer, char **position, const void *data, SizeT size)
 {
     SizeT s = ((Addr) *position - (Addr) buffer);
     if (s + size <= MAX_MESSAGE_BUFFER_LENGTH) {
@@ -1769,7 +1771,7 @@ static void add_to_send_buffer(char *buffer, char **position, void *data, SizeT 
     *position = buffer;
 }
 
-static void add_string_to_send_buffer(char *buffer, char **position, char *str)
+static void add_string_to_send_buffer(char *buffer, char **position, const char *str)
 {
     SizeT size = VG_(strlen)(str);
     add_to_send_buffer(buffer, position, str, size);
@@ -2445,12 +2447,13 @@ void event_read(IRSB *sb, IRExpr *addr, Int dsize)
    addStmtToIRSB( sb, IRStmt_Dirty(di) );
 }
 
+
 static
 IRSB* an_instrument ( VgCallbackClosure* closure,
                       IRSB* sb_in,
-                      VexGuestLayout* layout,
-                      VexGuestExtents* vge,
-                      VexArchInfo* archinfo_host,
+                      const VexGuestLayout* layout,
+                      const VexGuestExtents* vge,
+                      const VexArchInfo* archinfo_host,
                       IRType gWordTy, IRType hWordTy )
 {
    Int i;
