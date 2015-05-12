@@ -256,11 +256,13 @@ def check_program(program):
     if not os.access(program, os.X_OK):
         logging.error("File '%s' not executable", program)
         sys.exit(1)
+    if not program.startswith(".") or not program.startswith("/"):
+        program = os.path.join(".", program)
+    return program
 
 def main():
     args, valgrind_args = parse_args()
-    check_program(args.program)
-    run_args = [ args.program ] + args.args
+    run_args = [ check_program(args.program) ] + args.args
     generator = Generator(run_args,
                           args.p,
                           valgrind_args,
