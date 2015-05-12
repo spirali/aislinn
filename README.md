@@ -11,7 +11,6 @@ that checks in one execution all possible runs with respect to nondeterminism in
 * Based on [Valgrind](http://valgrind.org)
 * Released under GPLv2 (same as Valgrind)
 * Source avaible on [GitHub](https://github.com/spirali/aislinn)
-* Project is currently in a very early state of development
 
 ## Author
 
