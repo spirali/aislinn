@@ -155,6 +155,8 @@ typedef
      // data follows ...
   } Buffer;
 
+/* Global variables */
+
 static int verbosity_level = 0;
 static SizeT heap_max_size = 512 * 1024 * 1024; // Default: 512M
 static SizeT redzone_size = 16;
@@ -174,14 +176,16 @@ Int server_port = -1;
 Int buffer_server_port = -1;
 Int identification = 0; // For debugging purpose when verbose > 0
 
+VA *uniform_va[4];
+
 struct {
     Bool syscall_write;
-
     Bool drop_this_syscall;
 } capture_syscalls;
 
 static struct {
    Word pages; // Number of currently allocated pages
+   Word vas; // Number of VAs
    Word buffers_size; // Sum of buffer sizes
 } stats;
 
@@ -561,6 +565,7 @@ static INLINE AuxMapEnt* maybe_find_in_auxmap ( Addr a )
 
 static VA *va_new(void)
 {
+   stats.vas++;
    VA *va = VG_(malloc)("an.va", sizeof(VA));
    va->ref_count = 1;
    return va;
@@ -579,6 +584,7 @@ static void va_dispose(VA *va)
    if (va->ref_count <= 0) {      
       tl_assert(va->ref_count == 0);
       VG_(free)(va);
+      stats.vas--;
    }
 }
 
@@ -600,8 +606,8 @@ static Page *page_new(Addr a)
 static Page *page_new_empty(Addr a)
 {
    Page *page = page_new(a);
-   page->va = va_new();
-   VG_(memset)(page->va->vabits, 0, sizeof(VA));
+   page->va = uniform_va[MEM_NOACCESS];
+   page->va->ref_count++;
    return page;
 }
 
@@ -673,6 +679,15 @@ static void INLINE page_prepare_for_write_data(Page **page) {
 
    p->status = INVALID_HASH;
 }
+
+static void INLINE page_set_va(Page **page, VA *va) {
+   page_prepare_for_write_data(page);
+   Page *p = *page;
+   p->va->ref_count--;
+   p->va = va;
+   va->ref_count++;
+}
+
 
 static void INLINE page_prepare_for_write_va(Page **page) {
    Page *p = *page;
@@ -981,10 +996,7 @@ void set_address_range_perms (
 part2:
    while (lenB >= PAGE_SIZE) {
       page_ptr = get_page_ptr(a);
-      page_prepare_for_write_va(page_ptr);
-      va = (*page_ptr)->va;
-
-      VG_(memset)(&((va)->vabits), perm, VA_CHUNKS);
+      page_set_va(page_ptr, uniform_va[perm]);
       lenB -= PAGE_SIZE;
       a += PAGE_SIZE;
    }
@@ -2211,19 +2223,14 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
           VG_(snprintf)(command,
                         MAX_MESSAGE_BUFFER_LENGTH,
                         "pages %ld|"
+                        "vas %ld|"
                         "active-pages %ld|"
                         "buffers-size %lu\n",
                         stats.pages,
+                        stats.vas,
                         VG_(OSetGen_Size)(current_memspace->auxmap),
                         stats.buffers_size);
           write_message(command);
-          /*
-          Buffer *buffer;
-          VG_(printf)("BUFFERS %d\n", VG_(HT_count_nodes(buffer_table)));
-          VG_(HT_ResetIter(buffer_table));
-          while ((buffer=(Buffer*) VG_(HT_Next)(buffer_table))) {
-            VG_(printf)("BUFFER %p %lu %lu\n", buffer, buffer->id, buffer->size);
-          }*/
           continue;
       }
 
@@ -2459,6 +2466,13 @@ static void an_post_clo_init(void)
 
    state_table = VG_(HT_construct)("an.states");
    buffer_table = VG_(HT_construct)("an.buffers");
+   uniform_va[MEM_NOACCESS] = va_new();
+   VG_(memset)(uniform_va[MEM_NOACCESS]->vabits, MEM_NOACCESS, VA_CHUNKS);
+   uniform_va[MEM_UNDEFINED] = NULL; // Not used now
+   uniform_va[MEM_READONLY] = va_new();
+   VG_(memset)(uniform_va[MEM_READONLY]->vabits, MEM_READONLY, VA_CHUNKS);
+   uniform_va[MEM_DEFINED] = va_new();
+   VG_(memset)(uniform_va[MEM_DEFINED]->vabits, MEM_DEFINED, VA_CHUNKS);
    memspace_init();
 
    char target[300];
