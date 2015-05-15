@@ -78,6 +78,7 @@
 
 typedef
    struct {
+      Int ref_count;
       UChar vabits[VA_CHUNKS];
    } VA;
 
@@ -558,6 +559,29 @@ static INLINE AuxMapEnt* maybe_find_in_auxmap ( Addr a )
    return res;
 }
 
+static VA *va_new(void)
+{
+   VA *va = VG_(malloc)("an.va", sizeof(VA));
+   va->ref_count = 1;
+   return va;
+}
+
+static VA *va_clone(VA *va)
+{
+   VA *new_va = va_new();
+   VG_(memcpy)(new_va->vabits, va->vabits, sizeof(va->vabits));
+   return new_va;
+}
+
+static void va_dispose(VA *va)
+{
+   va->ref_count--;
+   if (va->ref_count <= 0) {      
+      tl_assert(va->ref_count == 0);
+      VG_(free)(va);
+   }
+}
+
 static Page *page_new(Addr a)
 {
     stats.pages++;
@@ -568,10 +592,17 @@ static Page *page_new(Addr a)
     page->status = EMPTY;
     page->data = NULL;
     VG_(memset)(page->ignore, 0, sizeof(page->ignore));
-    page->va = VG_(malloc)("an.va", sizeof(VA));
-    VG_(memset)(page->va, 0, sizeof(VA));
+    page->va = NULL;
     VPRINT(3, "page_new %p base=%lx\n", page, a);
     return page;
+}
+
+static Page *page_new_empty(Addr a)
+{
+   Page *page = page_new(a);
+   page->va = va_new();
+   VG_(memset)(page->va->vabits, 0, sizeof(VA));
+   return page;
 }
 
 // Page is cloned without data and hash
@@ -580,7 +611,9 @@ static Page* page_clone(Page *page)
    Page *new_page = page_new(page->base);
    new_page->status = page->status;
    VG_(memcpy)(new_page->ignore, page->ignore, sizeof(page->ignore));
-   VG_(memcpy)(new_page->va, page->va, sizeof(VA));
+   //VG_(memcpy)(new_page->va, page->va, sizeof(VA));
+   page->va->ref_count++;
+   new_page->va = page->va;
    return new_page;
 }
 
@@ -593,7 +626,7 @@ static void page_dispose(Page *page)
       if (page->data) {
          VG_(free)(page->data);
       }
-      VG_(free)(page->va);
+      va_dispose(page->va);
       VG_(free)(page);
    }
 }
@@ -616,7 +649,7 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
       current_memspace->auxmap, sizeof(AuxMapEnt));
    tl_assert(nyu);
    nyu->base = a;
-   page = page_new(a);
+   page = page_new_empty(a);
    nyu->page = page;
    //nyu->sm = &sm_distinguished[SM_DIST_NOACCESS];
    /*nyu->sm = VG_(malloc)("an.secmap", sizeof(SecMap));
@@ -627,14 +660,40 @@ static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
    return nyu;
 }
 
-static void INLINE page_prepare_for_write(Page **page) {
-   VPRINT(3, "page_prepare_for_write base=%lx refcount=%d page=%p\n", (*page)->base, (*page)->ref_count, (*page));
-   if (UNLIKELY((*page)->ref_count >= 2)) {
-      (*page)->ref_count--;
-      Page *new_page = page_clone(*page);
+static void INLINE page_prepare_for_write_data(Page **page) {
+   Page *p = *page;
+   VPRINT(3, "page_prepare_for_write_data base=%lx refcount=%d page=%p\n", p->base, p->ref_count, p);
+   if (UNLIKELY(p->ref_count >= 2)) {
+      p->ref_count--;
+      Page *new_page = page_clone(p);
+      new_page->status = INVALID_HASH;
       *page = new_page;
+      return;
    }
-   (*page)->status = INVALID_HASH;
+
+   p->status = INVALID_HASH;
+}
+
+static void INLINE page_prepare_for_write_va(Page **page) {
+   Page *p = *page;
+   VPRINT(3, "page_prepare_for_write_va base=%lx refcount=%d page=%p\n", p->base, p->ref_count, p);
+   if (UNLIKELY(p->ref_count >= 2)) {
+      p->ref_count--;
+      Page *new_page = page_clone(p);
+      p->va->ref_count--;
+      new_page->va = va_clone(p->va);
+      new_page->status = INVALID_HASH;
+      *page = new_page;
+      return;
+   }
+
+   if (UNLIKELY(p->va->ref_count >= 2)) {
+      p->va->ref_count--;
+      p->va = va_clone(p->va);
+      p->status = INVALID_HASH;
+      return;
+   }
+   p->status = INVALID_HASH;
 }
 
 static INLINE Page** get_page_ptr (Addr a)
@@ -902,7 +961,7 @@ void set_address_range_perms (
    }
 
    page_ptr = get_page_ptr(a);
-   page_prepare_for_write(page_ptr);
+   page_prepare_for_write_va(page_ptr);
    va = (*page_ptr)->va;
    pg_off = PAGE_OFF(a);
 
@@ -922,7 +981,7 @@ void set_address_range_perms (
 part2:
    while (lenB >= PAGE_SIZE) {
       page_ptr = get_page_ptr(a);
-      page_prepare_for_write(page_ptr);
+      page_prepare_for_write_va(page_ptr);
       va = (*page_ptr)->va;
 
       VG_(memset)(&((va)->vabits), perm, VA_CHUNKS);
@@ -937,7 +996,7 @@ part2:
    tl_assert(lenB < PAGE_SIZE);
 
    page_ptr = get_page_ptr(a);
-   page_prepare_for_write(page_ptr);
+   page_prepare_for_write_va(page_ptr);
    va = (*page_ptr)->va;
    pg_off = 0;
    while (lenB > 0) {
@@ -1115,15 +1174,13 @@ static void memimage_restore(MemoryImage *memimage)
         } else {
             tl_assert(page->base > elem->base);
             page_dispose(elem->page);
-            // TODO: make a shared copy of an empty page
-            elem->page = page_new(elem->base);
+            elem->page = page_new_empty(elem->base);
         }
     }
     tl_assert(i == memimage->pages_count);
     while ((elem = VG_(OSetGen_Next(auxmap)))) {
         page_dispose(elem->page);
-        // TODO: make a shared copy of an empty page
-        elem->page = page_new(elem->base);
+        elem->page = page_new_empty(elem->base);
     }
 
     VG_(deleteXA)(current_memspace->allocation_blocks);
@@ -1255,7 +1312,7 @@ static void prepare_for_write(Addr addr, SizeT size)
     while (addr <= last_page) {
         AuxMapEnt *ent = maybe_find_in_auxmap(addr);
         tl_assert(ent != NULL);
-        page_prepare_for_write(&ent->page);
+        page_prepare_for_write_data(&ent->page);
         addr += PAGE_SIZE;
     }
 }
@@ -1271,7 +1328,7 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
         report_error_write(addr, size);
         tl_assert(0); // no return here
    }
-   page_prepare_for_write(&ent->page);
+   page_prepare_for_write_data(&ent->page);
    Page *page = ent->page;
    Addr offset = addr - page->base;
    SizeT i;
