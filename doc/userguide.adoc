@@ -386,9 +386,7 @@ Aislinn itself.
 
 **--profile**
 
-**--debug-under-valgrind**
-
-**--profile-under-valgrind**
+**--debug-by-valgrind-tool=TOOL**
 
 **--vgv=LEVEL**
 

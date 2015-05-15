@@ -83,18 +83,17 @@ class Generator:
         self.is_full_statespace = False
 
         self.buffer_manager = BufferManager()
-        self.controllers = [ Controller(self.args) for i in xrange(process_count) ]
+        self.controllers = [ Controller(self.args)
+                             for i in xrange(process_count) ]
 
         for i, controller in enumerate(self.controllers):
             controller.valgrind_args = valgrind_args
             controller.name = i
 
-        if aislinn_args.debug_under_valgrind:
+        if aislinn_args.debug_by_valgrind_tool:
             for controller in self.controllers:
-                controller.debug_under_valgrind = True
-        if aislinn_args.profile_under_valgrind:
-            for controller in self.controllers:
-                controller.profile_under_valgrind = True
+                controller.debug_by_valgrind_tool = \
+                        aislinn_args.debug_by_valgrind_tool
         self.debug_seq = aislinn_args.debug_seq
 
     def get_statistics(self):

@@ -54,8 +54,7 @@ class Controller:
     FUNCTION_2_INT_2_POINTER = 2
     FUNCTION_2_INT_4_POINTER = 3
 
-    debug_under_valgrind = False
-    profile_under_valgrind = False
+    debug_by_valgrind_tool = None
 
     stdout_arg = None
     buffer_server_port = None
@@ -359,18 +358,14 @@ class Controller:
 
         args += tuple(self.valgrind_args) + tuple(self.args)
 
-        if self.debug_under_valgrind or self.profile_under_valgrind:
-            if self.profile_under_valgrind:
-                extra = ("--tool=callgrind",)
-            else:
-                extra = ()
-
+        if self.debug_by_valgrind_tool:
             args = (
                 "valgrind",
+                "--tool=" + self.debug_by_valgrind_tool,
                 "--sim-hints=enable-outer",
                 "--trace-children=yes",
                 "--smc-check=all-non-file",
-                "--run-libc-freeres=no") + extra + args
+                "--run-libc-freeres=no") + args
 
         logging.debug("Starting valgrind with %s", args)
         self.process = subprocess.Popen(

@@ -132,10 +132,6 @@ def parse_args():
 
     parser.add_argument("--write-dot",
                        action="store_true")
-    parser.add_argument("--debug-under-valgrind",
-                       action="store_true")
-    parser.add_argument("--profile-under-valgrind",
-                       action="store_true")
     parser.add_argument("--profile",
                        action="store_true")
 
@@ -152,6 +148,10 @@ def parse_args():
                        action="store_true")
     parser.add_argument("--debug-seq",
                        action="store_true")
+    parser.add_argument("--debug-by-valgrind-tool",
+                        metavar="TOOL",
+                        type=str,
+                        default=None)
     args = parser.parse_args()
 
     if args.verbose == 0:
