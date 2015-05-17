@@ -1044,44 +1044,54 @@ static void hash_to_string(MD5_Digest *digest, char *out);
 static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
 {
    if (page->status == INVALID_HASH) {
+      if (page->va == uniform_va[MEM_NOACCESS]) {
+         page->status = EMPTY;
+         return;
+      }
       //VPRINT(2, "rehashing page %lu\n", page->base);
       AN_(MD5_CTX) ctx2;
       AN_(MD5_Init)(&ctx2);
-      UWord i, j;
-      /* This is quite performance critical
-       * It needs benchmarking before changing this code */
-      UChar *base = (UChar*) page->base;
-      SizeT s = 0;
-      UChar *b = base;
-      Bool empty = True;
 
-      for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
-        if (!page->ignore[i]) {
-            for (j = 0; j < PAGE_SIZE; j++) {
-                 if (page->va->vabits[j] != MEM_NOACCESS) {
-                    if (s == 0) {
-                       b = base + j;
+
+      if (page->va == uniform_va[MEM_DEFINED] || page->va == uniform_va[MEM_READONLY]) {
+         AN_(MD5_Update)(&ctx2, (UChar*) page->base, PAGE_SIZE);
+      } else {
+         UWord i, j;
+         /* This is quite performance critical
+          * It needs benchmarking before changing this code */
+         UChar *base = (UChar*) page->base;
+         SizeT s = 0;
+         UChar *b = base;
+         Bool empty = True;
+
+         for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
+           if (!page->ignore[i]) {
+               for (j = 0; j < PAGE_SIZE; j++) {
+                    if (page->va->vabits[j] != MEM_NOACCESS) {
+                       if (s == 0) {
+                          b = base + j;
+                       }
+                       s++;
+                    } else if (s != 0) {
+                       empty = False;
+                       AN_(MD5_Update)(&ctx2, b, s);
+                       s = 0;
                     }
-                    s++;
-                 } else if (s != 0) {
-                    empty = False;
-                    AN_(MD5_Update)(&ctx2, b, s);
-                    s = 0;
                  }
-              }
-        }
-        if (s != 0) {
-           empty = False;
-           AN_(MD5_Update)(&ctx2, b, s);
-           s = 0;
-        }
-      }
+           }
+           if (s != 0) {
+              empty = False;
+              AN_(MD5_Update)(&ctx2, b, s);
+              s = 0;
+           }
+         }
 
-      if (empty) {
-        page->status = EMPTY;
-        return;
+         if (empty) {
+           page->status = EMPTY;
+           return;
+         }
+         AN_(MD5_Update)(&ctx2, page->va->vabits, VA_CHUNKS);
       }
-      AN_(MD5_Update)(&ctx2, page->va->vabits, VA_CHUNKS);
       AN_(MD5_Final)(&page->hash, &ctx2);
       page->status = VALID_HASH;
    }
@@ -1093,7 +1103,12 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
 static void memimage_save_page_content(Page *page)
 {
    UWord i, j;
+   VA *va = page->va;
    //UWord c = 0;
+
+   if (va == uniform_va[MEM_NOACCESS]) {
+      return;
+   }
 
    if (page->data == NULL) {
       page->data = VG_(malloc)("an.page.data", PAGE_SIZE);
@@ -1101,7 +1116,11 @@ static void memimage_save_page_content(Page *page)
 
    UChar *src = (UChar*) page->base;
    UChar *dst = page->data;
-   VA *va = page->va;
+
+   if (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY]) {
+      VG_(memcpy)(dst, src, PAGE_SIZE);
+      return;
+   }
    for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
       if (!page->ignore[i]) {
          for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {
@@ -1117,12 +1136,23 @@ static void memimage_save_page_content(Page *page)
 static void memimage_restore_page_content(Page *page)
 {
    //page_dump(page);
-   VPRINT(2, "memimage_restore_page_content base=%lx\n", page->base);
+   //VPRINT(2, "memimage_restore_page_content base=%lx\n", page->base);
+
+   if (page->va == uniform_va[MEM_NOACCESS]) {
+      return;
+   }
+
    UWord i, j;
    UChar *dst = (UChar*) page->base;
    VA *va = page->va;
    tl_assert(page->data);
    UChar *src = page->data;
+
+   if (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY]) {
+      VG_(memcpy)(dst, src, PAGE_SIZE);
+      return;
+   }
+
    for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
       if (!page->ignore[i]) {
          for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {

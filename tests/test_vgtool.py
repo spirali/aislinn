@@ -294,6 +294,30 @@ class VgToolTests(TestCase):
         assert hash4 == hash2
         self.assertEquals(10, c.read_int(mem1))
 
+    def test_bigalloc(self):
+        self.program("bigalloc")
+        c = self.controller()
+        size = int(c.start_and_connect().split()[2])
+        mem = int(c.run_process().split()[2])
+        state1 = c.save_state()
+        hash1 = c.hash_state()
+        # Do not modifiy the first page -> write after first 64kb)
+        for i in xrange(1000):
+            c.write_int(mem + i * 10 * 1024 + 200000, 0xFF00FF00)
+        state2 = c.save_state()
+        hash2 = c.hash_state()
+        assert hash1 != hash2
+        c.restore_state(state1)
+        assert hash1 == c.hash_state()
+        c.run_process()
+        hash3 = c.hash_state()
+        assert hash3 != hash1
+        assert hash3 != hash2
+        c.restore_state(state2)
+        c.run_process()
+        assert hash3 == c.hash_state()
+        c.run_process()
+
     def test_bufserver(self):
         self.start_bufserver(1)
         s = self.connect_to_bufserver()
