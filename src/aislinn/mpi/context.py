@@ -17,7 +17,7 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from base.arc import STREAM_STDOUT, STREAM_STDERR
+from base.arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
 from base.utils import convert_type
 import errormsg
 import consts
@@ -87,6 +87,11 @@ class Context:
         else:
             raise Exception("Invalid syscall" + commands[1])
 
+    def process_instructions(self, command):
+        self.gcontext.add_data(COUNTER_INSTRUCTIONS,
+                               self.state.pid,
+                               int(command[1]))
+
     def handle_call(self, name, args, callback=False):
         call = mpicalls.calls_non_communicating.get(name)
         if call is None:
@@ -126,6 +131,10 @@ class Context:
             else:
                 self.controller.run_process_async()
                 return True
+        if result[0] == "INSTRUCTIONS":
+            self.process_instructions(result)
+            result = self.controller.receive_line()
+            return self.process_run_result(result)
         if result[0] == "SYSCALL":
             if self.process_syscall(result):
                 self.controller.run_process_async()
@@ -189,7 +198,22 @@ class Context:
 
         while True:
             result = result.split()
-            if result[0] == "EXIT":
+            if result[0] == "CALL":
+                if result[1] == "MPI_Initialized":
+                    assert len(result) == 3
+                    ptr = convert_type(result[2], "ptr")
+                    controller.write_int(ptr, 0)
+                    result = controller.run_process()
+                    continue
+                elif result[1] != "MPI_Init":
+                    e = errormsg.NoMpiInit(self)
+                    self.add_error_and_throw(e)
+                break
+            elif result[0] == "INSTRUCTIONS":
+                self.process_instructions(result)
+                result = controller.receive_line()
+                continue
+            elif result[0] == "EXIT":
                 exitcode = convert_type(result[1], "int")
                 if exitcode != 0:
                     self.add_error_message(
@@ -208,20 +232,8 @@ class Context:
                     result = controller.run_process()
                 else:
                     result = controller.run_drop_syscall()
-            elif result[0] == "CALL":
-                if result[1] == "MPI_Initialized":
-                    assert len(result) == 3
-                    ptr = convert_type(result[2], "ptr")
-                    controller.write_int(ptr, 0)
-                    result = controller.run_process()
-                    continue
-                elif result[1] != "MPI_Init":
-                    e = errormsg.NoMpiInit(self)
-                    self.add_error_and_throw(e)
-                    return True
-                break
             else:
-                assert 0, "Invalid reposponse " + result
+                assert 0, "Invalid reposponse " + repr(result)
 
         # FIXME: Consts pool
         self.gcontext.generator.consts_pool = convert_type(result[4], "ptr")
@@ -256,6 +268,9 @@ class Context:
             if result[0] == "EXIT":
                 e = errormsg.ExitInCallback(self)
                 self.add_error_and_throw(e)
+            if result[0] == "INSTRUCTIONS":
+                self.process_instructions(result)
+                result = self.controller.receive_line().split()
             assert result[0] == "CALL"
             assert not self.handle_call(result[1], result[2:], True)
             result = self.controller.run_process()

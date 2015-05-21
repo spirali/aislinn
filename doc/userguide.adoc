@@ -344,7 +344,7 @@ capture)
 * _capture_ - Standard output is captured and processed by Aislinn as a part of
   the state space, i.e. when an error occurs, Aislinn can show a corresponding
   output of an invalid run.
-* _print_ - Standard output is ignored by Aislinn and it is normally processed 
+* _print_ - Standard output is ignored by Aislinn and it is normally processed
   by an application as usual. Note: During a state space analysis, parts of the
   verified application can be run several times or run in different orders.
   Therefore the output can be quite different from a normal output of the
@@ -354,8 +354,13 @@ capture)
 **--stdout-write=N**
 
 When used, it saves the first N possible outputs that may application write on
-standard output. N can be set to value "all" to obtain all outputs. 
+standard output. N can be set to value "all" to obtain all outputs.
 Outputs are saved into files with names `stdout-<pid>-<x>`.
+
+**--track-instructions**
+
+Aislinn tracks counts of processed instructions and makes a summary of
+instructions counts in the report.
 
 === Semi-internal options
 
@@ -406,7 +411,7 @@ Computation_] (PETSc), proceed as follows:
 * Download and unpack a distribution tarball of PETSc.
 
 * Run the configure command; modify `path/to/aislinn` to your real path where Aislinn is installed.
-    
+
     $ ./configure --with-mpi-dir=/path/to/aislinn --with-mpiuni-fortran-binding=false --with-shared-libraries=0 
 
 * Compile your program as usual against this version of PETSc.

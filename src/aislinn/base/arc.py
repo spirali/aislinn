@@ -66,3 +66,9 @@ class Counter:
 
     def __init__(self):
         pass
+
+    def compact_data(self, data):
+        return sum(data)
+
+
+COUNTER_INSTRUCTIONS = Counter()

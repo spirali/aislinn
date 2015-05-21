@@ -168,6 +168,9 @@ static VgHashTable *buffer_table;
 static Int control_socket = -1;
 static Int buffer_socket = -1;
 
+static Bool track_instructions = False;
+static UWord count_instructions = 0;
+
 #define MAX_MESSAGE_BUFFER_LENGTH 20000
 char message_buffer[MAX_MESSAGE_BUFFER_LENGTH];
 Int message_buffer_size = 0;
@@ -1424,6 +1427,12 @@ static VG_REGPARM(2) void trace_read(Addr addr, SizeT size)
    }*/
 }
 
+static VG_REGPARM(0) void trace_alu_op(void)
+{
+    count_instructions++;
+}
+
+
 
 // This function should be called when write from controller occurs ("WRITE" commands)
 static void extern_write(Addr addr, SizeT size, Bool check)
@@ -1591,6 +1600,14 @@ static void download_buffer(int buffer_id)
     size -= already_received;
     a += already_received;
     receive_data(buffer_socket, a, size);
+}
+
+static void put_instruction_info(HChar **buffer, SizeT *size)
+{
+    SizeT s = VG_(snprintf)(*buffer, *size, "INSTRUCTIONS %lu\n", count_instructions);
+    count_instructions = 0;
+    *buffer += s;
+    *size -= s;
 }
 
 
@@ -2350,9 +2367,12 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
    tl_assert(arg[1]);
    switch(arg[0]) {
       case VG_USERREQ__AISLINN_CALL: {
-         Int l = MAX_MESSAGE_BUFFER_LENGTH - 1; // reserve 1 char for \n
+         SizeT l = MAX_MESSAGE_BUFFER_LENGTH - 1; // reserve 1 char for \n
          UWord i;
          char *m = message;
+         if (track_instructions) {
+            put_instruction_info(&m, &l);
+         }
          Int p = VG_(snprintf)(m, l, "CALL %s", (char*) arg[1]);
          m += p;
          l -= p;
@@ -2521,8 +2541,13 @@ static
 Bool restore_thread(ThreadId tid)
 {
    ThreadState *tst = VG_(get_ThreadState)(tid);
-   char str[100];
-   VG_(snprintf)(str, 100, "EXIT %lu\n", tst->os_state.exitcode);
+   HChar str[MAX_MESSAGE_BUFFER_LENGTH];
+   SizeT l = MAX_MESSAGE_BUFFER_LENGTH;
+   HChar *buffer = str;
+   if (track_instructions) {
+       put_instruction_info(&buffer, &l);
+   }
+   VG_(snprintf)(buffer, l, "EXIT %lu\n", tst->os_state.exitcode);
    write_message(str);
    process_commands(CET_FINISH, NULL);
    return True;
@@ -2548,6 +2573,16 @@ void event_read(IRSB *sb, IRExpr *addr, Int dsize)
    addStmtToIRSB( sb, IRStmt_Dirty(di) );
 }
 
+static
+void event_alu_op(IRSB *sb, IRExpr *op)
+{
+    IRExpr **args = mkIRExprVec_0();
+    IRDirty *di   = unsafeIRDirty_0_N( /*regparms*/0,
+                              "trace_alu_op", VG_(fnptr_to_fnentry)(trace_alu_op),
+                              args);
+    addStmtToIRSB( sb, IRStmt_Dirty(di) );
+
+}
 
 static
 IRSB* an_instrument ( VgCallbackClosure* closure,
@@ -2580,10 +2615,23 @@ IRSB* an_instrument ( VgCallbackClosure* closure,
 
          case Ist_WrTmp: {
             IRExpr* data = st->Ist.WrTmp.data;
-            if (data->tag == Iex_Load) {
-                event_read(sb_out,
-                           data->Iex.Load.addr,
-                           sizeofIRType(data->Iex.Load.ty));
+            switch (data->tag) {
+                case Iex_Load:
+                    event_read(sb_out,
+                               data->Iex.Load.addr,
+                               sizeofIRType(data->Iex.Load.ty));
+                    break;
+                case Iex_Unop:
+                case Iex_Binop:
+                case Iex_Triop:
+                case Iex_Qop:
+                case Iex_ITE:
+                    if (track_instructions) {
+                        event_alu_op(sb_out, data);
+                    }
+                    break;
+                default:
+                    break;
             }
             addStmtToIRSB(sb_out, st);
             break;
@@ -2662,6 +2710,10 @@ static Bool process_cmd_line_option(const HChar* arg)
 
    if (VG_STR_CLO(arg, "--capture-syscall", syscall_name)) {
       return set_capture_syscalls_by_name(syscall_name, True);
+   }
+
+   if (VG_BOOL_CLO(arg, "--track-instructions", track_instructions)) {
+      return True;
    }
 
    return False;

@@ -198,11 +198,11 @@ class TestCase(unittest.TestCase):
                                             set_to_sorted_list(program_outputs - expected_outputs),
                                             set_to_sorted_list(expected_outputs - program_outputs)))
 
-    def controller(self, args=(), verbose=False):
+    def controller(self, args=(), verbose=False, track_instructions=False):
         self.assertTrue(self.program_instance is not None)
         self.report = None
         c = self.program_instance.controller(
-                args, verbose, self.bufserver_port)
+                args, verbose, track_instructions, self.bufserver_port)
         self.controllers.append(c)
         return c
 
@@ -311,8 +311,9 @@ class Program:
         return stdout, stderr
 
 
-    def controller(self, args, verbose, bufserver_port):
+    def controller(self, args, verbose, track_instructions, bufserver_port):
         controller = base.controller.Controller(("./a.out",) + args, AISLINN_BUILD)
+        controller.track_instructions = track_instructions
         controller.buffer_server_port = bufserver_port
         if verbose:
            controller.valgrind_args = ("--verbose={0}".format(verbose),)

@@ -22,7 +22,7 @@ VERSION_STRING = "0.2.0"
 
 
 from mpi.generator import Generator
-from base.arc import STREAM_STDOUT, STREAM_STDERR
+from base.arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
 import base.utils as utils
 import argparse
 import os
@@ -131,6 +131,9 @@ def parse_args():
                        default=None)
 
     parser.add_argument("--write-dot",
+                       action="store_true")
+
+    parser.add_argument("--track-instructions",
                        action="store_true")
 
     # Internal debug options
@@ -314,6 +317,7 @@ def main():
     if args.report_type == "xml" or args.report_type == "html+xml":
         generator.create_report(args).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
+
     if args.report_type == "html" or args.report_type == "html+xml":
         if args.stdout_write:
             write_outputs(generator, STREAM_STDOUT, args.stdout_write, "stdout")

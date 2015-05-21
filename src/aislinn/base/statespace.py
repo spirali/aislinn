@@ -174,12 +174,27 @@ class StateSpace:
                     stack_arcs.append(0)
         return visited[self.initial_node]
 
-    def get_all_outputs(self, name, pid, limit=None):
+    def get_all_outputs(self, name, pid, limit=None, init=""):
         def arc_value(arc, node_value):
             data = arc.get_data(name, pid)
             if not data or not data.value:
                 return node_value
             return frozenset(data.value + v for v in node_value)
+
+        def arc_value_list(arc, node_value):
+            value = None
+            for p in pid:
+                data = arc.get_data(name, p)
+                if not data or not data.value:
+                    continue
+                if value is None:
+                    value = data.value
+                else:
+                    value += data.value
+            if value is None:
+                return node_value
+            else:
+                return frozenset(value + v for v in node_value)
 
         def is_visible(arc):
             return bool(arc.get_data(name, pid))
@@ -193,9 +208,10 @@ class StateSpace:
                 r.sort()
                 return frozenset(r[:limit])
         return self.tree_reduce(reduce_op,
-                                arc_value,
+                                arc_value if not isinstance(pid, list)
+                                          else arc_value_list,
                                 is_visible,
-                                frozenset(("",)))
+                                frozenset((init,)))
 
     def get_outputs_count(self, stream_name, pid, upto):
         class TooManyOutputs(Exception):

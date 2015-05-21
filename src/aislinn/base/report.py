@@ -19,7 +19,7 @@
 
 
 from tags import Tag, embed_img
-from arc import STREAM_STDOUT, STREAM_STDERR
+from arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
 import xml.etree.ElementTree as xml
 
 plt = None
@@ -56,15 +56,29 @@ wait_operations = [
     "Probe"
 ]
 
-def make_chart(data, ydata, units):
-    fig = plt.figure(figsize=(8, 2))
-    plt.plot(ydata, data, "-")
-    plt.ylabel(units)
+def serialize_fig(fig):
     stringfile = StringIO.StringIO()
     fig.savefig(stringfile, format="png", transparent=True)
     stringfile.seek(0)
     return stringfile.buf
 
+def make_chart(data, ydata, units):
+    fig = plt.figure(figsize=(8, 2))
+    plt.plot(ydata, data, "-")
+    plt.ylabel(units)
+    return serialize_fig(fig)
+
+def make_chart_1d(data, yticks, xlabel, ylabel):
+    fig = plt.figure(figsize=(8, 0.5 + 0.5 * len(data)))
+    plt.yticks(yticks)
+    plt.gca().invert_yaxis()
+    plt.margins(0.2)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    for i, d in enumerate(data):
+            plt.plot(d, len(d) * [i], "1")
+    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+    return serialize_fig(fig)
 
 class Entry:
 
@@ -144,6 +158,16 @@ class Report:
             self.outputs[STREAM_STDOUT.name] = [
                     generator.statespace.get_all_outputs(STREAM_STDOUT, pid, limit)
                     for pid in xrange(generator.process_count)]
+
+        if args.track_instructions:
+            self.process_icounts = []
+            for pid in xrange(generator.process_count):
+                lst = list(generator.statespace.get_all_outputs(COUNTER_INSTRUCTIONS, pid, init=0))
+                self.process_icounts.append(lst)
+            self.total_icounts = list(generator.statespace.get_all_outputs(COUNTER_INSTRUCTIONS, range(generator.process_count), init=0))
+        else:
+            self.total_icounts = None
+            self.process_icounts = None
 
         self.program_info.add(
                 "program-args", " ".join(generator.args), "Program arguments")
@@ -334,6 +358,29 @@ class Report:
             self._make_row(tbody, data, classes, titles)
             step += 1
 
+    def write_html_instruction_counts(self, parent):
+        if plt is not None:
+            parent.child("h3", "Instructions per process")
+            img = make_chart_1d(self.process_icounts,
+                                range(len(self.process_icounts)),
+                                "# of instructions", "Process")
+            embed_img(parent, img)
+
+            parent.child("h3", "Global instructions")
+            img = make_chart_1d([self.total_icounts],
+                                (),
+                                "# of instructions", "")
+            embed_img(parent, img)
+
+            parent.child("h3", "# of outcomes")
+            ul = parent.child("ul")
+            for i, d in enumerate(self.process_icounts):
+                ul.child("li", "Process {0}: {1}".format(i, len(d)))
+            ul.child("li", "Global: {1}".format(i, len(self.total_icounts)))
+        else:
+            parent.child("Error: please install matplotlib to obtain charts")
+
+
     def write_html_statistics(self, parent):
         if plt is not None:
             metadata, data, tick = self.statistics
@@ -403,6 +450,10 @@ class Report:
 
         else:
             div.child("p", "No errors found")
+
+        if self.process_icounts:
+            div.child("h2", "Instruction counts")
+            self.write_html_instruction_counts(div)
 
         if self.statistics:
             div.child("h2", "Statistics")

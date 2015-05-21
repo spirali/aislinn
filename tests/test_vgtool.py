@@ -364,5 +364,20 @@ class VgToolTests(TestCase):
         self.assertEquals(s.read_line(), "0 0")
 
 
+    def test_track_instructions(self):
+        def get_instructions(value):
+            name, v = value.split()
+            self.assertEquals(name, "INSTRUCTIONS")
+            return int(v)
+        self.program("simple")
+        c = self.controller(track_instructions=True)
+        i1 = get_instructions(c.start_and_connect())
+        self.assertEquals(c.receive_line(), "CALL Hello 1")
+        i2 = get_instructions(c.run_process())
+        self.assertEquals(c.receive_line(), "CALL Hello 2")
+        i3 = get_instructions(c.run_process())
+        self.assertEquals(c.receive_line(), "EXIT 0")
+        assert i1 > i2 and i3 > i2
+
 if __name__ == "__main__":
     unittest.main()
