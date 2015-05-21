@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -17,8 +17,7 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from base.node import Arc
-from base.stream import StreamChunk
+from base.arc import Arc, ArcData
 from context import Context
 from event import MatchEvent
 from state import State
@@ -38,7 +37,7 @@ class GlobalContext:
         self.gstate = gstate
         self.contexts = [ None ] * generator.process_count
         self.events = []
-        self.stream_data = []
+        self.data = []
 
     def get_context(self, pid):
         context = self.contexts[pid]
@@ -73,40 +72,39 @@ class GlobalContext:
     def make_node(self):
         self.save_states()
         node = self.generator.add_node(self.node, self.gstate)
-        arc = Arc(node, self.events, self.get_compact_stream_chunks())
+        arc = Arc(node, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
         self.events = None
-        self.stream_data = None
+        self.data = None
         self.gstate = None
 
     def make_fail_node(self):
-        if not self.events and not self.stream_data:
+        if not self.events and not self.data:
             # There is no visible change, so no new node is made
             return
         node = self.generator.add_node(self.node, self.gstate, do_hash=False)
-        arc = Arc(node, self.events, self.get_compact_stream_chunks())
+        arc = Arc(node, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
 
     def add_event(self, event):
         self.events.append(event)
 
-    def add_stream_chunk(self, stream_name, pid, data):
-        self.stream_data.append(((stream_name, pid), data))
+    def add_data(self, name, pid, data):
+        self.data.append(((name, pid), data))
 
-    def get_compact_stream_chunks(self):
-        if not self.stream_data:
+    def get_compact_data(self):
+        if not self.data:
             return None
         streams = {}
-        for key, data in self.stream_data:
+        for key, data in self.data:
             lst = streams.get(key)
             if lst is None:
                 lst = []
                 streams[key] = lst
             lst.append(data)
-        return [ StreamChunk(key[0], key[1], "".join(streams[key]))
-                 for key in streams ]
+        return [ ArcData(key[0], key[1], key[0].compact_data(data)) for key, data in streams.items() ]
 
     def find_deterministic_match(self):
         for state in self.gstate.states:

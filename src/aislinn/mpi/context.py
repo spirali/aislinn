@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -17,7 +17,7 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from base.stream import STREAM_STDOUT, STREAM_STDERR
+from base.arc import STREAM_STDOUT, STREAM_STDERR
 from base.utils import convert_type
 import errormsg
 import consts
@@ -70,7 +70,7 @@ class Context:
             fd, data_ptr, size = commands[2:]
             if fd == "2" and self.gcontext.generator.stderr_mode != "stdout":
                 if gcontext.generator.stderr_mode == "capture":
-                    gcontext.add_stream_chunk(
+                    gcontext.add_data(
                             STREAM_STDERR, self.state.pid,
                             self.controller.read_mem(data_ptr,
                                                      size))
@@ -78,7 +78,7 @@ class Context:
             if fd == "1" or (fd == "2"
                              and gcontext.generator.stderr_mode == "stdout"):
                 if gcontext.generator.stdout_mode == "capture":
-                    gcontext.add_stream_chunk(
+                    gcontext.add_data(
                             STREAM_STDOUT, self.state.pid,
                             self.controller.read_mem(data_ptr,
                                                      size))

@@ -22,7 +22,7 @@ VERSION_STRING = "0.2.0"
 
 
 from mpi.generator import Generator
-from base.stream import STREAM_STDOUT, STREAM_STDERR
+from base.arc import STREAM_STDOUT, STREAM_STDERR
 import base.utils as utils
 import argparse
 import os

@@ -19,7 +19,7 @@
 
 
 from tags import Tag, embed_img
-from stream import STREAM_STDOUT, STREAM_STDERR
+from arc import STREAM_STDOUT, STREAM_STDERR
 import xml.etree.ElementTree as xml
 
 plt = None
@@ -130,7 +130,7 @@ class Report:
                 limit = None
             else:
                 limit = args.stderr_write
-            self.outputs[STREAM_STDERR] = [
+            self.outputs[STREAM_STDERR.name] = [
                     generator.statespace.get_all_outputs(STREAM_STDERR, pid, limit)
                     for pid in xrange(generator.process_count)]
 
@@ -141,7 +141,7 @@ class Report:
                 limit = None
             else:
                 limit = args.stderr_write
-            self.outputs[STREAM_STDOUT] = [
+            self.outputs[STREAM_STDOUT.name] = [
                     generator.statespace.get_all_outputs(STREAM_STDOUT, pid, limit)
                     for pid in xrange(generator.process_count)]
 

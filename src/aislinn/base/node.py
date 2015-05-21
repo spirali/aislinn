@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -16,30 +16,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
-
-
-class Arc:
-
-    def __init__(self, node, events=(), streams=()):
-        self.node = node
-        self.events = events
-        self.streams = streams
-
-    @property
-    def label(self):
-        if not self.events and not self.streams:
-            return "no-events"
-        pids = list(set(e.pid for e in self.events if hasattr(e, "pid")))
-        l = ",".join(map(str, pids))
-        if self.streams:
-            l += "+s"
-        return l
-
-    def get_stream_chunk(self, stream_name, pid):
-        if self.streams:
-            for chunk in self.streams:
-                if chunk.stream_name == stream_name and chunk.pid == pid:
-                    return chunk
 
 
 class Node:

@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -97,17 +97,17 @@ class StateSpace:
         return list(itertools.chain.from_iterable(
             a.events for a in arcs))
 
-    def stream_chunks_to_node(self, node, last_arc, stream_name, pid):
+    def arc_data_to_node(self, node, last_arc, name, pid):
         arcs = self.arcs_to_node(node)
         if last_arc:
             arcs.append(last_arc)
-        return filter(None, (a.get_stream_chunk(stream_name, pid)
+        return filter(None, (a.get_data(name, pid)
                              for a in arcs))
 
-    def stream_to_node(self, node, last_arc, stream_name, pid):
-        return "".join(chunk.data
-                       for chunk in self.stream_chunks_to_node(
-                           node, last_arc, stream_name, pid))
+    def stream_to_node(self, node, last_arc, name, pid):
+        return "".join(data.value
+                       for data in self.arc_data_to_node(
+                           node, last_arc, name, pid))
 
     def depth_first_search_with_arcs(self):
         stack = [ self.initial_node ]
@@ -174,16 +174,15 @@ class StateSpace:
                     stack_arcs.append(0)
         return visited[self.initial_node]
 
-    def get_all_outputs(self, stream_name, pid, limit=None):
+    def get_all_outputs(self, name, pid, limit=None):
         def arc_value(arc, node_value):
-            chunk = arc.get_stream_chunk(stream_name, pid)
-            if not chunk or not chunk.data:
+            data = arc.get_data(name, pid)
+            if not data or not data.value:
                 return node_value
-
-            return frozenset(chunk.data + value for value in node_value)
+            return frozenset(data.value + v for v in node_value)
 
         def is_visible(arc):
-            return bool(arc.get_stream_chunk(stream_name, pid))
+            return bool(arc.get_data(name, pid))
 
         def reduce_op(values):
             result = frozenset.union(*values)
@@ -202,14 +201,14 @@ class StateSpace:
         class TooManyOutputs(Exception):
             pass
         def arc_value(arc, node_value):
-            chunk = arc.get_stream_chunk(stream_name, pid)
-            if not chunk or not chunk.data:
+            chunk = arc.get_data(stream_name, pid)
+            if not chunk or not chunk.value:
                 return node_value
 
-            return frozenset(chunk.data + value for value in node_value)
+            return frozenset(chunk.value + v for v in node_value)
 
         def is_visible(arc):
-            return bool(arc.get_stream_chunk(stream_name, pid))
+            return bool(arc.get_data(stream_name, pid))
 
         def reduce_op(values):
             result = frozenset.union(*values)

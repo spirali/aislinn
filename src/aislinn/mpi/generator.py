@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -19,10 +19,10 @@
 
 
 from base.controller import BufferManager, poll_controllers
-from base.node import Node, Arc
+from base.node import Node
+from base.arc import Arc, STREAM_STDOUT, STREAM_STDERR
 from base.report import Report
 from base.statespace import StateSpace
-from base.stream import STREAM_STDOUT, STREAM_STDERR
 from base.utils import power_set
 from collections import deque
 from gcontext import GlobalContext, ErrorFound
