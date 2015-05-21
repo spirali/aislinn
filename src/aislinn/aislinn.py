@@ -132,8 +132,6 @@ def parse_args():
 
     parser.add_argument("--write-dot",
                        action="store_true")
-    parser.add_argument("--profile",
-                       action="store_true")
 
     # Internal debug options
     parser.add_argument("--debug-state",
@@ -152,6 +150,8 @@ def parse_args():
                         metavar="TOOL",
                         type=str,
                         default=None)
+    parser.add_argument("--debug-profile",
+                       action="store_true")
     args = parser.parse_args()
 
     if args.verbose == 0:
@@ -279,7 +279,7 @@ def main():
 
     logging.debug("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
 
-    if args.profile:
+    if args.debug_profile:
         import cProfile
         import pstats
         pr = cProfile.Profile()
@@ -294,7 +294,7 @@ def main():
     else:
         logging.info("No errors found")
 
-    if args.profile:
+    if args.debug_profile:
         pr.disable()
         with open("aislinn.stats", "w") as f:
             ps = pstats.Stats(pr, stream=f).sort_stats("cumulative")

@@ -384,7 +384,7 @@ Write a resulting state space into file `statespace.dot` (graphviz format).
 The following options are considered as internal and they are used for debugging
 Aislinn itself.
 
-**--profile**
+**--debug-profile**
 
 **--debug-by-valgrind-tool=TOOL**
 
