@@ -1068,27 +1068,25 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
          Bool empty = True;
 
          for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
-           if (!page->ignore[i]) {
-               for (j = 0; j < PAGE_SIZE; j++) {
-                    if (page->va->vabits[j] != MEM_NOACCESS) {
-                       if (s == 0) {
-                          b = base + j;
-                       }
-                       s++;
-                    } else if (s != 0) {
-                       empty = False;
-                       AN_(MD5_Update)(&ctx2, b, s);
-                       s = 0;
-                    }
-                 }
-           }
-           if (s != 0) {
-              empty = False;
-              AN_(MD5_Update)(&ctx2, b, s);
-              s = 0;
-           }
+             if (!page->ignore[i]) {
+                 for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++)
+                     if (page->va->vabits[j] != MEM_NOACCESS) {
+                         if (s == 0) {
+                             b = base + j;
+                         }
+                         s++;
+                     } else if (s != 0) {
+                         empty = False;
+                         AN_(MD5_Update)(&ctx2, b, s);
+                         s = 0;
+                     }
+             }
+             if (s != 0) {
+                 empty = False;
+                 AN_(MD5_Update)(&ctx2, b, s);
+                 s = 0;
+             }
          }
-
          if (empty) {
            page->status = EMPTY;
            return;
