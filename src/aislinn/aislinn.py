@@ -256,7 +256,7 @@ def check_program(program):
     if not os.access(program, os.X_OK):
         logging.error("File '%s' not executable", program)
         sys.exit(1)
-    if not program.startswith(".") or not program.startswith("/"):
+    if not program.startswith(".") and not program.startswith("/"):
         program = os.path.join(".", program)
     return program
 
