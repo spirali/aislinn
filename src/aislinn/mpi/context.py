@@ -18,6 +18,7 @@
 #
 
 from base.arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
+from base.arc import COUNTER_ALLOCATIONS, COUNTER_SIZE_ALLOCATIONS
 from base.utils import convert_type
 import errormsg
 import consts
@@ -93,6 +94,17 @@ class Context:
             self.gcontext.add_data(COUNTER_INSTRUCTIONS,
                                    self.state.pid,
                                    instructions)
+        allocations = int(command[2])
+        if allocations:
+            self.gcontext.add_data(COUNTER_ALLOCATIONS,
+                                   self.state.pid,
+                                   allocations)
+        size_allocations = int(command[3])
+        if size_allocations:
+            self.gcontext.add_data(COUNTER_SIZE_ALLOCATIONS,
+                                   self.state.pid,
+                                   size_allocations)
+
 
     def handle_call(self, name, args, callback=False):
         call = mpicalls.calls_non_communicating.get(name)

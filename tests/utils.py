@@ -364,7 +364,8 @@ class Report:
                 .find("deterministic-non-freed-memory").text)
 
     def get_icounts(self, name):
-        return map(str, self.root.find("profile").find("instructions").find(name).text.split())
+        profile = self.root.find("profile")
+        return map(str, profile.find("instructions").find(name).text.split())
 
     def get_stream(self, name):
         for stream in self.root.find("streams").findall("stream"):

@@ -366,9 +366,9 @@ class VgToolTests(TestCase):
 
     def test_profile(self):
         def get_profile(value):
-            name, v = value.split()
-            self.assertEquals(name, "PROFILE")
-            return int(v)
+            data = value.split()
+            self.assertEquals(data[0], "PROFILE")
+            return map(int, data[1:])
         self.program("simple")
         c = self.controller(profile=True)
         i1 = get_profile(c.start_and_connect())
@@ -377,7 +377,9 @@ class VgToolTests(TestCase):
         self.assertEquals(c.receive_line(), "CALL Hello 2")
         i3 = get_profile(c.run_process())
         self.assertEquals(c.receive_line(), "EXIT 0")
-        assert i1 > i2 and i3 > i2
+        assert i1[0] > i2[0] and i3[0] > i2[0]
+        assert i1[1] == i2[1] == i3[1] == 0
+        assert i1[2] == i2[2] == i3[2] == 0
 
 if __name__ == "__main__":
     unittest.main()

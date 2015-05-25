@@ -171,6 +171,8 @@ static Int buffer_socket = -1;
 static struct {
     Bool enable;
     UWord count_instructions;
+    UWord count_allocations;
+    UWord size_allocations;
 } profile;
 
 #define MAX_MESSAGE_BUFFER_LENGTH 20000
@@ -386,6 +388,9 @@ static void memspace_sanity_check(void)
 static
 Addr memspace_alloc(SizeT alloc_size, SizeT allign)
 {   
+   profile.count_allocations += 1;
+   profile.size_allocations += alloc_size;
+
    SizeT requested_size = alloc_size;
    alloc_size += redzone_size;
    if (UNLIKELY(alloc_size == 0)) {
@@ -1604,8 +1609,15 @@ static void download_buffer(int buffer_id)
 
 static void put_profile_info(HChar **buffer, SizeT *size)
 {
-    SizeT s = VG_(snprintf)(*buffer, *size, "PROFILE %lu\n", profile.count_instructions);
+    SizeT s = VG_(snprintf)(*buffer,
+                            *size,
+                            "PROFILE %lu %lu %lu\n",
+                            profile.count_instructions,
+                            profile.count_allocations,
+                            profile.size_allocations);
     profile.count_instructions = 0;
+    profile.count_allocations = 0;
+    profile.size_allocations = 0;
     *buffer += s;
     *size -= s;
 }

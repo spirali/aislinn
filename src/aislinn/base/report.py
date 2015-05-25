@@ -20,6 +20,7 @@
 
 from tags import Tag, embed_img
 from arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
+from arc import COUNTER_ALLOCATIONS, COUNTER_SIZE_ALLOCATIONS
 import xml.etree.ElementTree as xml
 
 plt = None
@@ -160,14 +161,21 @@ class Report:
                     for pid in xrange(generator.process_count)]
 
         if args.profile:
-            self.process_icounts = []
-            for pid in xrange(generator.process_count):
-                lst = list(generator.statespace.get_all_outputs(COUNTER_INSTRUCTIONS, pid, init=0))
-                self.process_icounts.append(lst)
-            self.total_icounts = list(generator.statespace.get_all_outputs(COUNTER_INSTRUCTIONS, range(generator.process_count), init=0))
+            self.profile = {}
+            for name, counter in (("instructions", COUNTER_INSTRUCTIONS),
+                                  ("allocations", COUNTER_ALLOCATIONS),
+                                  ("size_allocations",
+                                      COUNTER_SIZE_ALLOCATIONS)):
+                self.profile[name] = []
+                for pid in xrange(generator.process_count):
+                    lst = list(generator.statespace \
+                            .get_all_outputs(counter, pid, init=0))
+                    self.profile[name].append(lst)
+                self.profile[name + "_global"] = \
+                        list(generator.statespace.get_all_outputs(
+                            counter, range(generator.process_count), init=0))
         else:
-            self.total_icounts = None
-            self.process_icounts = None
+            self.profile = None
 
         self.program_info.add(
                 "program-args", " ".join(generator.args), "Program arguments")
@@ -302,7 +310,7 @@ class Report:
                         e.text = text
                         process.append(e)
 
-        if self.process_icounts:
+        if self.profile:
             profile = xml.Element("profile")
             root.append(profile)
             self.write_xml_profile(profile)
@@ -366,33 +374,37 @@ class Report:
     def write_xml_profile(self, parent):
         e = xml.Element("instructions")
         parent.append(e)
-        for i, d in enumerate(self.process_icounts):
+        for i, d in enumerate(self.profile["instructions"]):
             f = xml.Element("process" + str(i))
             f.text = " ".join(map(str, d))
             e.append(f)
-        f = xml.Element("total")
-        f.text = " ".join(map(str, self.total_icounts))
+        f = xml.Element("global")
+        f.text = " ".join(map(str, self.profile["instructions_global"]))
         e.append(f)
 
     def write_html_profile(self, parent):
         if plt is not None:
-            parent.child("h3", "Instructions per process")
-            img = make_chart_1d(self.process_icounts,
-                                range(len(self.process_icounts)),
-                                "# of instructions", "Process")
-            embed_img(parent, img)
+            for label, name in (("# of instructions", "instructions"),
+                                ("# of allocations", "allocations"),
+                                ("size of allocations", "size_allocations")):
+                parent.child("h3", "{0} per process".format(label))
+                img = make_chart_1d(self.profile[name],
+                                    range(len(self.profile[name])),
+                                    label, "Process")
+                embed_img(parent, img)
 
-            parent.child("h3", "Global instructions")
-            img = make_chart_1d([self.total_icounts],
-                                (),
-                                "# of instructions", "")
-            embed_img(parent, img)
+                parent.child("h3", "Global {0}".format(label))
+                img = make_chart_1d([self.profile[name + "_global"]],
+                                    (),
+                                    label, "")
+                embed_img(parent, img)
 
-            parent.child("h3", "# of outcomes")
-            ul = parent.child("ul")
-            for i, d in enumerate(self.process_icounts):
-                ul.child("li", "Process {0}: {1}".format(i, len(d)))
-            ul.child("li", "Global: {1}".format(i, len(self.total_icounts)))
+                parent.child("h3", "# of outcomes")
+                ul = parent.child("ul")
+                for i, d in enumerate(self.profile[name]):
+                    ul.child("li", "Process {0}: {1}".format(i, len(d)))
+                ul.child("li", "Global: {1}" \
+                        .format(i, len(self.profile[name + "_global"])))
         else:
             parent.child("Error: please install matplotlib to obtain charts")
 
@@ -467,7 +479,7 @@ class Report:
         else:
             div.child("p", "No errors found")
 
-        if self.process_icounts:
+        if self.profile:
             div.child("h2", "Profile")
             self.write_html_profile(div)
 

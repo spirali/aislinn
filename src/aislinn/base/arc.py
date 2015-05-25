@@ -50,6 +50,7 @@ class Arc:
                 if d.name == name and d.pid == pid:
                     return d
 
+
 class Stream:
 
     def __init__(self, name):
@@ -57,6 +58,7 @@ class Stream:
 
     def compact_data(self, data):
         return "".join(data)
+
 
 STREAM_STDOUT = Stream("<stdout>")
 STREAM_STDERR = Stream("<stderr>")
@@ -72,3 +74,5 @@ class Counter:
 
 
 COUNTER_INSTRUCTIONS = Counter()
+COUNTER_ALLOCATIONS = Counter()
+COUNTER_SIZE_ALLOCATIONS = Counter()

@@ -16,7 +16,7 @@ class ComplexTests(TestCase):
         self.assertTrue(len(self.report.get_icounts("process1")) == 1)
         self.assertTrue(len(self.report.get_icounts("process2")) == 1)
         self.assertTrue(len(self.report.get_icounts("process3")) == 1)
-        self.assertTrue(len(self.report.get_icounts("total")) == 1)
+        self.assertTrue(len(self.report.get_icounts("global")) == 1)
         #self.execute(8, ("40", "40", "10", "10000"), stdout="")
 
     def test_workers(self):
@@ -27,7 +27,7 @@ class ComplexTests(TestCase):
         self.assertTrue(len(self.report.get_icounts("process0")) == 1)
         self.assertTrue(len(self.report.get_icounts("process1")) > 10)
         self.assertTrue(len(self.report.get_icounts("process2")) > 10)
-        self.assertTrue(len(self.report.get_icounts("total")) == 1)
+        self.assertTrue(len(self.report.get_icounts("global")) == 1)
 
 if __name__ == "__main__":
     unittest.main()

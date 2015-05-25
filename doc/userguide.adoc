@@ -359,8 +359,8 @@ Outputs are saved into files with names `stdout-<pid>-<x>`.
 
 **--profile**
 
-Aislinn tracks counts of processed instructions and makes a summary of
-instructions counts in the report.
+Aislinn tracks counts of processed instructions and allocations and shows
+possible outcomes in the report.
 
 === Semi-internal options
 
