@@ -168,8 +168,10 @@ static VgHashTable *buffer_table;
 static Int control_socket = -1;
 static Int buffer_socket = -1;
 
-static Bool track_instructions = False;
-static UWord count_instructions = 0;
+static struct {
+    Bool enable;
+    UWord count_instructions;
+} profile;
 
 #define MAX_MESSAGE_BUFFER_LENGTH 20000
 char message_buffer[MAX_MESSAGE_BUFFER_LENGTH];
@@ -181,7 +183,7 @@ Int identification = 0; // For debugging purpose when verbose > 0
 
 VA *uniform_va[4];
 
-struct {
+static struct {
     Bool syscall_write;
     Bool drop_this_syscall;
 } capture_syscalls;
@@ -1427,7 +1429,7 @@ static VG_REGPARM(2) void trace_read(Addr addr, SizeT size)
 
 static VG_REGPARM(0) void trace_alu_op(void)
 {
-    count_instructions++;
+    profile.count_instructions++;
 }
 
 
@@ -1600,10 +1602,10 @@ static void download_buffer(int buffer_id)
     receive_data(buffer_socket, a, size);
 }
 
-static void put_instruction_info(HChar **buffer, SizeT *size)
+static void put_profile_info(HChar **buffer, SizeT *size)
 {
-    SizeT s = VG_(snprintf)(*buffer, *size, "INSTRUCTIONS %lu\n", count_instructions);
-    count_instructions = 0;
+    SizeT s = VG_(snprintf)(*buffer, *size, "PROFILE %lu\n", profile.count_instructions);
+    profile.count_instructions = 0;
     *buffer += s;
     *size -= s;
 }
@@ -2368,8 +2370,8 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
          SizeT l = MAX_MESSAGE_BUFFER_LENGTH - 1; // reserve 1 char for \n
          UWord i;
          char *m = message;
-         if (track_instructions) {
-            put_instruction_info(&m, &l);
+         if (profile.enable) {
+            put_profile_info(&m, &l);
          }
          Int p = VG_(snprintf)(m, l, "CALL %s", (char*) arg[1]);
          m += p;
@@ -2542,8 +2544,8 @@ Bool restore_thread(ThreadId tid)
    HChar str[MAX_MESSAGE_BUFFER_LENGTH];
    SizeT l = MAX_MESSAGE_BUFFER_LENGTH;
    HChar *buffer = str;
-   if (track_instructions) {
-       put_instruction_info(&buffer, &l);
+   if (profile.enable) {
+       put_profile_info(&buffer, &l);
    }
    VG_(snprintf)(buffer, l, "EXIT %lu\n", tst->os_state.exitcode);
    write_message(str);
@@ -2624,7 +2626,7 @@ IRSB* an_instrument ( VgCallbackClosure* closure,
                 case Iex_Triop:
                 case Iex_Qop:
                 case Iex_ITE:
-                    if (track_instructions) {
+                    if (profile.enable) {
                         event_alu_op(sb_out, data);
                     }
                     break;
@@ -2710,7 +2712,7 @@ static Bool process_cmd_line_option(const HChar* arg)
       return set_capture_syscalls_by_name(syscall_name, True);
    }
 
-   if (VG_BOOL_CLO(arg, "--track-instructions", track_instructions)) {
+   if (VG_BOOL_CLO(arg, "--profile", profile.enable)) {
       return True;
    }
 
@@ -2861,6 +2863,7 @@ void post_syscall_wrap(ThreadId tid, UInt syscallno,
 static void an_pre_clo_init(void)
 {
    VG_(memset)(&capture_syscalls, 0, sizeof(capture_syscalls));
+   VG_(memset)(&profile, 0, sizeof(profile));
 
    VG_(details_name)            ("Aislinn");
    VG_(details_version)         (NULL);

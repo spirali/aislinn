@@ -102,6 +102,7 @@ class TestCase(unittest.TestCase):
             send_protocol="full",
             heap_size=None,
             redzone_size=None,
+            profile=False,
             ):
         aislinn_args = { "report-type" : "xml",
                          "verbose" : 0,
@@ -127,6 +128,9 @@ class TestCase(unittest.TestCase):
 
         if redzone_size:
             aislinn_args["redzone-size"] = redzone_size
+
+        if profile:
+            aislinn_args["profile"] = None
 
         if stdout is not None:
             aislinn_args["stdout"] = "print"
@@ -198,11 +202,11 @@ class TestCase(unittest.TestCase):
                                             set_to_sorted_list(program_outputs - expected_outputs),
                                             set_to_sorted_list(expected_outputs - program_outputs)))
 
-    def controller(self, args=(), verbose=False, track_instructions=False):
+    def controller(self, args=(), verbose=False, profile=False):
         self.assertTrue(self.program_instance is not None)
         self.report = None
         c = self.program_instance.controller(
-                args, verbose, track_instructions, self.bufserver_port)
+                args, verbose, profile, self.bufserver_port)
         self.controllers.append(c)
         return c
 
@@ -299,7 +303,7 @@ class Program:
 
     def run(self, aislinn_args, processes, program_args):
         run_args = [ AISLINN, "-p={0}".format(processes) ] + \
-                   [ "--{0}={1}".format(name, value)
+                   [ ("--{0}={1}" if value is not None else "--{0}").format(name, value)
                      for name, value in aislinn_args.items() ]
         run_args.append("./a.out")
         run_args += list(program_args)
@@ -311,9 +315,9 @@ class Program:
         return stdout, stderr
 
 
-    def controller(self, args, verbose, track_instructions, bufserver_port):
+    def controller(self, args, verbose, profile, bufserver_port):
         controller = base.controller.Controller(("./a.out",) + args, AISLINN_BUILD)
-        controller.track_instructions = track_instructions
+        controller.profile = profile
         controller.buffer_server_port = bufserver_port
         if verbose:
            controller.valgrind_args = ("--verbose={0}".format(verbose),)
@@ -358,6 +362,9 @@ class Report:
     def determinisic_nonfreed_memory(self):
         return int(self.root.find("analysis-info") \
                 .find("deterministic-non-freed-memory").text)
+
+    def get_icounts(self, name):
+        return map(str, self.root.find("profile").find("instructions").find(name).text.split())
 
     def get_stream(self, name):
         for stream in self.root.find("streams").findall("stream"):

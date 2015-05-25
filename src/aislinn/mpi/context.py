@@ -87,10 +87,12 @@ class Context:
         else:
             raise Exception("Invalid syscall" + commands[1])
 
-    def process_instructions(self, command):
-        self.gcontext.add_data(COUNTER_INSTRUCTIONS,
-                               self.state.pid,
-                               int(command[1]))
+    def process_profile(self, command):
+        instructions = int(command[1])
+        if instructions:
+            self.gcontext.add_data(COUNTER_INSTRUCTIONS,
+                                   self.state.pid,
+                                   instructions)
 
     def handle_call(self, name, args, callback=False):
         call = mpicalls.calls_non_communicating.get(name)
@@ -131,8 +133,8 @@ class Context:
             else:
                 self.controller.run_process_async()
                 return True
-        if result[0] == "INSTRUCTIONS":
-            self.process_instructions(result)
+        if result[0] == "PROFILE":
+            self.process_profile(result)
             result = self.controller.receive_line()
             return self.process_run_result(result)
         if result[0] == "SYSCALL":
@@ -209,8 +211,8 @@ class Context:
                     e = errormsg.NoMpiInit(self)
                     self.add_error_and_throw(e)
                 break
-            elif result[0] == "INSTRUCTIONS":
-                self.process_instructions(result)
+            elif result[0] == "PROFILE":
+                self.process_profile(result)
                 result = controller.receive_line()
                 continue
             elif result[0] == "EXIT":
@@ -268,8 +270,8 @@ class Context:
             if result[0] == "EXIT":
                 e = errormsg.ExitInCallback(self)
                 self.add_error_and_throw(e)
-            if result[0] == "INSTRUCTIONS":
-                self.process_instructions(result)
+            if result[0] == "PROFILE":
+                self.process_profile(result)
                 result = self.controller.receive_line().split()
             assert result[0] == "CALL"
             assert not self.handle_call(result[1], result[2:], True)

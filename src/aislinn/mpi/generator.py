@@ -89,7 +89,7 @@ class Generator:
         for i, controller in enumerate(self.controllers):
             controller.valgrind_args = valgrind_args
             controller.name = i
-            controller.track_instructions = aislinn_args.track_instructions
+            controller.profile = aislinn_args.profile
 
         if aislinn_args.debug_by_valgrind_tool:
             for controller in self.controllers:

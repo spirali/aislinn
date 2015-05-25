@@ -22,7 +22,7 @@ VERSION_STRING = "0.2.0"
 
 
 from mpi.generator import Generator
-from base.arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
+from base.arc import STREAM_STDOUT, STREAM_STDERR
 import base.utils as utils
 import argparse
 import os
@@ -133,7 +133,7 @@ def parse_args():
     parser.add_argument("--write-dot",
                        action="store_true")
 
-    parser.add_argument("--track-instructions",
+    parser.add_argument("--profile",
                        action="store_true")
 
     # Internal debug options

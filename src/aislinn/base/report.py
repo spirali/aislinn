@@ -159,7 +159,7 @@ class Report:
                     generator.statespace.get_all_outputs(STREAM_STDOUT, pid, limit)
                     for pid in xrange(generator.process_count)]
 
-        if args.track_instructions:
+        if args.profile:
             self.process_icounts = []
             for pid in xrange(generator.process_count):
                 lst = list(generator.statespace.get_all_outputs(COUNTER_INSTRUCTIONS, pid, init=0))
@@ -301,6 +301,11 @@ class Report:
                         e = xml.Element("output")
                         e.text = text
                         process.append(e)
+
+        if self.process_icounts:
+            profile = xml.Element("profile")
+            root.append(profile)
+            self.write_xml_profile(profile)
         return xml.ElementTree(root)
 
     def create_html_head(self, html):
@@ -358,7 +363,18 @@ class Report:
             self._make_row(tbody, data, classes, titles)
             step += 1
 
-    def write_html_instruction_counts(self, parent):
+    def write_xml_profile(self, parent):
+        e = xml.Element("instructions")
+        parent.append(e)
+        for i, d in enumerate(self.process_icounts):
+            f = xml.Element("process" + str(i))
+            f.text = " ".join(map(str, d))
+            e.append(f)
+        f = xml.Element("total")
+        f.text = " ".join(map(str, self.total_icounts))
+        e.append(f)
+
+    def write_html_profile(self, parent):
         if plt is not None:
             parent.child("h3", "Instructions per process")
             img = make_chart_1d(self.process_icounts,
@@ -452,8 +468,8 @@ class Report:
             div.child("p", "No errors found")
 
         if self.process_icounts:
-            div.child("h2", "Instruction counts")
-            self.write_html_instruction_counts(div)
+            div.child("h2", "Profile")
+            self.write_html_profile(div)
 
         if self.statistics:
             div.child("h2", "Statistics")

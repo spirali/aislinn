@@ -58,7 +58,7 @@ class Controller:
 
     stdout_arg = None
     buffer_server_port = None
-    track_instructions = False
+    profile = False
 
     name = "" # For debug purpose
 
@@ -357,8 +357,8 @@ class Controller:
         if self.buffer_server_port is not None:
             args += ("--bs-port={0}".format(self.buffer_server_port),)
 
-        if self.track_instructions:
-            args += ("--track-instructions=yes",)
+        if self.profile:
+            args += ("--profile=yes",)
 
         args += tuple(self.valgrind_args) + tuple(self.args)
 

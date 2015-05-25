@@ -364,18 +364,18 @@ class VgToolTests(TestCase):
         self.assertEquals(s.read_line(), "0 0")
 
 
-    def test_track_instructions(self):
-        def get_instructions(value):
+    def test_profile(self):
+        def get_profile(value):
             name, v = value.split()
-            self.assertEquals(name, "INSTRUCTIONS")
+            self.assertEquals(name, "PROFILE")
             return int(v)
         self.program("simple")
-        c = self.controller(track_instructions=True)
-        i1 = get_instructions(c.start_and_connect())
+        c = self.controller(profile=True)
+        i1 = get_profile(c.start_and_connect())
         self.assertEquals(c.receive_line(), "CALL Hello 1")
-        i2 = get_instructions(c.run_process())
+        i2 = get_profile(c.run_process())
         self.assertEquals(c.receive_line(), "CALL Hello 2")
-        i3 = get_instructions(c.run_process())
+        i3 = get_profile(c.run_process())
         self.assertEquals(c.receive_line(), "EXIT 0")
         assert i1 > i2 and i3 > i2
 
