@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -21,6 +21,9 @@
 class Event:
 
     stacktrace = None
+    new_request = None
+    cc = None # Collective communication info (comm_id, cc_id)
+    ndsync = False
 
 
 class CallEvent(Event):
@@ -29,6 +32,9 @@ class CallEvent(Event):
         self.name = name
         self.args = args
         self.pid = pid
+
+    def __repr__(self):
+        return "<Event {1} {0.name} pid={0.pid} {0.args}>".format(self, id(self))
 
 
 class ExitEvent(Event):
@@ -39,11 +45,30 @@ class ExitEvent(Event):
         self.pid = pid
         self.exitcode = exitcode
 
+    def __repr__(self):
+        return "<Event Exit pid={0.pid} exitcode={0.exitcode}>".format(self)
+
 
 class MatchEvent(Event):
 
     name = "Match"
 
-    def __init__(self, source_pid, target_pid):
-        self.source_pid = source_pid
-        self.target_pid = target_pid
+    def __init__(self, source_id, target_id):
+        self.source_id = source_id
+        self.target_id = target_id
+
+    def __repr__(self):
+        return "<Event Match source_id={0.source_id} " \
+               "target_id={0.target_id}>".format(self)
+
+
+class Continue(Event):
+
+    name = "Continue"
+
+    def __init__(self, pid, request_ids):
+        self.pid = pid
+        self.request_ids = tuple(request_ids)
+
+    def __repr__(self):
+        return "<Continue pid={0.pid} rids={0.request_ids}>".format(self)

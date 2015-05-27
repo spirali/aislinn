@@ -34,8 +34,10 @@ class ErrorMessage(object):
     stdout = None
     stderr = None
 
+    events = None
+    node = None
+
     def __init__(self, context, pid=None, gcontext=None, **kw):
-        assert context or gcontext
         for name in self.optional_arg_names:
             if name not in kw:
                 kw[name] = None
@@ -48,10 +50,7 @@ class ErrorMessage(object):
                          .format(type(self), self.arg_names,
                                  self.optional_arg_names, k))
         self.args = kw
-        if context is None:
-            self.pid = pid
-            self.node = gcontext.node
-        else:
+        if context is not None:
             if context.state:
                 self.pid = context.state.pid
             context.make_fail_node()
@@ -63,6 +62,10 @@ class ErrorMessage(object):
                     self.fn_name = context.event.name
             elif context.controller:
                 self.stacktrace = context.controller.get_stacktrace()
+        elif gcontext is not None:
+            self.pid = pid
+            self.node = gcontext.node
+
 
     @property
     def description(self):

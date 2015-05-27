@@ -358,7 +358,9 @@ class Report:
                     titles[r] += "Exitcode: {0}\n".format(e.exitcode)
                 if e.stacktrace:
                     titles[r] += e.stacktrace.replace("|", "\n")
-                if name in collective_operations:
+                if e.ndsync:
+                    classes[r] = "Ndsync"
+                elif name in collective_operations:
                     classes[r] = "Collective"
                 elif name in wait_operations:
                     classes[r] = "Wait"
@@ -461,7 +463,6 @@ class Report:
                     div.child("h4", title)
                     div.child("pre", "{0}" \
                             .format(stacktrace.replace("|", "<br>")))
-
                 if error.events:
                     div.child("h4", "Events")
                     self.export_events(error.events, div)
@@ -675,6 +676,11 @@ table, tr, td {
 td {
     padding: 0.5em;
     text-align: center;
+}
+
+.Ndsync {
+    background-color: black;
+    color: white;
 }
 
 .Wait {

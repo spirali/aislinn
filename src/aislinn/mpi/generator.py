@@ -35,6 +35,7 @@ from context import Context
 from controller import Controller
 from gcontext import GlobalContext, ErrorFound
 from globalstate import GlobalState
+from mpi.ndsync import NdsyncChecker
 from state import State
 import consts
 import errormsg
@@ -205,6 +206,8 @@ class Generator:
                     return True
             self.memory_leak_check()
             self.final_check()
+            if self.send_protocol == "full" and not self.error_messages:
+                self.ndsync_check()
             self.is_full_statespace = True
         except ErrorFound:
             logging.debug("ErrorFound catched")
@@ -213,6 +216,12 @@ class Generator:
                 controller.kill()
             self.end_time = datetime.datetime.now()
         return True
+
+    def ndsync_check(self):
+        self.statespace.inject_dfs_indegree()
+        message = NdsyncChecker(self, self.statespace).run()
+        if message:
+            self.add_error_message(message)
 
     def memory_leak_check(self):
         final_nodes = list(self.statespace.all_final_nodes())
@@ -297,7 +306,6 @@ class Generator:
                         state.finish_collective_request(r)
                         return True
         return False
-
 
     def continue_probe(self, gcontext, state, rank):
         logging.debug("Continue probe %s", state)
@@ -538,9 +546,11 @@ class Generator:
 
         self.fast_expand_node(gcontext)
 
+        """
         if self.fork_standard_sends(node, gstate):
             gstate.dispose()
             return
+        """
 
         if not gcontext.make_node():
             gstate.dispose()
@@ -594,7 +604,8 @@ class Generator:
     def create_report(self, args):
         for error_message in self.error_messages:
             if error_message.node:
-                error_message.events = \
+                if error_message.events is None:
+                    error_message.events = \
                         self.statespace.events_to_node(error_message.node, None)
                 if self.stdout_mode == "capture":
                     error_message.stdout = \

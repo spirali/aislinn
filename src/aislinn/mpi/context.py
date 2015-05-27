@@ -340,12 +340,29 @@ class Context:
         self.close_requests(range(len(self.state.tested_request_ids)))
 
     def close_requests(self, indices):
+        if self.generator.send_protocol == "full":
+            request_ids = []
+        else:
+            request_ids = None
+
         for i, index in enumerate(indices):
             request_id = self.state.tested_request_ids[index]
-            if request_id == consts.MPI_REQUEST_NULL: # requests was MPI_REQUEST_NULL
+            if request_id == consts.MPI_REQUEST_NULL:
                 continue
             request = self.state.get_finished_request(request_id)
+            if not (request_ids is None or
+                    (request.is_send() and
+                           request.target == consts.MPI_PROC_NULL) or
+                    (request.is_receive() and
+                           request.source == consts.MPI_PROC_NULL)):
+                request_ids.append(request_id)
+
             self._close_request(request, index, i)
+
+        if request_ids is not None:
+            self.gcontext.add_event(event.Continue(self.state.pid,
+                                                   tuple(request_ids)))
+
         self.tested_request_ids = None
 
     def _close_request(self, request, index_pointer, index_status):

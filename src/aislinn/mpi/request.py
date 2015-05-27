@@ -25,6 +25,13 @@ import copy
 
 class Request(EqMixin):
 
+    TYPE_RECEIVE = 0
+    TYPE_SEND_STD = 1 # Standard send
+    TYPE_SEND_EAGER = 2 # BSEND
+    TYPE_SEND_RENDEZVOUS = 3 # SSEND
+    TYPE_COLLECTIVE = 4
+    TYPES_COUNT = 5
+
     stacktrace = None
 
     def __init__(self, request_id):
@@ -54,15 +61,10 @@ class Request(EqMixin):
 
 class SendRequest(Request):
 
-    Standard = 0
-    Synchronous = 1
-    Buffered = 2
-
     name = "send"
 
     def __init__(self, request_id, send_type,
                  comm, target, tag, data_ptr, datatype, count):
-        assert send_type >= 0 and send_type <= 2
         Request.__init__(self, request_id)
         self.send_type = send_type
         self.comm = comm

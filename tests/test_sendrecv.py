@@ -187,7 +187,6 @@ class SendRecvTests(TestCase):
         self.execute(3, send_protocol="3")
         self.execute(3, send_protocol="1M")
         self.execute(3, send_protocol="5", error="mpi/deadlock")
-        self.execute(3, send_protocol="dynamic", error="mpi/deadlock")
         self.execute(3, send_protocol="full", error="mpi/deadlock")
 
     def test_cross_send1(self):

@@ -132,7 +132,7 @@ class GlobalContext:
     def apply_matching(self, matching):
         logging.debug("Apply matching: %s", matching)
         source_pid, s, target_pid, r = matching
-        self.add_event(MatchEvent(source_pid, target_pid))
+        self.add_event(MatchEvent(s.id, r.id))
         # Receive has to be handled FIRST, otherwise buffer could be freed
         self.gstate.states[target_pid].finish_receive_request(
                 r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)

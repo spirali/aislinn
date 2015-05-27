@@ -26,7 +26,7 @@ import types
 import ops
 import misc
 import atypes as at
-from request import SendRequest, ReceiveRequest
+from request import Request, ReceiveRequest, SendRequest
 from comm import comm_compare, group_compare, Group
 from keyval import Keyval
 
@@ -470,7 +470,7 @@ def MPI_Comm_split(context, args):
     args = args[1:]
     op = context.state.gstate.call_collective_operation(
                 context, comm, collectives.CommSplit, True, args)
-    request_id = context.state.add_collective_request(comm, op.cc_id)
+    request_id = context.state.add_collective_request(context, comm, op.cc_id)
     context.state.set_wait((request_id,))
     return True
 
@@ -478,7 +478,7 @@ def MPI_Comm_dup(context, args):
     comm, new_comm_ptr = args
     op = context.state.gstate.call_collective_operation(
                 context, comm, collectives.CommDup, True, new_comm_ptr)
-    request_id = context.state.add_collective_request(comm, op.cc_id)
+    request_id = context.state.add_collective_request(context, comm, op.cc_id)
     context.state.set_wait((request_id,))
     return True
 
@@ -486,7 +486,7 @@ def MPI_Comm_create(context, args):
     comm, group, new_comm_ptr = args
     op = context.state.gstate.call_collective_operation(
                 context, comm, collectives.CommCreate, True, (group, new_comm_ptr))
-    request_id = context.state.add_collective_request(comm, op.cc_id)
+    request_id = context.state.add_collective_request(context, comm, op.cc_id)
     context.state.set_wait((request_id,))
     return True
 
@@ -723,7 +723,7 @@ def call_collective_operation(context,
 
     op = context.state.gstate.call_collective_operation(
                 context, comm, op_class, blocking, args)
-    request_id = context.state.add_collective_request(comm, op.cc_id)
+    request_id = context.state.add_collective_request(context, comm, op.cc_id)
     if blocking:
         context.state.set_wait((request_id,))
     else:
@@ -733,31 +733,31 @@ def call_collective_operation(context,
 def get_send_type(generator, state, mode, datatype, count):
     if mode == "Ssend" \
        or (mode == "Send" and generator.send_protocol == "rendezvous"):
-        return SendRequest.Synchronous
+        return Request.TYPE_SEND_RENDEZVOUS
     elif mode == "Bsend" \
        or (mode == "Send" and generator.send_protocol == "eager"):
-        return SendRequest.Buffered
+        return Request.TYPE_SEND_EAGER
     elif generator.send_protocol == "dynamic":
         size = datatype.size * count
         eager_threshold, rendezvous_threshold = \
                 state.gstate.send_protocol_thresholds
         if size < eager_threshold:
-            return SendRequest.Buffered
+            return Request.TYPE_SEND_EAGER
         elif size >= rendezvous_threshold:
-            return SendRequest.Synchronous
+            return Request.TYPE_SEND_RENDEZVOUS
         else:
-            return SendRequest.Standard
+            return Request.TYPE_SEND_STD
     elif generator.send_protocol == "threshold":
         size = datatype.size * count
         if size < generator.send_protocol_eager_threshold:
-            return SendRequest.Buffered
+            return Request.TYPE_SEND_EAGER
         elif size >= generator.send_protocol_rendezvous_threshold:
-            return SendRequest.Synchronous
+            return Request.TYPE_SEND_RENDEZVOUS
         else:
-            return SendRequest.Standard
+            return Request.TYPE_SEND_STD
     else:
         assert generator.send_protocol == "full"
-        return SendRequest.Standard
+        return Request.TYPE_SEND_STD
 
 def call_send(context, args,
               blocking, mode, persistent=False, return_request=False):
@@ -771,7 +771,7 @@ def call_send(context, args,
 
     send_type = get_send_type(
             context.gcontext.generator, context.state, mode, datatype, count)
-    request = SendRequest(context.state.new_request_id(), send_type,
+    request = SendRequest(context.state.new_request_id(send_type), send_type,
                           comm, target, tag, data_ptr, datatype, count)
     if persistent:
         assert not blocking
@@ -806,7 +806,8 @@ def call_recv(context, args, blocking, persistent=False, return_request=False):
         return False
 
     request = ReceiveRequest(
-            context.state.new_request_id(), comm, source, tag, data_ptr, datatype, count)
+            context.state.new_request_id(Request.TYPE_RECEIVE),
+            comm, source, tag, data_ptr, datatype, count)
 
     if persistent:
         assert not blocking

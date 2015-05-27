@@ -242,3 +242,45 @@ class StateSpace:
             return len(outputs)
         except TooManyOutputs:
             return None
+
+    def inject_indegree(self):
+        for node in self.all_nodes():
+            for arc in node.arcs:
+                arc.node.indegree += 1
+
+    def inject_dfs_indegree(self):
+        for node, arc, visited, is_cycle \
+                in self.depth_first_search_with_arcs():
+            if not is_cycle:
+                arc.node.indegree += 1
+
+    def reconstruct_path(self, events):
+        path = []
+        node = self.initial_node
+        events = list(events)
+        while events:
+            p, found = self.find_path_to_events(node, events)
+            path.extend(p)
+            for e in found:
+                events.remove(e)
+            node = path[-1].node
+        return path
+
+    def find_path_to_events(self, node, events):
+        queue = [ node ]
+        visited = { node: [] }
+        found = []
+        while queue:
+            node = queue.pop()
+            for arc in node.arcs:
+                for e in events:
+                    if e in arc.events:
+                        found.append(e)
+                if found:
+                    return visited[node] + [arc], found
+            if arc.node not in visited:
+                path = visited[node][:]
+                path.append(arc)
+                visited[arc.node] = path
+                queue.append(arc.node)
+        assert 0, "Events not found"

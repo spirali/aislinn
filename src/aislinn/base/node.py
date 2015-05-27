@@ -21,6 +21,7 @@
 class Node:
 
     allocations = None
+    indegree = 0
 
     def __init__(self, uid, hash):
         self.uid = uid

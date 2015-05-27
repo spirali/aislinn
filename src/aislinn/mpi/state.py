@@ -19,7 +19,7 @@
 
 
 from request import \
-    SendRequest, \
+    Request, \
     CollectiveRequest
 import errormsg
 
@@ -322,7 +322,7 @@ class State:
                 e = errormsg.InvalidSendBuffer(context, address=int(r))
                 context.add_error_and_throw(e)
             request.create_message(context)
-            if request.send_type == SendRequest.Buffered:
+            if request.send_type != Request.TYPE_SEND_RENDEZVOUS:
                 request.inc_ref()
                 self.add_finished_request(request)
         elif request.is_receive():
@@ -337,6 +337,15 @@ class State:
                 context.add_error_and_throw(e)
 
         self.add_request(request)
+
+        if context.event.new_request is None:
+            context.event.new_request = request.id
+        elif isinstance(context.event.new_request, list):
+            context.event.new_request.append(request.id)
+        else:
+            context.event.new_request = [ context.event.new_request,
+                                          request.id ]
+
         if not immediate:
             request.stacktrace = context.event.stacktrace
             request.datatype.lock_memory(
@@ -377,10 +386,13 @@ class State:
         self.persistent_requests = copy.copy(self.persistent_requests)
         self.persistent_requests.remove(request)
 
-    def add_collective_request(self, comm, cc_id):
-        request_id = self.new_request_id()
+    def add_collective_request(self, context, comm, cc_id):
+        request_id = self.new_request_id(Request.TYPE_COLLECTIVE)
         request = CollectiveRequest(request_id, comm, cc_id)
         self.add_request(request)
+        context.event.new_request = request_id
+        if context.gcontext.generator.send_protocol == "full":
+            context.event.cc = (comm.comm_id, cc_id, comm.group.size)
         return request_id
 
     def reset_state(self):
@@ -474,7 +486,7 @@ class State:
         self.active_requests = copy.copy(self.active_requests)
         i = self.active_requests.index(request)
         request = copy.copy(request)
-        request.send_type = SendRequest.Synchronous
+        request.send_type = Request.TYPE_SEND_RENDEZVOUS
         self.active_requests[i] = request
 
     def set_request_as_buffered(self, request):
@@ -483,7 +495,7 @@ class State:
         self.active_requests = copy.copy(self.active_requests)
         i = self.active_requests.index(request)
         request = copy.copy(request)
-        request.send_type = SendRequest.Buffered
+        request.send_type = Request.TYPE_SEND_EAGER
         self.active_requests[i] = request
         request.inc_ref()
         self.add_finished_request(request)
@@ -638,7 +650,7 @@ class State:
     def finish_send_request(self, request):
         self.active_requests = copy.copy(self.active_requests)
         self.active_requests.remove(request)
-        if request.send_type == SendRequest.Buffered:
+        if request.send_type != Request.TYPE_SEND_RENDEZVOUS:
             request.dec_ref()
         else:
             self.add_finished_request(request)
@@ -669,8 +681,9 @@ class State:
         if c == comm_id and s == source and t == tag:
             return rank
 
-    def new_request_id(self):
-        i = 10
+    def new_request_id(self, request_type):
+        c = Request.TYPES_COUNT * self.gstate.process_count
+        i = c + Request.TYPES_COUNT * self.pid + request_type
         while True:
             for request in self.active_requests:
                 if i == request.id:
@@ -685,7 +698,7 @@ class State:
                             break
                     else:
                         return i
-            i += 1
+            i += c
 
     def __repr__(self):
         info = ""
