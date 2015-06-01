@@ -398,5 +398,21 @@ class Context:
 
         self.state.remove_finished_request(request)
 
+    def continue_waitany(self, index):
+        logging.debug("Continue waitsome %s", self)
+        self.controller.write_int(self.state.index_ptr, index)
+        self.close_requests((index,))
+
+    def continue_waitsome(self, indices):
+        logging.debug("Continue waitsome %s", self)
+        index_ptr, outcounts_ptr = self.state.index_ptr
+        self.controller.write_int(outcounts_ptr, len(indices))
+        self.controller.write_ints(index_ptr, indices)
+        self.close_requests(indices)
+
+    def continue_testall(self):
+        self.controller.write_int(self.state.flag_ptr, 1)
+        self.close_all_requests()
+
     def __repr__(self):
         return "<Controller pid={0.state.pid}>".format(self)

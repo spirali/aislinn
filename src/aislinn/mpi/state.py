@@ -69,7 +69,6 @@ class State:
         self.probe_promise = None
         self.finalized = False
         self.immediate_wait = False
-        self.select = None # Used for WaitAny and WaitSome
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
@@ -297,9 +296,6 @@ class State:
             if op is not None:
                 op.compute_hash(hashthread)
 
-        if self.select is not None:
-            hashthread.update(str(self.select))
-
         if self.probe_promise:
             hashthread.update(str(self.probe_promise))
 
@@ -396,7 +392,6 @@ class State:
         self.index_ptr = None
         self.probe_data = None
         self.immediate_wait = False
-        self.select = None
 
     def are_tested_requests_finished(self):
         if not self.tested_request_ids:
@@ -430,14 +425,6 @@ class State:
     def set_ready(self):
         self.reset_state()
         self.status = self.StatusReady
-
-    # Same as set_ready but remembers flag_ptr,
-    # When process is resumed, int 0 is written at flag_ptr
-    def set_ready_flag0(self):
-        flag_ptr = self.flag_ptr
-        assert flag_ptr
-        self.set_ready()
-        self.flag_ptr = flag_ptr
 
     def set_probe(self, comm, source, tag, flag_ptr, status_ptr):
         self.reset_state()

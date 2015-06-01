@@ -71,19 +71,29 @@ class GlobalContext:
 
     def make_node(self):
         self.save_states()
-        node = self.generator.add_node(self.node, self.gstate)
+        node, is_new = self.generator.add_node(self.node, self.gstate)
         arc = Arc(node, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
         self.events = None
         self.data = None
-        self.gstate = None
+        self.contexts = None
+        return is_new
+
+    def add_to_queue(self, action, copy):
+        assert not self.events
+        gstate = self.gstate
+        if copy:
+            gstate = gstate.copy()
+        else:
+            self.gstate = None
+        self.generator.add_to_queue(self.node, gstate, action)
 
     def make_fail_node(self):
         if not self.events and not self.data:
             # There is no visible change, so no new node is made
             return
-        node = self.generator.add_node(self.node, self.gstate, do_hash=False)
+        node, is_new = self.generator.add_node(self.node, self.gstate, do_hash=False)
         arc = Arc(node, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
@@ -131,3 +141,5 @@ class GlobalContext:
     def is_running(self, pid):
         context = self.contexts[pid]
         return context and context.controller.running
+
+

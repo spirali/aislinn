@@ -18,17 +18,23 @@
 #
 
 
+from action import (ActionMatching,
+                    ActionWaitAny,
+                    ActionWaitSome,
+                    ActionFlag0,
+                    ActionProbePromise,
+                    ActionTestAll)
+from base.arc import Arc, STREAM_STDOUT, STREAM_STDERR
 from base.controller import BufferManager, poll_controllers
 from base.node import Node
-from base.arc import Arc, STREAM_STDOUT, STREAM_STDERR
 from base.report import Report
 from base.statespace import StateSpace
 from base.utils import power_set
 from collections import deque
+from context import Context
+from controller import Controller
 from gcontext import GlobalContext, ErrorFound
 from globalstate import GlobalState
-from mpi.context import Context
-from mpi.controller import Controller
 from state import State
 import consts
 import errormsg
@@ -167,6 +173,7 @@ class Generator:
                 return False
 
         gcontext.make_node()
+        gcontext.add_to_queue(None, False)
         return True
 
     def run(self):
@@ -176,12 +183,13 @@ class Generator:
                 return False
             tick = self.statistics_tick
             tick_counter = tick
+
             while self.working_queue:
                 if self.search == "dfs":
-                    node, gstate = self.working_queue.pop()
+                    node, gstate, action = self.working_queue.pop()
                 else: # bfs
-                    node, gstate = self.working_queue.popleft()
-                self.expand_node(node, gstate)
+                    node, gstate, action = self.working_queue.popleft()
+                self.expand_node(node, gstate, action)
                 self.cleanup()
 
                 if tick:
@@ -290,42 +298,6 @@ class Generator:
                         return True
         return False
 
-    def continue_waitany(self, gcontext, state):
-        logging.debug("Continue waitsome %s", state)
-        context = gcontext.prepare_context(state.pid)
-        context.controller.write_int(context.state.index_ptr, state.select)
-        context.close_requests((state.select,))
-        context.run()
-
-    def continue_waitsome(self, gcontext, state):
-        logging.debug("Continue waitsome %s", state)
-        context = gcontext.prepare_context(state.pid)
-        index_ptr, outcounts_ptr = context.state.index_ptr
-        indices = state.select
-        context.controller.write_int(outcounts_ptr, len(indices))
-        context.controller.write_ints(index_ptr, indices)
-        context.close_requests(indices)
-        context.run()
-
-    def continue_ready(self, gcontext, state):
-        logging.debug("Continue ready with flag %s", state)
-        context = gcontext.prepare_context(state.pid)
-        if state.flag_ptr:
-            context.controller.write_int(state.flag_ptr, 0)
-        context.run()
-
-    def continue_waitall(self, gcontext, state):
-        logging.debug("Continue waitall %s", state)
-        context = gcontext.prepare_context(state.pid)
-        context.close_all_requests()
-        context.run()
-
-    def continue_testall(self, gcontext, state):
-        logging.debug("Continue testall %s", state)
-        context = gcontext.prepare_context(state.pid)
-        context.controller.write_int(state.flag_ptr, 1)
-        context.close_all_requests()
-        context.run()
 
     def continue_probe(self, gcontext, state, rank):
         logging.debug("Continue probe %s", state)
@@ -341,31 +313,32 @@ class Generator:
     def fast_expand_state(self, gcontext, state):
         if (state.status == State.StatusWaitAll
             and state.are_tested_requests_finished()):
-               self.continue_waitall(gcontext, state)
+               context = gcontext.prepare_context(state.pid)
+               context.close_all_requests()
+               context.run()
                return True
 
         if state.status == State.StatusReady:
-            self.continue_ready(gcontext, state)
+            logging.debug("Continue ready with flag %s", state)
+            gcontext.prepare_context(state.pid).run()
             return True
 
-        if state.status == State.StatusWaitSome:
-            if state.select is not None:
-                self.continue_waitsome(gcontext, state)
-                return True
-            elif state.waits_for_single_non_null_request() and \
-                state.are_tested_requests_finished():
-                state.select = [ state.index_of_first_non_null_request() ]
-                self.continue_waitsome(gcontext, state)
+        if state.status == State.StatusWaitSome and \
+           state.waits_for_single_non_null_request() and \
+           state.are_tested_requests_finished():
+                context = gcontext.prepare_context(state.pid)
+                context.continue_waitsome(
+                    [ state.index_of_first_non_null_request() ])
+                context.run()
                 return True
 
-        if state.status == State.StatusWaitAny:
-            if state.select is not None:
-                self.continue_waitany(gcontext, state)
-                return True
-            elif state.waits_for_single_non_null_request() and \
+        if state.status == State.StatusWaitAny and \
+                state.waits_for_single_non_null_request() and \
                 state.are_tested_requests_finished():
-                state.select = state.index_of_first_non_null_request()
-                self.continue_waitany(gcontext, state)
+                context = gcontext.prepare_context(state.pid)
+                context.continue_waitany(
+                        state.index_of_first_non_null_request())
+                context.run()
                 return True
 
         if state.status == State.StatusProbe:
@@ -381,10 +354,6 @@ class Generator:
                     rank = request.comm.group.pid_to_rank(pid)
                     self.continue_probe(gcontext, state, rank)
                     return True
-
-        if state.status == State.StatusTest and state.select:
-            self.continue_testall(gcontext, state)
-            return True
         return False
 
     def poll_controllers(self, gcontext):
@@ -432,6 +401,7 @@ class Generator:
             return modified
 
     def fork_standard_sends(self, node, gstate):
+        return False # STANDARD SENDS ARE NOW DISABLED !!!!
         new_state_created = False
         for state in gstate.states:
             if state.status == State.StatusWaitAll or \
@@ -482,90 +452,77 @@ class Generator:
                     return True
         return False
 
-    def setup_select_and_make_node(self, gcontext, state, select):
-        gstate = gcontext.gstate.copy()
-        gstate.states[state.pid].select = select
-        g = GlobalContext(self, gcontext.node, gstate)
-        g.make_node()
-
-    def set_flag0_and_make_node(self, gcontext, state):
-        gstate = gcontext.gstate.copy()
-        gstate.states[state.pid].set_ready_flag0()
-        g = GlobalContext(self, gcontext.node, gstate)
-        g.make_node()
-
-    def set_probe_promise_and_make_node(
-            self, gcontext, state, comm_id, source, t, rank):
-        gstate = gcontext.gstate.copy()
-        state = gstate.states[state.pid]
-        state.set_probe_promise(comm_id, source, t, rank)
-        g = GlobalContext(self, gcontext.node, gstate)
-        g.make_node()
-
-    def expand_waitsome(self, gcontext, state):
-        logging.debug("Expanding waitsome %s", state)
+    def expand_waitsome(self, gcontext, state, actions):
         indices = state.get_indices_of_tested_and_finished_requests()
         if not indices:
             return
+        logging.debug("Expanding waitsome %s", state)
         for indices in power_set(indices):
             if not indices:
                 continue # skip empty set
-            self.setup_select_and_make_node(gcontext, state, indices)
+            actions.append(ActionWaitSome(state.pid, indices))
 
-    def expand_testall(self, gcontext, state):
+    def expand_testall(self, gcontext, state, actions):
         logging.debug("Expanding testall %s", state)
-        self.set_flag0_and_make_node(gcontext, state)
+        actions.append(ActionFlag0(state.pid))
         if state.are_tested_requests_finished():
-            self.setup_select_and_make_node(gcontext, state, True)
+            actions.append(ActionTestAll(state.pid))
 
-    def expand_waitany(self, gcontext, state):
+    def expand_waitany(self, gcontext, state, actions):
         logging.debug("Expanding waitany %s", state)
         indices = state.get_indices_of_tested_and_finished_requests()
         if not indices:
             return
         for i in indices:
-            self.setup_select_and_make_node(gcontext, state, i)
+            actions.append(ActionWaitAny(state.pid, i))
 
-    def expand_probe(self, gcontext, state):
+    def expand_probe(self, gcontext, state, actions):
         logging.debug("Expanding probe %s", state)
         comm_id, source, tag, status_ptr = state.probe_data
         if state.get_probe_promise(comm_id, source, tag) is not None:
             return
 
         if state.flag_ptr:
-            self.set_flag0_and_make_node(gcontext, state)
+            actions.append(ActionFlag0(state.pid))
             if source != consts.MPI_ANY_SOURCE:
                  probed = state.probe_deterministic(comm_id, source, tag)
                  if probed:
                      pid, request = probed
                      rank = request.comm.group.pid_to_rank(pid)
-                     self.set_probe_promise_and_make_node(
-                          gcontext, state, comm_id, source, tag, rank)
+                     actions.append(ActionProbePromise(
+                        state.pid, comm_id, source, tag, rank))
         if source != consts.MPI_ANY_SOURCE:
             return
         for pid, request in state.probe_nondeterministic(comm_id, tag):
             rank = request.comm.group.pid_to_rank(pid)
-            self.set_probe_promise_and_make_node(
-                    gcontext, state, comm_id, source, tag, rank)
+            actions.append(ActionProbePromise(
+               state.pid, comm_id, source, tag, rank))
 
-    def slow_expand(self, gcontext):
-        for matching in gcontext.find_nondeterministic_matches():
-            logging.debug("Slow expand matching = %s", matching)
-            g = GlobalContext(self, gcontext.node, gcontext.gstate.copy())
-            g.apply_matching(matching)
-            g.make_node()
-
+    def get_actions(self, gcontext):
+        actions = [ ActionMatching(matching)
+                    for matching in gcontext.find_nondeterministic_matches() ]
         for state in gcontext.gstate.states:
             if state.status == State.StatusWaitAny:
-                self.expand_waitany(gcontext, state)
-            elif state.status == State.StatusWaitSome:
-                self.expand_waitsome(gcontext, state)
+               self.expand_waitany(gcontext, state, actions)
             elif state.status == State.StatusProbe:
-                self.expand_probe(gcontext, state)
+                self.expand_probe(gcontext, state, actions)
+            elif state.status == State.StatusWaitSome:
+                self.expand_waitsome(gcontext, state, actions)
             elif state.status == State.StatusTest:
-                self.expand_testall(gcontext, state)
+                self.expand_testall(gcontext, state, actions)
+        return actions
 
-    def expand_node(self, node, gstate):
+    def slow_expand(self, gcontext):
+        actions = self.get_actions(gcontext)
+        if actions:
+            for action in actions:
+                gcontext.add_to_queue(action, True)
+        return bool(actions)
+
+    def add_to_queue(self, node, gstate, action):
+        self.working_queue.append((node, gstate, action))
+
+    def expand_node(self, node, gstate, action):
         logging.debug("--------- Expanding node %s %s ------------", node.uid, gstate)
 
         if self.debug_compare_states is not None \
@@ -576,17 +533,21 @@ class Generator:
 
         gcontext = GlobalContext(self, node, gstate)
 
-        if self.fast_expand_node(gcontext):
-            gcontext.make_node()
-            return
+        if action:
+            action.apply_action(gcontext)
+
+        self.fast_expand_node(gcontext)
 
         if self.fork_standard_sends(node, gstate):
             gstate.dispose()
             return
 
-        self.slow_expand(gcontext)
+        if not gcontext.make_node():
+            gstate.dispose()
+            return
 
-        if not node.arcs:
+        if not self.slow_expand(gcontext):
+            node = gcontext.node
             if any(state.status != State.StatusFinished
                    for state in gstate.states):
                 active_pids = [ state.pid for state in gstate.states
@@ -613,41 +574,22 @@ class Generator:
             if hash is not None:
                 node = self.statespace.get_node_by_hash(hash)
                 if node is not None:
-                    gstate.dispose()
-                    return node
+                    return (node, False)
         else:
             hash = None
-        """
-        uid = []
-        for state in gstate.states:
-            if state.vg_state is not None:
-                u = str(state.vg_state.id)
-            else:
-                u = "F"
-            if state.select is not None:
-                u += "s"
-            uid.append(u)
-
-        uid = ",".join(uid)
-        """
         uid = str(self.statespace.nodes_count)
-        #uid = ",".join([ str(state.vg_state.id) if state.vg_state is not None else "F"
-        #         for state in gstate.states ])
-        #uids += [ [ m.vg_buffer.id for m in s.messages ] for s in gstate.states ]
-
         node = Node(uid, hash)
         logging.debug("New node %s", node.uid)
 
         if prev:
             node.prev = prev
         self.statespace.add_node(node)
-        self.working_queue.append((node, gstate))
 
         if self.debug_state == uid:
             context = Context(self, node, None)
             context.add_error_and_throw(
                     errormsg.StateCaptured(context, uid=uid))
-        return node
+        return (node, True)
 
     def create_report(self, args):
         for error_message in self.error_messages:
