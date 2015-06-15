@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -737,16 +737,6 @@ def get_send_type(generator, state, mode, datatype, count):
     elif mode == "Bsend" \
        or (mode == "Send" and generator.send_protocol == "eager"):
         return Request.TYPE_SEND_EAGER
-    elif generator.send_protocol == "dynamic":
-        size = datatype.size * count
-        eager_threshold, rendezvous_threshold = \
-                state.gstate.send_protocol_thresholds
-        if size < eager_threshold:
-            return Request.TYPE_SEND_EAGER
-        elif size >= rendezvous_threshold:
-            return Request.TYPE_SEND_RENDEZVOUS
-        else:
-            return Request.TYPE_SEND_STD
     elif generator.send_protocol == "threshold":
         size = datatype.size * count
         if size < generator.send_protocol_eager_threshold:

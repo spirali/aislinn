@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -212,7 +212,7 @@ def parse_args():
     if args.vgv:
         valgrind_args.append("--verbose={0}".format(args.vgv))
 
-    if args.send_protocol not in ("full", "eager", "rendezvous", "dynamic"):
+    if args.send_protocol not in ("full", "eager", "rendezvous"):
         threshold = parse_threshold(args.send_protocol)
         if threshold is None:
             logging.error("Invalid send protocol (parameter -S or --send-protocol)")

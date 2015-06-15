@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -30,11 +30,9 @@ import logging
 class GlobalState(EqMixin):
 
     def __init__(self,
-                 process_count,
-                 send_protocol_thresholds):
+                 process_count):
         self.states = [ State(self, i, None) for i in xrange(process_count) ]
         self.collective_operations = None
-        self.send_protocol_thresholds = send_protocol_thresholds
         self.comm_world = make_comm_world(process_count)
         self.comm_id_counter = consts.MPI_COMM_USERDEF
 
@@ -69,8 +67,6 @@ class GlobalState(EqMixin):
             if not state.is_hashable():
                 return None
         hashthread = hashlib.md5()
-        if self.send_protocol_thresholds:
-            hashthread.update(str(self.send_protocol_thresholds))
         for state in self.states:
             state.compute_hash(hashthread)
         if self.collective_operations:

@@ -42,7 +42,6 @@ import errormsg
 
 import logging
 import datetime
-import sys
 
 
 class Generator:
@@ -158,13 +157,7 @@ class Generator:
         self.statespace.add_node(initial_node)
         self.statespace.initial_node = initial_node
 
-        if self.send_protocol == "dynamic":
-            send_protocol_thresholds = (0, sys.maxint)
-        else:
-            send_protocol_thresholds = None
-
-        gstate = GlobalState(self.process_count,
-                             send_protocol_thresholds)
+        gstate = GlobalState(self.process_count)
         gcontext = GlobalContext(self, initial_node, gstate)
 
         # TODO: Do it in parallel
@@ -420,34 +413,8 @@ class Generator:
                     continue
                 logging.debug("Forking because of standard send %s", requests)
                 for buffered, synchronous in requests:
-                    if self.send_protocol == "dynamic":
-                       eager_threshold, rendezvous_threshold = \
-                               gstate.send_protocol_thresholds
-                       assert eager_threshold <= rendezvous_threshold
-                       if buffered:
-                           buffered_size = \
-                               max(max(r.vg_buffer.size for r in buffered),
-                                   eager_threshold)
-                       else:
-                           buffered_size = eager_threshold
-
-                       if synchronous:
-                           synchronous_size = \
-                               min(min(r.vg_buffer.size for r in synchronous),
-                                   rendezvous_threshold)
-                       else:
-                           synchronous_size = rendezvous_threshold
-
-                       if buffered_size >= rendezvous_threshold or \
-                               synchronous_size < eager_threshold:
-                           continue
-
                     new_gstate = gstate.copy()
                     new_state = new_gstate.get_state(state.pid)
-
-                    if self.send_protocol == "dynamic":
-                       new_gstate.send_protocol_thresholds = (buffered_size,
-                                                              synchronous_size)
 
                     for r in buffered:
                         new_state.set_request_as_buffered(r)
