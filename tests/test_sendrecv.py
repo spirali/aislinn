@@ -180,15 +180,6 @@ class SendRecvTests(TestCase):
         self.program("waitany3")
         self.execute(2)
 
-    def test_send_protocol(self):
-        self.program("deadlock1")
-        self.execute(3, send_protocol="eager")
-        self.execute(3, send_protocol="rendezvous")
-        self.execute(3, send_protocol="3")
-        self.execute(3, send_protocol="1M")
-        self.execute(3, send_protocol="5", error="mpi/deadlock")
-        self.execute(3, send_protocol="full", error="mpi/deadlock")
-
     def test_cross_send1(self):
         self.program("cross1")
         self.execute(2, send_protocol="eager")
