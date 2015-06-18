@@ -245,7 +245,7 @@ class Marking(utils.EqMixin):
             return self.process_marks[event.pid]
 
     def is_covered_by(self, marking):
-        if self.terminate_marks or marking.terminate_marks:
+        if len(self.terminate_marks) != len(marking.terminate_marks):
             # markings with terminate_marks are not handled yet
             return False
 
@@ -267,6 +267,10 @@ class Marking(utils.EqMixin):
         def mark_pid(mark):
             return mark.pid
 
+        def pre_check_fn(m, v1, v2):
+             return len(self.terminate_marks[v1]) == \
+                    len(marking.terminate_marks[v2]),
+
         assert len(self.ssend_marks) == len(marking.ssend_marks)
         mapping = {} # mapping of markigs between "self" and "marking"
 
@@ -284,22 +288,29 @@ class Marking(utils.EqMixin):
             m2.sort(key=mark_pid)
             mapping.update(zip(m1, m2))
 
-        # check mapping
+        for mapping in utils.build_equivalence(
+                self.terminate_marks.keys(),
+                marking.terminate_marks.keys(),
+                pre_check_fn,
+                mapping):
+            # check mapping
+            for m1, m2 in zip(self.process_marks, marking.process_marks):
+                if apply_mapping(m1) != m2:
+                    continue
 
-        for m1, m2 in zip(self.process_marks, marking.process_marks):
-            if apply_mapping(m1) != m2:
-                return False
+            if not check_dicts(self.active_marks, marking.active_marks):
+                continue
+            if not check_dicts(self.finished_marks, marking.finished_marks):
+                continue
 
-        if not check_dicts(self.active_marks, marking.active_marks):
-            return False
-        if not check_dicts(self.finished_marks, marking.finished_marks):
-            return False
-
-        for c in self.collectives:
-            c2 = marking.find_collective(c.comm_id, c.cc_id)
-            if not check_mark_dicts(c.marks, c2.marks):
-                return False
-        return True
+            for c in self.collectives:
+                c2 = marking.find_collective(c.comm_id, c.cc_id)
+                if not check_mark_dicts(c.marks, c2.marks):
+                    continue
+            if not check_mark_dicts(self.terminate_marks, marking.terminate_marks):
+                continue
+            return True
+        return False
 
     def find_collective(self, comm_id, cc_id):
         for c in self.collectives:

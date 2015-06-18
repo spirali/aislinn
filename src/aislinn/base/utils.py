@@ -81,3 +81,31 @@ def power_set(items):
     if not items:
         return []
     return power_set_helper(items)
+
+def build_equivalence(items1, items2, check_fn, mapping=None):
+    results = []
+    if len(items1) != len(items2):
+        return results
+    if mapping is None:
+        mapping = {}
+    if not items1:
+        results.append(mapping)
+        return results
+    def helper(items1, items2):
+        if not items1:
+            results.append(mapping.copy())
+            return
+        v = items1.pop()
+        for i in xrange(len(items2)):
+            value = items2[i]
+            mapping[v] = value
+            if not check_fn(mapping, v, value):
+                del mapping[v]
+                continue
+            del items2[i]
+            helper(items1, items2)
+            del mapping[v]
+            items2.insert(i, value)
+        items1.append(v)
+    helper(items1, items2)
+    return results
