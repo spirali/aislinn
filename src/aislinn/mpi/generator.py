@@ -401,32 +401,6 @@ class Generator:
                 continue
             return modified
 
-    def fork_standard_sends(self, node, gstate):
-        return False # STANDARD SENDS ARE NOW DISABLED !!!!
-        new_state_created = False
-        for state in gstate.states:
-            if state.status == State.StatusWaitAll or \
-                    state.status == State.StatusTest or \
-                    state.status == State.StatusWaitAny:
-                requests = state.fork_standard_sends()
-                if requests is None:
-                    continue
-                logging.debug("Forking because of standard send %s", requests)
-                for buffered, synchronous in requests:
-                    new_gstate = gstate.copy()
-                    new_state = new_gstate.get_state(state.pid)
-
-                    for r in buffered:
-                        new_state.set_request_as_buffered(r)
-                    for r in synchronous:
-                        new_state.set_request_as_synchronous(r)
-                    new_node = self.add_node(node, new_gstate)
-                    node.add_arc(Arc(new_node))
-                    new_state_created = True
-                if new_state_created:
-                    return True
-        return False
-
     def expand_waitsome(self, gcontext, state, actions):
         indices = state.get_indices_of_tested_and_finished_requests()
         if not indices:
@@ -512,12 +486,6 @@ class Generator:
             action.apply_action(gcontext)
 
         self.fast_expand_node(gcontext)
-
-        """
-        if self.fork_standard_sends(node, gstate):
-            gstate.dispose()
-            return
-        """
 
         if not gcontext.make_node():
             gstate.dispose()

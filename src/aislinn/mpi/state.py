@@ -480,26 +480,6 @@ class State:
         self.tested_requests_pointer = request_ptr
         self.tested_requests_status_ptr = status_ptr
 
-    def set_request_as_synchronous(self, request):
-        logging.debug("Set request as synchronous %s", request)
-        assert request.is_standard_send()
-        self.active_requests = copy.copy(self.active_requests)
-        i = self.active_requests.index(request)
-        request = copy.copy(request)
-        request.send_type = Request.TYPE_SEND_RENDEZVOUS
-        self.active_requests[i] = request
-
-    def set_request_as_buffered(self, request):
-        logging.debug("Set request as buffered %s", request)
-        assert request.is_standard_send()
-        self.active_requests = copy.copy(self.active_requests)
-        i = self.active_requests.index(request)
-        request = copy.copy(request)
-        request.send_type = Request.TYPE_SEND_EAGER
-        self.active_requests[i] = request
-        request.inc_ref()
-        self.add_finished_request(request)
-
     def find_deterministic_match(self):
         for i, r in enumerate(self.active_requests):
             if not r.is_receive() or r.source == consts.MPI_ANY_SOURCE:
@@ -576,28 +556,6 @@ class State:
                 tag == consts.MPI_ANY_TAG) and \
                 self.probe_is_possible(comm_id, s.target, s.tag):
                     return (pid, s)
-
-    def fork_standard_sends(self):
-        max_index = max(self.get_request_index(id)
-                        for id in self.tested_request_ids)
-        result = [ ([], []) ]
-        for i in xrange(max_index + 1):
-            request = self.active_requests[i]
-            if request.is_send() and request.is_standard_send():
-                new_result = []
-                for buffered, synchronous  in result:
-                    b = buffered[:]
-                    buffered.append(request)
-                    s = synchronous[:]
-                    synchronous.append(request)
-                    new_result.append((b, synchronous))
-                    new_result.append((buffered, s))
-                result = new_result
-
-        if len(result) == 1: # Nothing changed
-            return None
-        else:
-            return result
 
     def get_comm(self, comm_id):
         if comm_id == consts.MPI_COMM_WORLD:
