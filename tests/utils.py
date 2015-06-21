@@ -356,11 +356,11 @@ class Report:
 
     @property
     def number_of_nodes(self):
-        return int(self.root.find("analysis-info").find("nodes").text)
+        return int(self.root.find("analysis").find("nodes").text)
 
     @property
     def determinisic_nonfreed_memory(self):
-        return int(self.root.find("analysis-info") \
+        return int(self.root.find("analysis") \
                 .find("deterministic-non-freed-memory").text)
 
     def get_icounts(self, name):

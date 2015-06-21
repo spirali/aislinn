@@ -26,5 +26,7 @@ AISLINN_ROOT = os.path.dirname(
                    os.path.dirname(
                      os.path.dirname(os.path.abspath(__file__)))))
 
+AISLINN_TEMPLATE = os.path.join(AISLINN_ROOT, "src", "aislinn", "template")
+
 VALGRIND = os.path.join(AISLINN_ROOT, "valgrind")
 VALGRIND_BIN = os.path.join(VALGRIND, "vg-in-place")

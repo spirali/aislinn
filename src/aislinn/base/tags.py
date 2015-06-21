@@ -18,8 +18,6 @@
 #
 
 
-import base64
-
 class Tag:
 
     def __init__(self, name, *args, **kw):
@@ -59,8 +57,3 @@ class Tag:
         tag = Tag(*args, **kw)
         self.add_child(tag)
         return tag
-
-def embed_img(parent, data):
-    img = parent.child("img")
-    img.set("src", "data:image/png;base64," + base64.b64encode(data))
-    return img

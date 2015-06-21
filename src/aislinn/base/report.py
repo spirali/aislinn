@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -18,10 +18,13 @@
 #
 
 
-from tags import Tag, embed_img
 from arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
 from arc import COUNTER_ALLOCATIONS, COUNTER_SIZE_ALLOCATIONS
 import xml.etree.ElementTree as xml
+import os
+import paths
+import base64
+import jinja2
 
 plt = None
 try:
@@ -29,33 +32,6 @@ try:
     import StringIO
 except ImportError:
     pass # User of plt has to make sure that plt is not None
-
-collective_operations = [
-    "Gather",
-    "Gatherv",
-    "Barrier"
-    "Scatter",
-    "Scatterv",
-    "Reduce",
-    "Allreduce",
-    "Allreduce",
-    "Bcast",
-
-    "Igather",
-    "Igatherv",
-    "Ibarrier"
-    "Iscatter",
-    "Iscatterv",
-    "Ireduce",
-    "Iallreduce"
-    "Ibcast",
-]
-
-wait_operations = [
-    "Wait",
-    "Waitall",
-    "Probe"
-]
 
 def serialize_fig(fig):
     stringfile = StringIO.StringIO()
@@ -81,12 +57,17 @@ def make_chart_1d(data, yticks, xlabel, ylabel):
     plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
     return serialize_fig(fig)
 
+def html_embed_img(data):
+    return "data:image/png;base64," + base64.b64encode(data)
+
+
 class Entry:
 
-    def __init__(self, name, value, description):
+    def __init__(self, name, value, description, help=None):
         self.name = name
         self.value = value
         self.description = description
+        self.help = help
 
     def make_xml_element(self):
         e = xml.Element(self.name)
@@ -100,42 +81,42 @@ class Entry:
             name = self.name.capitalize()
         return "{0}: {1}".format(name, self.value)
 
-
-class EntryList:
-
-    def __init__(self):
-        self.entries = []
-
-    def add(self, name, value, description=None):
-        self.entries.append(Entry(name, value, description))
-
 OUTPUTS_LIMIT = 10
+
 
 class Report:
 
-    def __init__(self, generator, args):
-        self.program_info = EntryList()
-        self.analysis_info = EntryList()
+    def __init__(self, generator, args, version):
         self.process_count = generator.process_count
         self.statistics = generator.get_statistics()
 
         self.stdout_counts = None
         self.stderr_counts = None
 
+        self.version = version
+
         self.outputs = {}
+
+        def count_of_outputs(count):
+            if count == None:
+                return ">" + str(OUTPUTS_LIMIT)
+            else:
+                return str(count)
 
         if generator.stdout_mode == "capture" \
                 and generator.statespace.initial_node:
             self.stdout_counts = \
-                    [ generator.statespace.get_outputs_count(
-                        STREAM_STDOUT, pid, OUTPUTS_LIMIT)
+                    [ count_of_outputs(
+                        generator.statespace.get_outputs_count(
+                        STREAM_STDOUT, pid, OUTPUTS_LIMIT))
                       for pid in xrange(generator.process_count) ]
 
         if generator.stderr_mode == "capture" \
                 and generator.statespace.initial_node:
             self.stderr_counts = \
-                    [ generator.statespace.get_outputs_count(
-                        STREAM_STDERR, pid, OUTPUTS_LIMIT)
+                    [ count_of_outputs(
+                        generator.statespace.get_outputs_count(
+                        STREAM_STDERR, pid, OUTPUTS_LIMIT))
                       for pid in xrange(generator.process_count) ]
 
         if args.stderr_write \
@@ -177,101 +158,85 @@ class Report:
         else:
             self.profile = None
 
-        self.program_info.add(
-                "program-args", " ".join(generator.args), "Program arguments")
-        self.program_info.add(
-                "processes", generator.process_count, "Number of processes")
-        self.program_info.add(
-                "send-protocol", generator.send_protocol, "Send protocol")
-        self.program_info.add("search",
-                              generator.search,
-                              "Search strategy")
-        self.program_info.add(
-                "stdout-mode", generator.stdout_mode, "Stdout mode")
-        self.program_info.add(
-                "stderr-mode", generator.stderr_mode, "Stderr mode")
+        self.program_info = [
+            Entry("program-args", " ".join(generator.args), "Program arguments"),
+            Entry("processes", generator.process_count, "Number of processes"),
+        ]
+
+        self.analysis_configuration = [
+            Entry("stdout-mode", generator.stdout_mode, "Stdout mode"),
+            Entry("stderr-mode", generator.stderr_mode, "Stderr mode"),
+            Entry("send-protocol", generator.send_protocol, "Send protocol"),
+            Entry("search", generator.search, "Search strategy"),
+        ]
 
         if args.heap_size:
-            self.program_info.add(
-                "heap-size", args.heap_size, "Heap size")
+            self.analysis_configuration.append(
+                    Entry("heap-size", args.heap_size, "Heap size"))
 
         if args.redzone_size:
-            self.program_info.add(
-                "redzone-size", args.redzone_size, "Redzone size")
+            self.analysis_configuration.append(
+                Entry("redzone-size", args.redzone_size, "Redzone size"))
 
-        if generator.send_protocol == "threshold":
-            self.program_info.add(
-                    "send-protocol-thresholds",
-                    "{0}:{1}".format(
-                        generator.send_protocol_eager_threshold,
-                        generator.send_protocol_rendezvous_threshold),
-                    "Threshold values")
-        self.analysis_info.add("nodes",
-                      generator.statespace.nodes_count,
-                      "Number of nodes in statespace")
-        self.analysis_info.add("full-statespace",
-                      generator.is_full_statespace,
-                      "Full statespace")
-        self.analysis_info.add("init-time",
-                      generator.init_time,
-                      "Start time")
-        execution_time = generator.end_time - generator.init_time
-        self.analysis_info.add("execution-time",
-                      execution_time,
-                      "Execution time")
-        self.analysis_info.add("speed",
-                      generator.statespace.nodes_count
-                          / execution_time.total_seconds(),
-                      "Nodes per second")
         sizes = list(generator.message_sizes)
         sizes.sort()
-        self.analysis_info.add("message-sizes",
-                      sizes,
-                      "Sizes of unicast messages (bytes)")
 
-        if generator.deterministic_unallocated_memory is not None:
-            self.analysis_info.add("deterministic-non-freed-memory",
-                          generator.deterministic_unallocated_memory,
-                          "Size of deterministic unallocated memory "
-                          "at the end of program (bytes)")
+        self.analysis_output = [
+            Entry("stdout-outputs",
+                  ",".join(self.stdout_counts) if self.stdout_counts else "N/A",
+                 "# of possible outputs on stdout (per rank)"),
+            Entry("stderr-outputs",
+                  ",".join(self.stderr_counts) if self.stderr_counts else "N/A",
+                 "# of possible outputs on stderr (per rank)"),
+            Entry("deterministic-non-freed-memory",
+                  generator.deterministic_unallocated_memory,
+                 "Deterministic unallocated memory (bytes)"),
+            Entry("message-sizes",
+                  sizes,
+                 "Sizes of unicast messages (bytes)")
+        ]
 
-        def count_of_outputs((rank, count)):
-            if count == None:
-                return ">" + str(OUTPUTS_LIMIT)
-            else:
-                return str(count)
-
-        if self.stdout_counts:
-            self.analysis_info.add("stdout-outputs",
-                          ", ".join(map(count_of_outputs,
-                                       enumerate(self.stdout_counts))),
-                          "Numbers of different outputs on stdout (per rank)")
-
-        if self.stderr_counts:
-            self.analysis_info.add("stdout-outputs",
-                          ", ".join(map(count_of_outputs,
-                                       enumerate(self.stderr_counts))),
-                          "Numbers of different outputs on stderr (per rank)")
-
+        execution_time = generator.end_time - generator.init_time
+        self.analysis_details = [
+            Entry("init-time",
+                  generator.init_time,
+                  "Start of verification"),
+            Entry("execution-time",
+                  execution_time,
+                  "Execution time"),
+            Entry("nodes",
+                  generator.statespace.nodes_count,
+                  "Number of nodes in statespace"),
+            Entry("full-statespace",
+                  generator.is_full_statespace,
+                  "Statespace fully explored"),
+            Entry("speed",
+                  generator.statespace.nodes_count
+                    / execution_time.total_seconds(),
+                  "Nodes per seconds"),
+        ]
         self.error_messages = generator.error_messages
+
+    @property
+    def error_message_keys(self):
+        return [ m.key for m in self.error_messages ]
+
+    @property
+    def pids(self):
+        return range(self.process_count)
 
     def entries_to_xml(self, parent_name, entry_list):
         parent = xml.Element(parent_name)
-        for entry in entry_list.entries:
+        for entry in entry_list:
             parent.append(entry.make_xml_element())
         return parent
 
-    def entries_to_html(self, tag, entry_list):
-        ul = tag.child("ul")
-        for entry in entry_list.entries:
-            ul.child("li", entry.make_html_text())
-        return ul
-
     def create_xml(self):
         root = xml.Element("report")
-        info = self.entries_to_xml("program-info", self.program_info)
+        info = self.entries_to_xml("program", self.program_info)
         root.append(info)
-        info = self.entries_to_xml("analysis-info", self.analysis_info)
+        info = self.entries_to_xml(
+                "analysis", self.analysis_output + self.analysis_details)
         root.append(info)
         for error in self.error_messages:
             e = xml.Element("error")
@@ -316,62 +281,18 @@ class Report:
             self.write_xml_profile(profile)
         return xml.ElementTree(root)
 
-    def create_html_head(self, html):
-        head = html.child("head")
-        head.child("title", "Aislinn report")
-        head.child("style", REPORT_CSS)
-
-    def _make_row(self, table, data, classes=None, titles=None):
-        tr = table.child("tr")
-        for i, d in enumerate(data):
-            td = tr.child("td", d)
-            if classes and classes[i]:
-                td.set("class", classes[i])
-            if titles and titles[i]:
-                td.set("title", titles[i])
-
-    def export_events(self, events, tag):
-        table = tag.child("table")
+    def events_table(self, events):
         process_count = self.process_count
-        self._make_row(table.child("thead"), range(process_count))
-        tbody = table.child("tbody")
         pids = [ [] for x in xrange(process_count) ]
         for e in events:
             if hasattr(e, "pid"):
                 pids[e.pid].append(e)
-
-        step = 0
-        while True:
-            data = [""] * process_count
-            classes = [None] * process_count
-            titles = [None] * process_count
-            for r in xrange(process_count):
-                if len(pids[r]) <= step:
-                    continue
-                e = pids[r][step]
-                name = e.name
-                data[r] = name
-                titles[r] = ""
-                if hasattr(e, "args"):
-                    titles[r] += "Args: {0}\n".format(e.args)
-                if hasattr(e, "exitcode"):
-                    titles[r] += "Exitcode: {0}\n".format(e.exitcode)
-                if e.stacktrace:
-                    titles[r] += e.stacktrace.replace("|", "\n")
-                if e.ndsync:
-                    classes[r] = "Ndsync"
-                elif name in collective_operations:
-                    classes[r] = "Collective"
-                elif name in wait_operations:
-                    classes[r] = "Wait"
-                elif name.endswith("end"):
-                    classes[r] = "Send"
-                elif name.endswith("ecv"):
-                    classes[r] = "Recv"
-            if not any(data):
-                break
-            self._make_row(tbody, data, classes, titles)
-            step += 1
+        table = []
+        for step in xrange(max(len(p) for p in pids)):
+            row = [ pids[p][step] if step < len(pids[p]) else None
+                    for p in xrange(process_count) ]
+            table.append(row)
+        return table
 
     def write_xml_profile(self, parent):
         e = xml.Element("instructions")
@@ -384,324 +305,55 @@ class Report:
         f.text = " ".join(map(str, self.profile["instructions_global"]))
         e.append(f)
 
-    def write_html_profile(self, parent):
-        if plt is not None:
-            for label, name in (("# of instructions", "instructions"),
-                                ("# of allocations", "allocations"),
-                                ("size of allocations", "size_allocations")):
-                parent.child("h3", "{0} per process".format(label))
-                img = make_chart_1d(self.profile[name],
-                                    range(len(self.profile[name])),
-                                    label, "Process")
-                embed_img(parent, img)
+    @property
+    def statistics_text(self):
+        if plt is None:
+            return "Error: Module 'matplotlib' not installed"
+        return ""
 
-                parent.child("h3", "Global {0}".format(label))
-                img = make_chart_1d([self.profile[name + "_global"]],
-                                    (),
-                                    label, "")
-                embed_img(parent, img)
+    @property
+    def statistics_charts(self):
+        if plt is None:
+            return
+        metadata, data, tick = self.statistics
+        ydata = range(0, len(data) * tick, tick)
 
-                parent.child("h3", "# of outcomes")
-                ul = parent.child("ul")
-                for i, d in enumerate(self.profile[name]):
-                    ul.child("li", "Process {0}: {1}".format(i, len(d)))
-                ul.child("li", "Global: {1}" \
-                        .format(i, len(self.profile[name + "_global"])))
-        else:
-            parent.child("Error: please install matplotlib to obtain charts")
+        for i, (name, units) in enumerate(metadata):
+            img = make_chart([s[i] for s in data], ydata, units)
+            yield name, html_embed_img(img)
 
+    @property
+    def profile_text(self):
+        if plt is None:
+            return "Error: Module 'matplotlib' not installed"
+        return ""
 
-    def write_html_statistics(self, parent):
-        if plt is not None:
-            metadata, data, tick = self.statistics
-            ydata = range(0, len(data) * tick, tick)
-            for i, (name, units) in enumerate(metadata):
-                parent.child("h3", name)
-                img = make_chart([s[i] for s in data], ydata, units)
-                embed_img(parent, img)
-        else:
-            parent.child("Error: please install matplotlib to obtain charts")
+    @property
+    def profile_charts(self):
+        if plt is None:
+            return
+        for label, name in (("# of instructions", "instructions"),
+                            ("# of allocations", "allocations"),
+                            ("size of allocations", "size_allocations")):
+            img1 = make_chart_1d(self.profile[name],
+                                range(len(self.profile[name])),
+                                label, "Process")
 
-    def create_html(self):
-        html = Tag("html")
-        self.create_html_head(html)
-        body = html.child("body")
-        header = body.child("header", id="header").child("div")
-        header.set("class", "inner clearfix")
-        header.child("h1", "Aislinn report")
-
-        section = body.child("section", id="section")
-        div = section.child("div", id="column")
-        div.set("class", "inner")
-
-        div.child("h2", "Program information")
-        self.entries_to_html(div, self.program_info)
-
-        div.child("h2", "Analysis information")
-        self.entries_to_html(div, self.analysis_info)
-
-        div.child("h2", "Errors")
-
-        if self.error_messages:
-            div.child("p", "{0} error(s) found" \
-                    .format(len(self.error_messages)))
-            for error in self.error_messages:
-                h3 = div.child("h3", "Error: " + error.name)
-                key = h3.child("span")
-                key.set("class", "key")
-                key.text("(" + error.key + ")")
-                div.child("p", error.description)
-                if error.pid is not None:
-                    div.child("h4", "Rank")
-                    div.text("Error occured on rank {0} in MPI_COMM_WORLD".format(error.pid))
-                if error.stacktrace is not None:
-                    div.child("h4", "Stacktrace")
-                    div.child("pre", "{0}" \
-                            .format(error.stacktrace.replace("|", "<br>")))
-
-                for title, stacktrace in error.other_stacktraces:
-                    div.child("h4", title)
-                    div.child("pre", "{0}" \
-                            .format(stacktrace.replace("|", "<br>")))
-                if error.events:
-                    div.child("h4", "Events")
-                    self.export_events(error.events, div)
-                if error.stdout:
-                    div.child("h4", "Stdout")
-                    for rank, stdout in enumerate(error.stdout):
-                        self.export_stream("stdout for rank {0}".format(rank),
-                                           stdout, div)
-                if error.stderr:
-                    div.child("h4", "Stderr")
-                    for rank, stderr in enumerate(error.stderr):
-                        self.export_stream("stderr for rank {0}".format(rank),
-                                           stderr, div)
-
-        else:
-            div.child("p", "No errors found")
-
-        if self.profile:
-            div.child("h2", "Profile")
-            self.write_html_profile(div)
-
-        if self.statistics:
-            div.child("h2", "Statistics")
-            self.write_html_statistics(div)
-
-        return html
-
-    def export_stream(self, title, stream, parent):
-        parent.child("h5", title)
-        parent.child("pre", stream if stream else ">>> EMPTY <<<")
+            img2 = make_chart_1d([self.profile[name + "_global"]],
+                                 (),
+                                label, "")
+            yield (name,
+                   html_embed_img(img1),
+                   html_embed_img(img2),
+                   map(len, self.profile[name]),
+                   len(self.profile[name + "_global"]))
 
     def write_xml(self, filename):
         self.create_xml().write(filename)
 
-    def write_html(self, filename):
-        html = self.create_html()
-        with open(filename, "w") as f:
-            html.write(f)
-
-
-REPORT_CSS = """
-html, h1, h2, h3, h4, h5, h6, body, div, span,
-applet, object, iframe, p, blockquote, pre,
-a, abbr, acronym, address, big, cite, code,
-del, dfn, em, font, img, ins, kbd, q, s, samp,
-small, strike, strong, sub, sup, tt, var,
-fieldset, form, label, legend,
-dl, dt, dd, ol, ul, li,
-table, caption, tbody, tfoot, thead, tr, th, td {
-	margin: 0;
-	padding: 0;
-	border: 0;
-	outline: 0;
-	font-weight: inherit;
-	font-style: inherit;
-	font-size: 100%;
-	font-family: inherit;
-	vertical-align: baseline;
-}
-
-body {
-	line-height: 1;
-	color: black;
-	background: white;
-	font: 14px/1.8em 'Open Sans', Helvetica, Arial, Helvetica, sans-serif;
-	color: #444;
-	background: #fff;
-	-webkit-font-smoothing: antialiased;
-}
-h1, h2, h3, h4, h5, h6 {
-	color: #000;
-	line-height: 1.2em;
-	margin-bottom: 0.3em;
-}
-
-h2, h3 {
-	margin-top: 1em;
-}
-
-h1 {
-	font-size: 2em;
-}
-
-h2 {
-	font-size: 1.7em;
-}
-
-h3 {
-	font-size: 1.5em;
-	margin-top: 2em;
-}
-
-h4 {
-	font-size: 1.3em;
-	margin-top: 1.2em;
-}
-
-p {
-	margin-bottom: 1em;
-}
-
-ol, ul {
-	padding-left: 30px;
-	margin-bottom: 1em;
-}
-
-b, strong {
-	font-weight: bold;
-}
-
-i, em {
-	font-style: italic;
-}
-
-u {
-	text-decoration: underline;
-}
-
-abbr, acronym {
-	cursor: help;
-	border-bottom: 0.1em dotted;
-}
-
-td, td img {
-	vertical-align: top;
-}
-
-sub {
-	vertical-align: sub;
-	font-size: smaller;
-}
-
-sup {
-	vertical-align: super;
-	font-size: smaller;
-}
-
-code {
-	font-family: Courier, "Courier New", Monaco, Tahoma;
-	background: #eee;
-	color: #333;
-	padding: 0px 2px;
-}
-
-pre {
-	margin-bottom: 1em;
-	overflow: auto;
-	background-color: #ddd;
-	padding: 0.2em;
-	border: 1px solid #aaa;
-}
-
-header, section, footer,
-aside, nav, article, figure {
-	display: block;
-}
-
-#header {
-        background: #025588;
-	padding-top: 20px;
-	color: #afe1da;
-}
-#header a { padding: 10px; color: #afe1da; }
-#header h1 a,
-#header a:hover { color: #dff1fa; }
-#header h1 {
-	font-size: 2.2em;
-	font-weight: bold;
-	margin: 10px;
-	float: left;
-    color: #dff1fa;
-}
-
-blockquote {
-	font-style: italic;
-	margin: 0 0 1em 15px;
-	padding-left: 10px;
-	border-left: 5px solid #dddddd;
-}
-
-.inner {
-	width: 840px;
-	margin: 0 auto;
-}
-
-#column
-{
-  overflow: hidden;
-  margin: 0 auto 0 auto;
-  background-color: #EEEEEE;
-  padding-left: 40px;
-  padding-right: 40px;
-}
-
-.clearfix:before,
-.clearfix:after {
-    content: " ";
-    display: table;
-}
-.clearfix:after {
-    clear: both;
-}
-.clearfix {
-    *zoom: 1;
-}
-
-table, tr, td {
-    border: black solid 1px;
-}
-
-td {
-    padding: 0.5em;
-    text-align: center;
-}
-
-.Ndsync {
-    background-color: black;
-    color: white;
-}
-
-.Wait {
-    background-color: orange;
-}
-
-.Send {
-    background-color: lightgreen;
-}
-
-.Recv {
-    background-color: lightblue;
-}
-
-.Collective {
-    background-color: #FF5555;
-}
-
-.key {
-    color: gray;
-    font-size: smaller;
-}
-
-"""
+def write_as_html(report, filename):
+    with open(os.path.join(paths.AISLINN_TEMPLATE, "report.html"), "r") as f:
+        template = jinja2.Template(f.read())
+    with open(filename, "w") as f:
+        for s in template.generate(report=report):
+            f.write(s)

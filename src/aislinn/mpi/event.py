@@ -26,12 +26,83 @@ class Event:
     ndsync = False
 
 
+call_types = {
+    "MPI_Recv" : "recv",
+    "MPI_Irecv" : "recv",
+
+    "MPI_Send" : "send",
+    "MPI_Ssend" : "send",
+    "MPI_Rsend" : "send",
+    "MPI_Bsend" : "send",
+    "MPI_Isend" : "send",
+    "MPI_Issend" : "send",
+    "MPI_Irsend" : "send",
+    "MPI_Ibsend" : "send",
+
+    "MPI_Wait" : "wait",
+    "MPI_Waitany" : "wait",
+    "MPI_Waitall" : "wait",
+    "MPI_Probe" : "wait",
+
+    "MPI_Test" : "test",
+    "MPI_Testany" : "test",
+    "MPI_Testall" : "test",
+    "MPI_Iprobe" : "test",
+
+    "MPI_Gather" : "coll",
+    "MPI_Gatherv" : "coll",
+    "MPI_Barrier" : "coll",
+    "MPI_Scatter" : "coll",
+    "MPI_Scatterv" : "coll",
+    "MPI_Reduce" : "coll",
+    "MPI_Allreduce" : "coll",
+    "MPI_Allreduce" : "coll",
+    "MPI_Bcast" : "coll",
+
+    "MPI_Igather" : "coll",
+    "MPI_Igatherv" : "coll",
+    "MPI_Ibarrier" : "coll",
+    "MPI_Iscatter" : "coll",
+    "MPI_Iscatterv" : "coll",
+    "MPI_Ireduce" : "coll",
+    "MPI_Iallreduce" : "coll",
+    "MPI_Ibcast" : "coll",
+}
+
+collective_operations = [
+    "Gather",
+    "Gatherv",
+    "Barrier"
+    "Scatter",
+    "Scatterv",
+    "Reduce",
+    "Allreduce",
+    "Allreduce",
+    "Bcast",
+
+    "Igather",
+    "Igatherv",
+    "Ibarrier"
+    "Iscatter",
+    "Iscatterv",
+    "Ireduce",
+    "Iallreduce"
+    "Ibcast",
+]
+
 class CallEvent(Event):
 
     def __init__(self, name, pid, args=None):
         self.name = name
         self.args = args
         self.pid = pid
+
+    @property
+    def type(self):
+        if self.ndsync:
+            return "ndsync"
+        else:
+            return call_types.get(self.name)
 
     def __repr__(self):
         return "<Event {1} {0.name} pid={0.pid} {0.args}>".format(self, id(self))

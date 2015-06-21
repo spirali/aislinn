@@ -23,6 +23,8 @@ VERSION_STRING = "0.3.0"
 
 from mpi.generator import Generator
 from base.arc import STREAM_STDOUT, STREAM_STDERR
+import base.report as report
+
 import base.utils as utils
 import argparse
 import os
@@ -315,7 +317,7 @@ def main():
         logging.info("Statespace written into 'statespace.txt'")
 
     if args.report_type == "xml" or args.report_type == "html+xml":
-        generator.create_report(args).write_xml("report.xml")
+        generator.create_report(args, VERSION_STRING).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
 
     if args.report_type == "html" or args.report_type == "html+xml":
@@ -323,7 +325,8 @@ def main():
             write_outputs(generator, STREAM_STDOUT, args.stdout_write, "stdout")
         if args.stderr_write:
             write_outputs(generator, STREAM_STDERR, args.stderr_write, "stderr")
-        generator.create_report(args).write_html("report.html")
+        report.write_as_html(generator.create_report(args, VERSION_STRING),
+                             "report.html")
         logging.info("Report written into 'report.html'")
 
 main()

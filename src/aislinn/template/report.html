@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Aislinn report</title>
+<style>
+html, h1, h2, h3, h4, h5, h6, body, div, span,
+applet, object, iframe, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, font, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+fieldset, form, label, legend,
+dl, dt, dd, ol, ul, li,
+table, caption, tbody, tfoot, thead, tr, th, td {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	font-weight: inherit;
+	font-style: inherit;
+	font-size: 100%;
+	font-family: inherit;
+	vertical-align: baseline;
+}
+
+body {
+	line-height: 1;
+	color: black;
+	background: white;
+	font: 14px/1.8em 'Open Sans', Helvetica, Arial, Helvetica, sans-serif;
+	color: #444;
+	background: #fff;
+	-webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	color: #000;
+	line-height: 1.2em;
+	margin-bottom: 0.3em;
+}
+
+h2, h3 {
+	margin-top: 1em;
+}
+
+h1 {
+	font-size: 2em;
+}
+
+h2 {
+	font-size: 1.5em;
+}
+
+h3 {
+	font-size: 1.3em;
+	margin-top: 2em;
+}
+
+h4 {
+	font-size: 1.3em;
+	margin-top: 1.2em;
+}
+
+p {
+	margin-bottom: 1em;
+}
+
+b, strong {
+	font-weight: bold;
+}
+
+i, em {
+	font-style: italic;
+}
+
+header, section, footer,
+aside, nav, article, figure {
+	display: block;
+}
+
+#header {
+    background: #025588;
+	padding-top: 2em;
+	color: #afe1da;
+}
+
+#header h1 {
+	font-size: 2.2em;
+	font-weight: bold;
+    margin: 0px;
+    margin-left: 1em;
+    padding: 0px;
+	color: #dff1fa;
+}
+
+#header .version {
+    font-size: 80%;
+    margin: 0px;
+    padding: 0px;
+    margin-left: 3em;
+}
+
+section
+{
+  overflow: hidden;
+  margin: 0 auto 0 auto;
+  background-color: #EEEEEE;
+  padding-left: 2em;
+  padding-right: 2em;
+  padding-bottom: 1em;
+  margin-bottom: 1em;
+  margin-top: 1em;
+}
+
+.clearfix:before,
+.clearfix:after {
+    content: " ";
+    display: table;
+}
+.clearfix:after {
+    clear: both;
+}
+.clearfix {
+    *zoom: 1;
+}
+
+/*
+table, tr, td {
+    border: black solid 1px;
+}
+
+td {
+    padding: 0.5em;
+    text-align: center;
+}*/
+
+table.namevalue {
+	border: none;
+	text-align: left;
+	width: 99%;
+}
+
+.namevalue tr {
+}
+
+.namevalue td {
+	background-color: #DDD;
+	padding: 0.2em;
+	padding-left: 1em;
+	padding-right: 1em;
+}
+
+td.name {
+	width: 25em;
+    font-weight: bold;
+}
+
+td.value {
+	font-family: monospace;
+}
+
+td.longname {
+    font-weight: bold;
+    border-bottom: none;
+}
+
+.longvalue {
+    font-weight: normal;
+	font-family: monospace;
+    border-top: none;
+}
+
+pre {
+	font-family: monospace;
+}
+
+table.events {
+    border-collapse: collapse;
+}
+
+.events thead {
+    text-align: center;
+}
+
+.events td {
+    border: 1px solid black;
+}
+
+td .t-ndsync {
+    background-color: #404040;
+    color: #EEE;
+}
+
+td .t-wait {
+    background-color: orange;
+}
+
+td .t-test {
+    background-color: #CCCC00;
+}
+
+td .t-send {
+    background-color: lightgreen;
+}
+
+td .t-recv {
+    background-color: lightblue;
+}
+
+td .t-coll {
+    background-color: #FF5555;
+}
+
+.key {
+    color: gray;
+    font-size: smaller;
+}
+
+
+</style>
+</head>
+<body>
+
+<header id="header">
+    <h1>Aislinn report</h1>
+    <div class="version">v{{ report.version }}</div>
+</header>
+
+<section>
+	<h2>Program</h2>
+	<table class="namevalue">
+		{% for entry in report.program_info %}
+		<tr>
+			<td class="name">{{ entry.description }}<td class="value">{{ entry.value }}
+		{% endfor %}
+	</table>
+</section>
+
+<section>
+	<h2>Analysis output</h2>
+	<table class="namevalue">
+		<tr>
+			<td class="name">Errors (details below)
+					{%- if report.error_messages %}
+					<td class="value" style="background-color: #FF7777;"> {{ report.error_messages|count }} ({{ report.error_message_keys|join(",")|truncate(70, True) }})
+					{%- else %}
+					<td class="value" style="background-color: lightgreen;">No errors found
+					{%- endif %}
+		{% for entry in report.analysis_output %}
+		<tr>
+			<td class="name">{{ entry.description }}<td class="value">{{ entry.value|d("N/A", true) }}
+		{% endfor %}
+	</table>
+</section>
+
+<section>
+	<h2>Analysis configuration</h2>
+	<table class="namevalue">
+		{% for entry in report.analysis_configuration %}
+		<tr>
+			<td class="name">{{ entry.description }}<td class="value">{{ entry.value }}
+		{% endfor %}
+	</table>
+</section>
+
+<section>
+	<h2>Analysis details</h2>
+	<table class="namevalue">
+		{% for entry in report.analysis_details %}
+		<tr>
+			<td class="name">{{ entry.description }}<td class="value">{{ entry.value }}
+		{% endfor %}
+	</table>
+</section>
+
+{% for error in report.error_messages %}
+<section>
+    <h2>Error: {{ error.name }} <span class="key">({{ error.key }})</span></h2>
+	<table class="namevalue">
+        <tr><td class="name">Description<td class="value">{{ error.description }}
+        {% if error.pid is not none %}
+        <tr><td class="name">Process rank in COMM_WORLD<td class="value">{{ error.pid }}
+        {% endif %}
+        {% if error.stacktrace %}
+            <tr><td class="name">Stack trace
+                <td class="value"><pre>{{ error.stacktrace|replace("|", "<br/>") }}</pre>
+        {% endif %}
+        {% if error.other_stacktraces %}
+            {% for title, stacktrace in error.other_stacktraces %}
+            <tr><td class="name">{{ title }}
+                <td class="value"><pre>{{ stacktrace|replace("|", "<br/>") }}</pre>
+            {% endfor %}
+        {% endif %}
+        {% if error.stdout %}
+            {% for stream in error.stdout %}
+            <tr><td class="name">Output (stdout) for pid {{ loop.index }}
+                <td class="value"><pre>{{ stream }}</pre>
+            {% endfor %}
+        {% endif %}
+        {% if error.stderr %}
+            {% for stream in error.stderr %}
+            <tr><td class="name">Error output (stderr) for pid {{ loop.index }}
+                <td class="value"><pre>{{ stream }}</pre>
+            {% endfor %}
+        {% endif %}
+
+        {% if error.events %}
+            <tr><td colspan="2" class="longname">Events
+            <pre class="longvalue">{{ stacktrace|replace("|", "<br/>") }}</pre>
+            <table class="events longvalue">
+                <thead>
+                    <tr>
+                        <td>#
+                        {% for i in report.pids %}<td>{{ i }}{% endfor %}
+                </thead>
+                <tbody>
+                        {% for row in report.events_table(error.events) %}
+                        <tr>
+                            <td>{{ loop.index }}
+                            {% for event in row %}
+                            <td {% if event.type %}class="t-{{event.type}}"{% endif %}
+                   title="{% if event.args %}Arguments: {{ event.args }}{% endif %}
+{{ event.stacktrace|replace("|", "\n") }}">
+                                {{ event.name }}
+                            {% endfor %}
+                        {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        </table>
+</section>
+{% endfor %}
+
+{% if report.profile %}
+<section>
+<h2>Profile</h2>
+<p>{{ report.profile_text }}</p>
+{% for name, pp_chart, global_chart, pp_counts, global_count in report.profile_charts %}
+<h3>{{ name }} per process</h3>
+<img src="{{ pp_chart }}"/>
+<p># of values per process: {{ pp_counts }}</p>
+<h3>{{ name }} global</h3>
+<img src="{{ global_chart }}"/>
+<p>Global # of values: {{ global_count }}</p>
+</ul>{% endfor %}
+
+</section>
+{% endif %}
+
+{% if report.statistics %}
+<section>
+<h2>Statistics</h2>
+<p>{{ report.statistics_text }}</p>
+{% for name, img in report.statistics_charts %}
+<h3>{{ name }}</h3>
+<img src="{{ img }}"/>
+{% endfor %}
+</section>
+{% endif %}
+
+</body>

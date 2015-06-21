@@ -24,7 +24,7 @@ from action import (ActionMatching,
                     ActionFlag0,
                     ActionProbePromise,
                     ActionTestAll)
-from base.arc import Arc, STREAM_STDOUT, STREAM_STDERR
+from base.arc import STREAM_STDOUT, STREAM_STDERR
 from base.controller import BufferManager, poll_controllers
 from base.node import Node
 from base.report import Report
@@ -536,7 +536,7 @@ class Generator:
                     errormsg.StateCaptured(context, uid=uid))
         return (node, True)
 
-    def create_report(self, args):
+    def create_report(self, args, version):
         for error_message in self.error_messages:
             if error_message.node:
                 if error_message.events is None:
@@ -558,4 +558,4 @@ class Generator:
                                 STREAM_STDERR,
                                 pid)
                               for pid in xrange(self.process_count) ]
-        return Report(self, args)
+        return Report(self, args, version)
