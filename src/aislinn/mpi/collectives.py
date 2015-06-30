@@ -894,7 +894,7 @@ class CommDup(CollectiveOperation):
                    context,
                    comm,
                    args):
-        newcomm_ptr = args
+        newcomm_ptr = args[0]
         rank = context.state.get_rank(comm)
 
         assert self.newcomm_ptrs[rank] is None

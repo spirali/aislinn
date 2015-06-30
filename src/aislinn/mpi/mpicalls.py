@@ -466,30 +466,13 @@ def MPI_Op_free(context, args):
     return False
 
 def MPI_Comm_split(context, args):
-    comm = args[0]
-    args = args[1:]
-    op = context.state.gstate.call_collective_operation(
-                context, comm, collectives.CommSplit, True, args)
-    request_id = context.state.add_collective_request(context, comm, op.cc_id)
-    context.state.set_wait((request_id,))
-    return True
+    return call_collective_operation2(context, collectives.CommSplit, args)
 
 def MPI_Comm_dup(context, args):
-    comm, new_comm_ptr = args
-    op = context.state.gstate.call_collective_operation(
-                context, comm, collectives.CommDup, True, new_comm_ptr)
-    request_id = context.state.add_collective_request(context, comm, op.cc_id)
-    context.state.set_wait((request_id,))
-    return True
+    return call_collective_operation2(context, collectives.CommDup, args)
 
 def MPI_Comm_create(context, args):
-    comm, group, new_comm_ptr = args
-    op = context.state.gstate.call_collective_operation(
-                context, comm, collectives.CommCreate, True, (group, new_comm_ptr))
-    request_id = context.state.add_collective_request(context, comm, op.cc_id)
-    context.state.set_wait((request_id,))
-    return True
-
+    return call_collective_operation2(context, collectives.CommCreate, args)
 
 def MPI_Comm_compare(context, args):
     comm1, comm2, result_ptr = args
@@ -729,6 +712,20 @@ def call_collective_operation(context,
     else:
         context.controller.write_int(request_ptr, request_id)
     return blocking
+
+def call_collective_operation2(context,
+                               op_class,
+                               args):
+    # Same as call_collective_operation but
+    # expect as first argument
+    comm = args[0]
+    args = args[1:]
+
+    op = context.state.gstate.call_collective_operation(
+                context, comm, op_class, True, args)
+    request_id = context.state.add_collective_request(context, comm, op.cc_id)
+    context.state.set_wait((request_id,))
+    return True
 
 def get_send_type(generator, state, mode, datatype, count):
     if mode == "Ssend" \
