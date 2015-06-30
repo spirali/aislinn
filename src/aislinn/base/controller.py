@@ -211,6 +211,9 @@ class Controller:
         assert len(results) == count
         return results
 
+    def read_string(self, addr):
+        return self.send_and_receive_data("READ {0} string\n".format(addr))
+
     def hash_state(self):
         #s = time.time()
         h = self.send_and_receive("HASH\n")

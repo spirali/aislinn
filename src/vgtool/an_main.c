@@ -2065,6 +2065,9 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                 SizeT size = next_token_uword();
                 write_data(addr, size);
                 continue; // we want to skip "write_message" at the end of switch
+         } else if(!VG_(strcmp)(param, "string")) {
+                write_data(addr, VG_(strlen)(addr));
+                continue; // we want to skip "write_message" at the end of switch
          } else {
                 write_message("Error: Invalid argument\n");
                 VG_(exit)(1);

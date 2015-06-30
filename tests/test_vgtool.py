@@ -363,7 +363,6 @@ class VgToolTests(TestCase):
         s.send_data("STATS\n")
         self.assertEquals(s.read_line(), "0 0")
 
-
     def test_profile(self):
         def get_profile(value):
             data = value.split()
@@ -380,6 +379,12 @@ class VgToolTests(TestCase):
         assert i1[0] > i2[0] and i3[0] > i2[0]
         assert i1[1] == i2[1] == i3[1] == 0
         assert i1[2] == i2[2] == i3[2] == 0
+
+    def test_string(self):
+        self.program("string")
+        c = self.controller()
+        ptr1 = c.start_and_connect().split()[2]
+        assert c.read_string(ptr1) == "This is\n my\n string!"
 
 if __name__ == "__main__":
     unittest.main()
