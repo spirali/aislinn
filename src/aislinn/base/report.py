@@ -89,6 +89,11 @@ class Report:
     def __init__(self, generator, args, version):
         self.process_count = generator.process_count
         self.statistics = generator.get_statistics()
+        if self.statistics and self.statistics[1]:
+            self.statistics_max = [ max((v[i] for v in self.statistics[1]))
+                                    for i in xrange(len(self.statistics[0])) ]
+        else:
+            self.statistics_max = None
 
         self.stdout_counts = None
         self.stderr_counts = None
@@ -238,6 +243,19 @@ class Report:
         info = self.entries_to_xml(
                 "analysis", self.analysis_output + self.analysis_details)
         root.append(info)
+
+        if self.statistics:
+            stats = xml.Element("statistics")
+            root.append(stats)
+            mx = xml.Element("max")
+            stats.append(mx)
+            for name, value in zip(self.statistics[0], self.statistics_max):
+                e = xml.Element("value")
+                e.set("name", name[0])
+                e.set("units", name[1])
+                e.text = str(value)
+                mx.append(e)
+
         for error in self.error_messages:
             e = xml.Element("error")
             e.set("key", error.key)
