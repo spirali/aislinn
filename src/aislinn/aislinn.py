@@ -83,7 +83,7 @@ def parse_args():
                         metavar="VALUE",
                         type=str,
                         help="Standard send protocol.",
-                        default="eager")
+                        default="full")
 
     parser.add_argument("--report-type",
                         metavar="TYPE",
