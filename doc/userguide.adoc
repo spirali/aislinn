@@ -69,32 +69,26 @@ MPI).
 
 The current version can find the following problems:
 
-* Invalid memory writes
+* Invalid memory reads and writes
+* Touching a memory provided to nonblocking MPI operation
 * Invalid arguments of MPI calls
+* Memory leaks, MPI resource leaks
 * Deadlocks
-* Non-unique write on standard output 
+* Non-unique write on standard output
   (If your program should always write the same thing in all runs)
-
-In the next versions it is planned to implement a detection of the following
-problems:
-
-* Invalid memory reads
-* Use of uninitialized memory
-* Memory leaks, resource leaks
-* Non-unique results in written files
 
 == What programs can be verified?
 
-* Aislinn verifies MPI program written in C/C++. 
+* Aislinn verifies MPI program written in C/C++.
 
 * The current version supports many commonly used calls from MPI-2 and MPI-3
-  related to point-to-point communication, collective communication, and 
+  related to point-to-point communication, collective communication, and
   communicator management.
-  Unfortunately, MPI-IO and one-side communication is not supported now.
+  Unfortunately, MPI-IO and one-side communication is not implemented yet.
   One of the main goals of the further development is to support almost all MPI
   calls.
 
-* Source codes that contain MPI have to be translated by Aislinn version of 
+* Source codes that contain MPI have to be translated by Aislinn version of
   `mpicc`; other source files do not have to be compiled by Aislinn.
 
 * The program state has to be fully described by its memory content and state
