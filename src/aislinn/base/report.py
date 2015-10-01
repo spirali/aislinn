@@ -20,6 +20,7 @@
 
 from arc import STREAM_STDOUT, STREAM_STDERR, COUNTER_INSTRUCTIONS
 from arc import COUNTER_ALLOCATIONS, COUNTER_SIZE_ALLOCATIONS
+from arc import COUNTER_MPICALLS
 import xml.etree.ElementTree as xml
 import os
 import paths
@@ -151,7 +152,8 @@ class Report:
             for name, counter in (("instructions", COUNTER_INSTRUCTIONS),
                                   ("allocations", COUNTER_ALLOCATIONS),
                                   ("size_allocations",
-                                      COUNTER_SIZE_ALLOCATIONS)):
+                                      COUNTER_SIZE_ALLOCATIONS),
+                                  ("mpi_calls", COUNTER_MPICALLS)):
                 self.profile[name] = []
                 for pid in xrange(generator.process_count):
                     lst = list(generator.statespace \
@@ -351,20 +353,22 @@ class Report:
         if plt is None:
             return
         for label, name in (("# of instructions", "instructions"),
+                            ("# of MPI calls", "mpi_calls"),
                             ("# of allocations", "allocations"),
                             ("size of allocations", "size_allocations")):
             img1 = make_chart_1d(self.profile[name],
                                 range(len(self.profile[name])),
                                 label, "Process")
 
-            img2 = make_chart_1d([self.profile[name + "_global"]],
+            global_data = self.profile[name + "_global"]
+            img2 = make_chart_1d([global_data],
                                  (),
                                 label, "")
             yield (name,
                    html_embed_img(img1),
                    html_embed_img(img2),
                    map(len, self.profile[name]),
-                   len(self.profile[name + "_global"]))
+                   len(global_data), max(global_data))
 
     def write_xml(self, filename):
         self.create_xml().write(filename)

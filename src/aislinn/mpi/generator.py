@@ -97,6 +97,8 @@ class Generator:
             controller.name = i
             controller.profile = aislinn_args.profile
 
+        self.profile = aislinn_args.profile
+
         if aislinn_args.debug_by_valgrind_tool:
             for controller in self.controllers:
                 controller.debug_by_valgrind_tool = \

@@ -334,13 +334,13 @@ td .t-coll {
 <section>
 <h2>Profile</h2>
 <p>{{ report.profile_text }}</p>
-{% for name, pp_chart, global_chart, pp_counts, global_count in report.profile_charts %}
+{% for name, pp_chart, global_chart, pp_counts, global_count, global_max in report.profile_charts %}
 <h3>{{ name }} per process</h3>
 <img src="{{ pp_chart }}"/>
 <p># of values per process: {{ pp_counts }}</p>
 <h3>{{ name }} global</h3>
 <img src="{{ global_chart }}"/>
-<p>Global # of values: {{ global_count }}</p>
+<p>Global # of values: {{ global_count }}, Global maximal value: {{ global_max }}</p>
 </ul>{% endfor %}
 
 </section>

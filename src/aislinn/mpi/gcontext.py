@@ -17,7 +17,7 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from base.arc import Arc, ArcData
+from base.arc import Arc, ArcData, COUNTER_MPICALLS
 from context import Context
 from event import MatchEvent
 from state import State
@@ -114,7 +114,13 @@ class GlobalContext:
                 lst = []
                 streams[key] = lst
             lst.append(data)
-        return [ ArcData(key[0], key[1], key[0].compact_data(data)) for key, data in streams.items() ]
+        data = [ ArcData(key[0], key[1], key[0].compact_data(data)) for key, data in streams.items() ]
+        if self.generator.profile:
+            for pid in xrange(self.generator.process_count):
+                value = len([ e for e in self.events if e.call_event and e.pid == pid])
+                if value:
+                    data.append(ArcData(COUNTER_MPICALLS, pid, value))
+        return data
 
     def find_deterministic_match(self):
         for state in self.gstate.states:

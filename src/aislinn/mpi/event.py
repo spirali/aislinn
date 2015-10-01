@@ -24,6 +24,7 @@ class Event:
     new_request = None
     cc = None # Collective communication info (comm_id, cc_id)
     ndsync = False
+    call_event = False
 
 
 call_types = {
@@ -91,6 +92,8 @@ collective_operations = [
 ]
 
 class CallEvent(Event):
+
+    call_event = True
 
     def __init__(self, name, pid, args=None):
         self.name = name
