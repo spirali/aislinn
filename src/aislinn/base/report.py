@@ -315,15 +315,16 @@ class Report:
         return table
 
     def write_xml_profile(self, parent):
-        e = xml.Element("instructions")
-        parent.append(e)
-        for i, d in enumerate(self.profile["instructions"]):
-            f = xml.Element("process" + str(i))
-            f.text = " ".join(map(str, d))
+        for name in ("instructions", "mpi_calls"):
+            e = xml.Element(name)
+            parent.append(e)
+            for i, d in enumerate(self.profile[name]):
+                f = xml.Element("process" + str(i))
+                f.text = " ".join(map(str, d))
+                e.append(f)
+            f = xml.Element("global")
+            f.text = " ".join(map(str, self.profile[name + "_global"]))
             e.append(f)
-        f = xml.Element("global")
-        f.text = " ".join(map(str, self.profile["instructions_global"]))
-        e.append(f)
 
     @property
     def statistics_text(self):
