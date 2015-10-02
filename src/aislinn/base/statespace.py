@@ -32,6 +32,16 @@ class StateSpace:
     def nodes_count(self):
         return len(self.nodes_with_hash) + len(self.nodes_without_hash)
 
+    @property
+    def mpi_calls_count(self):
+        count = 0
+        for node in self.all_nodes():
+            for arc in node.arcs:
+                for event in arc.events:
+                    if event.call_event:
+                        count += 1
+        return count
+
     def get_node_by_hash(self, hash):
         return self.nodes_with_hash.get(hash)
 
