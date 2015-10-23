@@ -454,6 +454,20 @@ class VgToolTests(TestCase):
         v = c.read_mem(addr, size)
         assert map(ord, v) == [ 0xbb ] * size
 
+    def test_connect(self):
+        self.program("string")
+        c = self.controller()
+        c.start_and_connect()
+        port = c.interconn_listen()
+
+        d = self.controller()
+        d.start_and_connect()
+        d.interconn_connect("127.0.0.1:" + str(port))
+
+        c_sock = c.interconn_listen_finish()
+        d_sock = d.interconn_connect_finish()
+        assert c_sock > 0
+        assert d_sock > 0
 
 if __name__ == "__main__":
     unittest.main()

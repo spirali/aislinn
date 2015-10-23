@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2015 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -248,7 +248,26 @@ class Controller:
         self.send_and_receive_ok("UNLOCK {0} {1}\n".format(addr, size))
 
     def get_allocations(self):
-        return self.send_and_receive("ALLOCATIONS\n");
+        return self.send_and_receive("ALLOCATIONS\n")
+
+    def interconn_listen(self):
+        # This has to immediately follows by interconn_accept
+        port = self.send_and_receive_int("CONN_LISTEN\n")
+        self.running = True
+        return port
+
+    def interconn_listen_finish(self):
+        # This has to immediately preceed by interconn_listen
+        return int(self.finish_async())
+
+    def interconn_connect(self, host):
+        self.running = True
+        # This has to immediately follows by interconn_connect_finish
+        return self.send_command("CONN_CONNECT {0}\n".format(host))
+
+    def interconn_connect_finish(self):
+        # This has to immediately preceed by interconn_connect
+        return int(self.finish_async())
 
     ### Semi-internal functions
 
@@ -516,6 +535,7 @@ class ControllerWithResources(Controller):
 
     def fileno(self):
         return self.socket.socket.fileno()
+
 
 def poll_controllers(controllers):
     for c in controllers:

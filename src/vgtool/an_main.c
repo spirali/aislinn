@@ -2433,6 +2433,30 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          continue;
       }
 
+      if (!VG_(strcmp(cmd, "CONN_LISTEN"))) {
+        Int socket = VG_(make_listen_socket(0, 1));
+        struct vki_sockaddr_in name;
+        Int size = sizeof(name);
+        tl_assert(VG_(getsockname)(socket, (struct vki_sockaddr*) &name, &size) == 0);
+        Int port = VG_(ntohs)(name.sin_port);
+        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%d\n", port);
+        write_message(command);
+        int client_socket = VG_(accept)(socket, NULL, NULL);
+        tl_assert(client_socket >= 0);
+        VG_(close)(socket);
+        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%d\n", client_socket);
+        write_message(command);
+        continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CONN_CONNECT"))) {
+        char *param = next_token();
+        Int socket = VG_(connect_via_socket)(param);
+        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%d\n", socket);
+        write_message(command);
+        continue;
+      }
+
       if (!VG_(strcmp(cmd, "QUIT"))) {
          VG_(exit)(1);
       }
