@@ -176,14 +176,14 @@ static struct {
 } profile;
 
 #define MAX_MESSAGE_BUFFER_LENGTH 20000
-char message_buffer[MAX_MESSAGE_BUFFER_LENGTH];
-Int message_buffer_size = 0;
+static char message_buffer[MAX_MESSAGE_BUFFER_LENGTH];
+static Int message_buffer_size = 0;
 
-Int server_port = -1;
-Int buffer_server_port = -1;
-Int identification = 0; // For debugging purpose when verbose > 0
+static Int server_port = -1;
+static Int buffer_server_port = -1;
+static Int identification = 0; // For debugging purpose when verbose > 0
 
-VA *uniform_va[4];
+static VA *uniform_va[4];
 
 static struct {
     Bool syscall_write;
