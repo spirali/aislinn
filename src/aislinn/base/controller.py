@@ -345,6 +345,12 @@ class Controller:
     def restore_state(self, state_id):
         self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
 
+    def push_state(self, socket, state_id):
+        self.send_command("CONN_PUSH_STATE {0} {1}\n".format(socket, state_id))
+
+    def pull_state(self, socket):
+        return self.send_and_receive_int("CONN_PULL_STATE {0}\n".format(socket))
+
     def make_buffer(self, buffer_id, size):
         self.send_and_receive_ok(
              "NEW_BUFFER {0} {1}\n".format(buffer_id, size))
@@ -504,7 +510,6 @@ class ControllerWithResources(Controller):
                     del self.state_cache[state.hash]
                 self.free_state(state.id)
 
-
     def save_state(self, hash=None):
         if hash:
             state = self.state_cache.get(hash)
@@ -543,3 +548,17 @@ def poll_controllers(controllers):
             return [ c ]
     rlist, wlist, xlist = select.select(controllers, (), ())
     return rlist
+
+def make_interconnection(controllers):
+    sockets = []
+    for i, c in enumerate(controllers):
+        s = []
+        for j, d in enumerate(controllers[:i]):
+            port = c.interconn_listen()
+            host = "127.0.0.1:" + str(port)
+            d.interconn_connect(host)
+            s.append(c.interconn_listen_finish())
+            sockets[j].append(d.interconn_connect_finish())
+        s.append(None)
+        sockets.append(s)
+    return sockets

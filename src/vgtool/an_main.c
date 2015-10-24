@@ -6,7 +6,7 @@
 /*
    This file is part of Aislinn
 
-   Copyright (C) 2014 Stanislav Bohm
+   Copyright (C) 2014, 2015 Stanislav Bohm
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -113,12 +113,24 @@ typedef
       MD5_Digest hash;
    } Page;
 
+#define TRANSPORT_PAGE_FLAG_IGNORE 0
+#define TRANSPORT_PAGE_FLAG_NOACCESS 1
+#define TRANSPORT_PAGE_FLAG_FULL 2
+#define TRANSPORT_PAGE_FLAG_DEFINED 3
+#define TRANSPORT_PAGE_FLAG_READONLY 4
+
+typedef
+   struct {
+      Addr base;
+      //MD5_Digest hash;
+      UChar flags[REAL_PAGES_IN_PAGE];
+   } TransportPageHeader;
+
 typedef
    struct {
       Addr    base;
       Page* page;
-   }
-   AuxMapEnt;
+   } AuxMapEnt;
 
 typedef
    enum {
@@ -161,6 +173,14 @@ typedef
    } State;
 
 typedef
+   struct {
+      UWord pages_count;
+      Word allocation_blocks_count;
+      Vg_AislinnCallAnswer *answer;
+      ThreadState threadstate;
+   } TransportStateHeader;
+
+typedef
   // First two entries has to correspond to VgHashNode
   struct {
      struct Buffer *next;
@@ -168,6 +188,7 @@ typedef
      SizeT size;
      // data follows ...
   } Buffer;
+
 
 /* Global variables */
 
@@ -315,14 +336,21 @@ static void memspace_init(void)
    current_memspace = ms;
 }
 
-/*
+/*static void mem_dump(void *addr, SizeT size)
+{
+    SizeT i;
+    UChar *d = addr;
+    VG_(printf)("Mem(0x%lx, %lu):", (Addr) addr, size);
+    for (i = 0; i < size; i++) {
+        VG_(printf)("%02x", (int) d[i]);
+    }
+    VG_(printf)("\n");
+}
+
 static void page_dump(Page *page)
 {
    char tmp[REAL_PAGES_IN_PAGE + 1];
    UWord i;
-   VA *va = page->va;
-   char prev = va->vabits[0];
-   int chunk_size = 1;
 
    for (i = 0; i < REAL_PAGES_IN_PAGE; i+=1) {
          if (page->page_flags[i] == PAGEFLAG_UNMAPPED) {
@@ -341,7 +369,18 @@ static void page_dump(Page *page)
    }
    tmp[REAL_PAGES_IN_PAGE] = 0;
 
-   VG_(printf)("~~~ Page %p base=0x%lx %s ~~~\n", page, page->base, tmp);
+   VG_(printf)("~~~ Page %p base=0x%lx data=%p %s ~~~\n", page, page->base, page->data, tmp);
+
+   VA *va = page->va;
+
+   if (va == NULL) {
+       VG_(printf("VA == NULL\n"));
+       return;
+   }
+
+   char prev = va->vabits[0];
+   int chunk_size = 1;
+
    for (i = 1; i < PAGE_SIZE; i++) {
       if (va->vabits[i] == prev) {
          chunk_size++;
@@ -353,6 +392,15 @@ static void page_dump(Page *page)
                             page->base + i,
                             chunk_size,
                             prev);
+                //UWord j;
+                //UChar *data = page->data;
+                //if (data == NULL) {
+                //    data = (UChar*) page->base;
+                //}
+                //for (j = i - chunk_size; j < i; j++) {
+                //    VG_(printf)("%02x", (int) data[j]);
+                //}
+                //VG_(printf)("\n");
             }
             prev = va->vabits[i];
             chunk_size = 1;
@@ -991,11 +1039,19 @@ void set_address_range_page_flags(Addr a, SizeT lenT, UChar value)
    if (lenT == 0) {
       return;
    }
+
    for(;;) {
       Page **page_ptr = get_page_ptr(a);
       Page *page = *page_ptr;
       tl_assert(page->ref_count == 1);
       UWord pg_off = PAGE_OFF(a);
+
+      // Dirty hack, to make sure that MEM_DEFINED or MEM_READONLY has not ignore pages
+      VA *va = page->va;
+      if (value && (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY])) {
+         page_set_va(&page, va_clone(page->va));
+      }
+
       UInt i;
       for (i = pg_off / VKI_PAGE_SIZE; i < REAL_PAGES_IN_PAGE; i++) {
          page->page_flags[i] = value;
@@ -1155,7 +1211,7 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
       page->status = VALID_HASH;
    }
    if (page->status != EMPTY) {
-        AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
+       AN_(MD5_Update)(ctx, &page->hash, sizeof(MD5_Digest));
    }
 }
 
@@ -1222,8 +1278,8 @@ static void memimage_restore_page_content(Page *page, Page *old_page)
     UWord i, j;
     UChar *dst = (UChar*) page->base;
     VA *va = page->va;
-    tl_assert(page->data);
     UChar *src = page->data;
+    tl_assert(src);
 
     if (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY]) {
         VG_(memcpy)(dst, src, PAGE_SIZE);
@@ -2039,6 +2095,340 @@ static Bool set_capture_syscalls_by_name(const char *name, Bool value)
     return True;
 }
 
+typedef
+   struct {
+      Int size; // Since Valgrind socket API uses Int, we are using Int, not SizeT
+      HChar *buffer;
+      Int buffer_size;
+      Int socket;
+   } SocketWriteBuffer;
+
+static void swb_init(
+      SocketWriteBuffer *swb, HChar *buffer, Int buffer_size, Int socket)
+{
+   swb->size = 0;
+   swb->buffer = buffer;
+   swb->buffer_size = buffer_size;
+   swb->socket = socket;
+}
+
+static void* swb_write(SocketWriteBuffer *swb, Int size)
+{
+   if (swb->size + size >= swb->buffer_size) {
+      tl_assert(size <= swb->buffer_size);
+      Int send_size = swb->size;
+      HChar *send_buffer = swb->buffer;
+      tl_assert(send_size > 0);
+      do {
+          Int written = VG_(write_socket)(swb->socket, send_buffer, send_size);
+          tl_assert(written > 0);
+          send_size -= written;
+          send_buffer += written;
+      } while (send_size > 0);;
+      swb->size = size;
+      return swb->buffer;
+   }
+   HChar *result = swb->buffer + swb->size;
+   swb->size += size;
+   return result;
+}
+
+static void swb_end(SocketWriteBuffer *swb)
+{
+   Int written = VG_(write_socket)(swb->socket, swb->buffer, swb->size);
+   tl_assert(written == swb->size);
+}
+
+typedef
+   struct {
+      HChar *ptr;
+      Int size;
+      HChar *buffer;
+      Int buffer_size;
+      Int socket;
+   } SocketReadBuffer;
+
+static void srb_init(
+      SocketReadBuffer *srb, void *buffer, SizeT buffer_size, Int socket)
+{
+   srb->ptr = (HChar*) buffer;
+   srb->buffer = (HChar*) buffer;
+   srb->buffer_size = buffer_size;
+   srb->socket = socket;
+   srb->size = VG_(read_socket)(socket, buffer, buffer_size);
+   tl_assert(srb->size > 0);
+}
+
+static void* srb_read(SocketReadBuffer *srb, Int size)
+{
+   Int remaining = srb->size - (srb->ptr - srb->buffer);
+   if (remaining < size) {
+      tl_assert(size <= srb->buffer_size);
+      VG_(memmove)(srb->buffer, srb->ptr, remaining);
+      srb->size = remaining;
+      do {
+         Int read = VG_(read_socket)(srb->socket, &srb->buffer[srb->size], srb->buffer_size - srb->size);
+         tl_assert(read > 0);
+         srb->size += read;
+      } while(srb->size < size);
+      srb->ptr = srb->buffer + size;
+      return srb->buffer;
+   }
+   HChar *result = srb->ptr;
+   srb->ptr += size;
+   return result;
+}
+
+static void push_page(SocketWriteBuffer *swb, Page *page)
+{
+   TransportPageHeader *page_header = (TransportPageHeader *)
+         swb_write(swb, sizeof(TransportPageHeader));
+   VA *va = page->va;
+   page_header->base = page->base;
+   //page_header[i].hash = state->memimage.pages[i]->hash;
+   Int i;
+   Bool transport_page[REAL_PAGES_IN_PAGE];
+   Bool transport_va[REAL_PAGES_IN_PAGE];
+   Int size = 0;
+   for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
+      transport_page[i] = False;
+      transport_va[i] = False;
+      if (page->ignore[i]) {
+          transport_va[i] = True;
+          page_header->flags[i] = TRANSPORT_PAGE_FLAG_IGNORE;
+          size += VKI_PAGE_SIZE;
+          continue;
+      }
+      Int j;
+      Int offset = i * VKI_PAGE_SIZE;
+      Bool noaccess = False;
+      Bool rdonly = False;
+      Bool defined = False;
+      for (j = 0; j < VKI_PAGE_SIZE; j++) {
+          switch(va->vabits[offset + j])
+          {
+                case MEM_DEFINED:
+                    defined = True;
+                    break;
+                case MEM_NOACCESS:
+                    noaccess = True;
+                    break;
+                case MEM_READONLY:
+                    rdonly = True;
+                    break;
+          }
+      }
+
+      if (defined && !noaccess && !rdonly) {
+          page_header->flags[i] = TRANSPORT_PAGE_FLAG_DEFINED;
+          size += VKI_PAGE_SIZE;
+          transport_page[i] = True;
+      } else if (!defined && noaccess && !rdonly) {
+          page_header->flags[i] = TRANSPORT_PAGE_FLAG_NOACCESS;
+      } else if (!defined && !noaccess && !rdonly) {
+          page_header->flags[i] = TRANSPORT_PAGE_FLAG_READONLY;
+          size += VKI_PAGE_SIZE;
+          transport_page[i] = True;
+      } else {
+          page_header->flags[i] = TRANSPORT_PAGE_FLAG_FULL;
+          size += 2 * VKI_PAGE_SIZE;
+          transport_page[i] = True;
+          transport_va[i] = True;
+      }
+   }
+
+   UChar *data = (UChar*) swb_write(swb, size);
+
+   for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
+       if (transport_va[i]) {
+          VG_(memcpy)(data, &va->vabits[i * VKI_PAGE_SIZE], VKI_PAGE_SIZE);
+          data += VKI_PAGE_SIZE;
+       }
+   }
+
+   for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
+       if (transport_page[i]) {
+          VG_(memcpy)(data, &page->data[i * VKI_PAGE_SIZE], VKI_PAGE_SIZE);
+          data += VKI_PAGE_SIZE;
+       }
+   }
+}
+
+static void push_state(Int socket, State *state)
+{
+   SocketWriteBuffer swb;
+   Int buffer_size = 160 * 1024;
+   void *buffer = VG_(malloc)("an.srb", buffer_size);
+   swb_init(&swb, buffer, buffer_size, socket);
+
+   Word blocks_count;
+   void *blocks_ptr;
+   VG_(getContentsXA_UNSAFE)(state->memimage.allocation_blocks, &blocks_ptr, &blocks_count);
+
+   TransportStateHeader *header = swb_write(&swb, sizeof(TransportStateHeader));
+   UWord pages_count = state->memimage.pages_count;
+   header->pages_count = pages_count;
+   header->allocation_blocks_count = blocks_count;
+   header->answer = state->memimage.answer;
+   header->threadstate = state->threadstate;
+
+   AllocationBlock *blocks = swb_write(&swb, sizeof(AllocationBlock) * blocks_count);
+   VG_(memcpy)(blocks, blocks_ptr, sizeof(AllocationBlock) * blocks_count);
+
+
+   UWord i;
+   for (i = 0; i < pages_count; i++) {
+      Page *page = state->memimage.pages[i];
+      push_page(&swb, page);
+
+   }
+   swb_end(&swb);
+   VG_(free)(buffer);
+}
+
+static Page *pull_page(SocketReadBuffer *srb)
+{
+    TransportPageHeader *page_header =
+          (TransportPageHeader*) srb_read(srb, sizeof(TransportPageHeader));
+    tl_assert(page_header->base % PAGE_SIZE == 0);
+    Page *page = page_new(page_header->base);
+    page->status = INVALID_HASH;
+
+    Int j;
+
+    // This forces to create a page in current_memspace if not present
+    Page **current_page = get_page_ptr(page->base);
+
+    Int flags[REAL_PAGES_IN_PAGE];
+
+    page->data = VG_(malloc)("an.page.data", PAGE_SIZE);
+
+    Bool defined = True;
+    Bool rdonly = True;
+    Bool noaccess = True;
+
+    // Copy flags, because srb_read may overwrite header;
+    for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
+         flags[j] = page_header->flags[j];
+         if (flags[j] != TRANSPORT_PAGE_FLAG_DEFINED) {
+            defined = False;
+         }
+         if (flags[j] != TRANSPORT_PAGE_FLAG_READONLY) {
+            rdonly = False;
+         }
+         if (flags[j] != TRANSPORT_PAGE_FLAG_NOACCESS) {
+            noaccess = False;
+         }
+    }
+
+    if (defined) {
+       page->va = uniform_va[MEM_DEFINED];
+       page->va->ref_count++;
+       VG_(memcpy)(page->data,
+                   srb_read(srb, PAGE_SIZE),
+                   PAGE_SIZE);
+       return page;
+    }
+
+    if (noaccess) {
+       page->va = uniform_va[MEM_NOACCESS];
+       page->va->ref_count++;
+       VG_(memset)(page->data, 0, PAGE_SIZE);
+       return page;
+    }
+
+    if (rdonly) {
+       page->va = uniform_va[MEM_READONLY];
+       page->va->ref_count++;
+       VG_(memcpy)(page->data,
+                   srb_read(srb, PAGE_SIZE),
+                   PAGE_SIZE);
+       return page;
+    }
+
+    page->va = va_new();
+
+    for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
+        Int flag = flags[j];
+        page->ignore[j] = flag == TRANSPORT_PAGE_FLAG_IGNORE;
+        tl_assert(page->ignore[j] == (*current_page)->ignore[j]);
+        Int offset = VKI_PAGE_SIZE * j;
+        switch (flag) {
+            case TRANSPORT_PAGE_FLAG_DEFINED:
+                VG_(memset)(&page->va->vabits[offset], MEM_DEFINED, VKI_PAGE_SIZE);
+                break;
+            case TRANSPORT_PAGE_FLAG_NOACCESS:
+                VG_(memset)(&page->va->vabits[offset], MEM_NOACCESS, VKI_PAGE_SIZE);
+                break;
+           case TRANSPORT_PAGE_FLAG_READONLY:
+               VG_(memset)(&page->va->vabits[offset], MEM_READONLY, VKI_PAGE_SIZE);
+               break;
+           case TRANSPORT_PAGE_FLAG_IGNORE:
+           case TRANSPORT_PAGE_FLAG_FULL:
+               VG_(memcpy)(&page->va->vabits[offset],
+                           srb_read(srb, VKI_PAGE_SIZE),
+                           VKI_PAGE_SIZE);
+              break;
+           default:
+              break;
+        }
+    }
+
+    for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
+        Int flag = flags[j];
+        if (flag != TRANSPORT_PAGE_FLAG_IGNORE && flag != TRANSPORT_PAGE_FLAG_NOACCESS) {
+            VG_(memcpy)(&page->data[j * VKI_PAGE_SIZE],
+                  srb_read(srb, VKI_PAGE_SIZE),
+                  VKI_PAGE_SIZE);
+        } else {
+           VG_(memset(&page->data[j * VKI_PAGE_SIZE], 0, VKI_PAGE_SIZE));
+        }
+    }
+    return page;
+}
+
+static State* pull_state(Int socket, UWord state_id)
+{
+   State *state = VG_(malloc)("an.state", sizeof(State));
+   VG_(memset)(state, 0, sizeof(State));
+
+   SocketReadBuffer srb;
+   const Int buffer_size = 160 * 1024;
+   void *buffer = VG_(malloc)("an.srb", buffer_size);
+   srb_init(&srb, buffer, buffer_size, socket);
+
+   TransportStateHeader *header = (TransportStateHeader*)
+      srb_read(&srb, sizeof(TransportStateHeader));
+
+   state->id = state_id;
+   state->memimage.pages_count = header->pages_count;
+   state->memimage.answer = header->answer;
+   state->threadstate = header->threadstate;
+
+   Word pages_count = header->pages_count;
+   Word blocks_count = header->allocation_blocks_count;
+
+   Page **pages = (Page**) VG_(malloc)("an.memimage", pages_count * sizeof(Page*));
+   state->memimage.pages = pages;
+
+   state->memimage.allocation_blocks = VG_(newXA) \
+          (VG_(malloc), "an.allocations", VG_(free), sizeof(AllocationBlock));
+
+   VG_(hintSizeXA)(state->memimage.allocation_blocks, blocks_count);
+   AllocationBlock *blocks = \
+         (AllocationBlock*) srb_read(&srb, sizeof(AllocationBlock) * blocks_count);
+   Int i;
+   for (i = 0; i < blocks_count; i++) {
+      VG_(addToXA)(state->memimage.allocation_blocks, &blocks[i]);
+   }
+
+   for (i = 0; i < pages_count; i++) {
+        pages[i] = pull_page(&srb);
+   }
+   VG_(free)(buffer);
+   return state;
+}
+
 static
 void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 {
@@ -2433,6 +2823,25 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          continue;
       }
 
+      if (!VG_(strcmp(cmd, "CONN_PUSH_STATE"))) {
+        Int socket = next_token_int();
+        UWord state_id = next_token_uword();
+        State *state = (State*) VG_(HT_lookup(state_table, state_id));
+        tl_assert(state);
+        push_state(socket, state);
+        continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CONN_PULL_STATE"))) {
+        Int socket = next_token_int();
+        UWord state_id = make_new_id();
+        State *state = pull_state(socket, state_id);
+        VG_(HT_add_node(state_table, state));
+        VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", state->id));
+        write_message(command);
+        continue;
+      }
+
       if (!VG_(strcmp(cmd, "CONN_LISTEN"))) {
         Int socket = VG_(make_listen_socket(0, 1));
         struct vki_sockaddr_in name;
@@ -2481,7 +2890,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
             debug_compare(state1, state2);
             write_message("Ok\n");
             continue;
-      }     
+      }
       write_message("Error: Unknown command:");
       write_message(command);
       write_message("\n");
