@@ -55,6 +55,9 @@ class CollectiveOperation:
     def after_copy(self):
         pass
 
+    def transfer(self, transfer_context):
+        return self.copy()
+
     def enter(self, context, comm, args):
         logging.debug("Entering collective operation %s", self)
         assert self.remaining_processes_enter > 0
@@ -124,11 +127,20 @@ class OperationWithBuffers(CollectiveOperation):
         CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
         self.buffers = [ None ] * self.process_count
 
-    def after_copy(self):
-        self.buffers = copy.copy(self.buffers)
+    def copy(self):
+        op = CollectiveOperation.copy(self)
+        op.buffers = copy.copy(self.buffers)
         for vg_buffer in self.buffers:
             if vg_buffer:
                 vg_buffer.inc_ref()
+        return op
+
+    def transfer(self, transfer_context):
+        op = copy.copy(self)
+        op.buffers = [ transfer_context.transfer_buffer(vg_buffer)
+                       if vg_buffer else None
+                       for vg_buffer in self.buffers ]
+        return op
 
     def dispose(self):
         for vg_buffer in self.buffers:
@@ -708,6 +720,7 @@ class AllReduce(OperationWithBuffers):
         hashthread.update(str(self.datatype.type_id))
         hashthread.update(str(self.count))
         hashthread.update(str(self.op))
+
 
 class ReduceScatter(OperationWithBuffers):
 

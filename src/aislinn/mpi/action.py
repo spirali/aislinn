@@ -18,6 +18,12 @@
 #
 
 import base.utils as utils
+import copy
+
+class Action(utils.EqMixin):
+
+    def transfer(self, transfer_context):
+        return self
 
 
 class ActionMatching(utils.EqMixin):
@@ -28,6 +34,14 @@ class ActionMatching(utils.EqMixin):
     def apply_action(self, gcontext):
         gcontext.apply_matching(self.matching)
 
+    def transfer(self, transfer_context):
+        action = copy.copy(self)
+        source_pid, s, target_pid, r = self.matching
+        s = transfer_context.translate_table[s]
+        r = transfer_context.translate_table[r]
+        action.matching = (source_pid, s, target_pid, r)
+        return action
+
     """
     def is_dependent(self, action):
         return (self.matching[2] == action.matching[2]
@@ -35,7 +49,7 @@ class ActionMatching(utils.EqMixin):
     """
 
 
-class ActionWaitAny:
+class ActionWaitAny(Action):
 
     def __init__(self, pid, index):
         self.pid = pid
@@ -47,7 +61,7 @@ class ActionWaitAny:
         context.state.set_ready()
 
 
-class ActionWaitSome:
+class ActionWaitSome(Action):
 
     def __init__(self, pid, indices):
         self.pid = pid
@@ -59,7 +73,7 @@ class ActionWaitSome:
         context.state.set_ready()
 
 
-class ActionFlag0:
+class ActionFlag0(Action):
 
     def __init__(self, pid):
         self.pid = pid
@@ -70,7 +84,7 @@ class ActionFlag0:
         context.state.set_ready()
 
 
-class ActionProbePromise:
+class ActionProbePromise(Action):
 
     def __init__(self, pid, comm_id, source, tag, rank):
         self.pid = pid
@@ -84,7 +98,7 @@ class ActionProbePromise:
         state.set_probe_promise(self.comm_id, self.source, self.tag, self.rank)
 
 
-class ActionTestAll:
+class ActionTestAll(Action):
 
     def __init__(self, pid):
         self.pid = pid

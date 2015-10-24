@@ -530,5 +530,53 @@ class VgToolTests(TestCase):
         assert h4 == h5
         assert h5 == h6
 
+    def test_printf_pushpull(self):
+        self.program("printf")
+        c = self.controller(verbose=1)
+        c.start_and_connect()
+        c.run_process()
+        state_id = c.save_state()
+        h1 = c.hash_state()
+
+        d = self.controller(verbose=1)
+        d.start_and_connect()
+        sockets = make_interconnection((c, d))
+
+        c_to_d = sockets[0][1]
+        d_to_c = sockets[1][0]
+
+        c.push_state(c_to_d, state_id)
+        s1 = d.pull_state(d_to_c)
+        d.restore_state(s1)
+        h2 = d.hash_state()
+
+        assert h1 == h2
+
+        c.run_process()
+        d.run_process()
+        assert c.hash_state() == d.hash_state()
+
+    def test_bigstack_pushpull(self):
+        self.program("bigstack2")
+        c = self.controller(verbose=1)
+        c.start_and_connect()
+        state_id = c.save_state()
+        h1 = c.hash_state()
+
+        d = self.controller(verbose=1)
+        d.start_and_connect()
+        sockets = make_interconnection((c, d))
+
+        c_to_d = sockets[0][1]
+        d_to_c = sockets[1][0]
+
+        c.push_state(c_to_d, state_id)
+        s1 = d.pull_state(d_to_c)
+        d.restore_state(s1)
+        h2 = d.hash_state()
+
+        assert h1 == h2
+
+
 if __name__ == "__main__":
     unittest.main()

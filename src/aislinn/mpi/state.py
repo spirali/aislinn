@@ -87,6 +87,19 @@ class State:
         state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
 
+    def transfer(self, gstate, transfer_context):
+        logging.debug("Transfering state %s", self)
+        state = copy.copy(self)
+        state.gstate = gstate
+        if self.vg_state:
+            state.vg_state = transfer_context.transfer_state(self.pid, self.vg_state)
+        state.active_requests = [ request.transfer(transfer_context)
+                                  for request in self.active_requests ]
+        state.finished_requests = [ request.transfer(transfer_context)
+                                    for request in self.finished_requests ]
+        state.cc_id_counters = copy.copy(self.cc_id_counters)
+        return state
+
     def add_keyval(self, keyval):
         assert keyval.keyval_id is None
         keyval_id = 8000 + len(self.keyvals)

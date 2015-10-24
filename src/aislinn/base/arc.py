@@ -29,6 +29,8 @@ class ArcData:
 
 class Arc:
 
+    worker = None
+
     def __init__(self, node, events=(), data=()):
         self.node = node
         self.events = events
@@ -39,6 +41,8 @@ class Arc:
         if not self.events and not self.data:
             return "no-events"
         pids = list(set(e.pid for e in self.events if hasattr(e, "pid")))
+        return "{}/{}".format(pids, self.worker)
+
         l = ",".join(map(str, pids))
         if self.data:
             l += "+d"

@@ -113,11 +113,13 @@ typedef
       MD5_Digest hash;
    } Page;
 
-#define TRANSPORT_PAGE_FLAG_IGNORE 0
-#define TRANSPORT_PAGE_FLAG_NOACCESS 1
-#define TRANSPORT_PAGE_FLAG_FULL 2
-#define TRANSPORT_PAGE_FLAG_DEFINED 3
-#define TRANSPORT_PAGE_FLAG_READONLY 4
+// Must be nonconflicting with PAGEFLAG
+#define TRANSPORT_PAGEFLAG_MASK     0xF0 // 11110000
+#define TRANSPORT_PAGEFLAG_NOACCESS 0x10 // 00010000
+#define TRANSPORT_PAGEFLAG_FULL     0x20 // 00100000
+#define TRANSPORT_PAGEFLAG_DEFINED  0x30 // 00110000
+#define TRANSPORT_PAGEFLAG_READONLY 0x40 // 01000000
+#define TRANSPORT_PAGEFLAG_VAONLY   0x50 // 01010000
 
 typedef
    struct {
@@ -189,6 +191,11 @@ typedef
      // data follows ...
   } Buffer;
 
+/* Maximal stack size, this is default on amd64,
+   But the correct way is to read the actual value from Valgrind
+   (somewhere from structures from m_stacks.c)
+ */
+#define STACK_SIZE (8 * 1024 * 1024)
 
 /* Global variables */
 
@@ -345,11 +352,28 @@ static void memspace_init(void)
         VG_(printf)("%02x", (int) d[i]);
     }
     VG_(printf)("\n");
-}
+}*/
+
+static void hash_to_string(MD5_Digest *digest, char *out);
 
 static void page_dump(Page *page)
 {
    char tmp[REAL_PAGES_IN_PAGE + 1];
+   const char *name = "";
+
+   if (page->base >= current_memspace->heap_space && page->base < current_memspace->heap_space_end) {
+        name = "heap";
+   } else {
+       Addr end = VG_(clstk_end);
+       Addr start = end - STACK_SIZE;
+       if (page->base >= start_of_this_page(start) &&
+           page->base <= start_of_this_page(end))
+       {
+           name = "stack";
+       }
+   }
+
+
    UWord i;
 
    for (i = 0; i < REAL_PAGES_IN_PAGE; i+=1) {
@@ -369,7 +393,36 @@ static void page_dump(Page *page)
    }
    tmp[REAL_PAGES_IN_PAGE] = 0;
 
-   VG_(printf)("~~~ Page %p base=0x%lx data=%p %s ~~~\n", page, page->base, page->data, tmp);
+   char hashstr[32];
+   if (page->status == VALID_HASH) {
+        hash_to_string(&page->hash, hashstr);
+   } else if (page->status == EMPTY) {
+        VG_(strcpy)(hashstr, "<empty>");
+   } else {
+       VG_(strcpy)(hashstr, "<invalid>");
+   }
+
+   const char *vastr = "";
+
+   if (page->va == uniform_va[MEM_DEFINED]) {
+       vastr = " (DEF)";
+   }
+
+   if (page->va == uniform_va[MEM_UNDEFINED]) {
+       vastr = " (UNDEF)";
+   }
+
+   if (page->va == uniform_va[MEM_NOACCESS]) {
+       vastr = " (NOA)";
+   }
+
+   if (page->va == uniform_va[MEM_READONLY]) {
+       vastr = " (RDONLY)";
+   }
+
+   VG_(printf)("~~~ Page %p base=0x%lx data=%p va=%p%s hash=%s %s %s ~~~\n", page, page->base, page->data, page->va, vastr, hashstr, name, tmp);
+
+
 
    VA *va = page->va;
 
@@ -414,7 +467,7 @@ static void page_dump(Page *page)
                   chunk_size,
                   prev);
    }
-}*/
+}
 
 /*
 static
@@ -700,8 +753,8 @@ static Page *page_new_empty(Addr a)
    } else {
        VG_(memset)(page->page_flags, PAGEFLAG_UNMAPPED, sizeof(page->page_flags));
 
-       Addr start = VG_(clstk_start_base);
        Addr end = VG_(clstk_end);
+       Addr start = end + 1 - STACK_SIZE;
        if (a >= start_of_this_page(start) &&
            a <= start_of_this_page(end))
        {
@@ -789,9 +842,16 @@ static void INLINE page_prepare_for_write_data(Page **page) {
 static void INLINE page_set_va(Page **page, VA *va) {
    page_prepare_for_write_data(page);
    Page *p = *page;
-   p->va->ref_count--;
+   va_dispose(p->va);
    p->va = va;
    va->ref_count++;
+}
+
+static void INLINE page_set_va_no_ref_inc(Page **page, VA *va) {
+   page_prepare_for_write_data(page);
+   Page *p = *page;
+   va_dispose(p->va);
+   p->va = va;
 }
 
 
@@ -1046,11 +1106,12 @@ void set_address_range_page_flags(Addr a, SizeT lenT, UChar value)
       tl_assert(page->ref_count == 1);
       UWord pg_off = PAGE_OFF(a);
 
-      // Dirty hack, to make sure that MEM_DEFINED or MEM_READONLY has not ignore pages
+      /*
+      // Dirty hack, to make sure that MEM_DEFINED or MEM_READONLY has not unmapped page
       VA *va = page->va;
-      if (value && (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY])) {
-         page_set_va(&page, va_clone(page->va));
-      }
+      if (value != PAGEFLAG_RW && (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY])) {
+         page_set_va_no_ref_inc(&page, va_clone(page->va));
+      }*/
 
       UInt i;
       for (i = pg_off / VKI_PAGE_SIZE; i < REAL_PAGES_IN_PAGE; i++) {
@@ -1155,8 +1216,6 @@ static INLINE void make_mem_noaccess(Addr a, SizeT len)
    set_address_range_perms(a, len, MEM_NOACCESS);
 }
 
-static void hash_to_string(MD5_Digest *digest, char *out);
-
 static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
 {
    if (page->status == INVALID_HASH) {
@@ -1168,9 +1227,18 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
       AN_(MD5_CTX) ctx2;
       AN_(MD5_Init)(&ctx2);
 
-
-      if (page->va == uniform_va[MEM_DEFINED] || page->va == uniform_va[MEM_READONLY]) {
-         AN_(MD5_Update)(&ctx2, (UChar*) page->base, PAGE_SIZE);
+      /* TODO: Test fort page->va == uniform_va[MEM_READONLY], however it cannot be
+         be done in the same simple way as for MEM_DEFINED since there may be read only pages
+         that are not hashed by the generic page hashing */
+      if (page->va == uniform_va[MEM_DEFINED]) {
+         //AN_(MD5_Update)(&ctx2, (UChar*) page->base, PAGE_SIZE);
+         int i;
+         for (i = 0; i < REAL_PAGES_IN_PAGE; i++)
+         {
+             if (page->page_flags[i] == PAGEFLAG_RW) {
+                AN_(MD5_Update)(&ctx2, (UChar*) (page->base + VKI_PAGE_SIZE * i), VKI_PAGE_SIZE);
+             }
+         }
       } else {
          UWord i, j;
          /* This is quite performance critical
@@ -1178,7 +1246,7 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
          UChar *base = (UChar*) page->base;
          SizeT s = 0;
          UChar *b = base;
-         Bool empty = True;
+         SizeT sum = 0;
 
          for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
              if ((page->page_flags[i] & PAGEFLAG_RW) == PAGEFLAG_RW) {
@@ -1190,22 +1258,26 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
                          }
                          s++;
                      } else if (s != 0) {
-                         empty = False;
                          AN_(MD5_Update)(&ctx2, b, s);
+                         sum += s;
                          s = 0;
                      }
              }
              if (s != 0) {
-                 empty = False;
                  AN_(MD5_Update)(&ctx2, b, s);
+                 sum += s;
                  s = 0;
              }
          }
-         if (empty) {
+
+         if (sum == 0) {
            page->status = EMPTY;
            return;
          }
-         AN_(MD5_Update)(&ctx2, page->va->vabits, VA_CHUNKS);
+
+         if (sum != PAGE_SIZE) {
+            AN_(MD5_Update)(&ctx2, page->va->vabits, VA_CHUNKS);
+         }
       }
       AN_(MD5_Final)(&page->hash, &ctx2);
       page->status = VALID_HASH;
@@ -1265,6 +1337,16 @@ static int flags_to_mmap_protection(int flags)
     return prot;
 }
 
+static INLINE Int are_all_flags_rw(Page *page) {
+    UWord i;
+    for (i = 1; i < REAL_PAGES_IN_PAGE; i++) {
+        if (page->page_flags[i] != PAGEFLAG_RW) {
+            return False;
+        }
+    }
+    return True;
+}
+
 static void memimage_restore_page_content(Page *page, Page *old_page)
 {
     tl_assert(page->base == old_page->base);
@@ -1281,13 +1363,12 @@ static void memimage_restore_page_content(Page *page, Page *old_page)
     UChar *src = page->data;
     tl_assert(src);
 
-    if (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY]) {
-        VG_(memcpy)(dst, src, PAGE_SIZE);
-        return;
+    if (va == uniform_va[MEM_DEFINED]) {
+        if (are_all_flags_rw(page)) {
+            VG_(memcpy)(dst, src, PAGE_SIZE);
+            return;
+        }
     }
-
-
-
     for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
         int flags = page->page_flags[i];
         int old_flags = old_page->page_flags[i];
@@ -1374,8 +1455,8 @@ static void memimage_restore(MemoryImage *memimage)
         Page *page = memimage->pages[i];
         if (LIKELY(page->base == elem->base)) {
             if (elem->page != page) {
-                memimage_restore_page_content(page, elem->page);               
-                page->ref_count++;                
+                memimage_restore_page_content(page, elem->page);
+                page->ref_count++;
                 page_dispose(elem->page);
                 elem->page = page;
             }
@@ -1505,7 +1586,9 @@ static void state_restore(State *state)
    tl_assert(tst->sig_queue == NULL); // TODO: handle non null sig_qeue
 
    //tst->arch.vex.guest_RDX = 0; // Result of client request
+   Int lwpid = tst->os_state.lwpid;
    VG_(memcpy)(tst, &state->threadstate, sizeof(ThreadState));
+   tst->os_state.lwpid = lwpid;
 
    /* Restore memory image */
    memimage_restore(&state->memimage);
@@ -1957,6 +2040,25 @@ static void process_commands_init(CommandsEnterType cet,
    current_memspace->answer = answer;
 }
 
+static void debug_dump_state(UWord state_id)
+{
+    State *state = (State*) VG_(HT_lookup(state_table, state_id));
+    tl_assert(state);
+    MemoryImage *image = &state->memimage;
+    Page **pages = image->pages;
+    VG_(printf)("===== DUMP State %lu =====\n", state_id);
+    VG_(printf)("Answer pointer: %p\n", image->answer);
+
+    UWord i;
+    for (i = 0; i < image->pages_count; i++) {
+        page_dump(pages[i]);
+    }
+
+
+    VG_(printf)("===== END OF DUMP =====\n");
+
+}
+
 static void debug_compare(UWord state_id1, UWord state_id2)
 {
     State *state1 = (State*) VG_(HT_lookup(state_table, state_id1));
@@ -2193,9 +2295,15 @@ static void push_page(SocketWriteBuffer *swb, Page *page)
    for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
       transport_page[i] = False;
       transport_va[i] = False;
-      if (page->ignore[i]) {
+      page_header->flags[i] = page->page_flags[i];
+
+      if (page->page_flags[i] == PAGEFLAG_UNMAPPED) {
+          page_header->flags[i] = PAGEFLAG_UNMAPPED | TRANSPORT_PAGEFLAG_NOACCESS;
+          continue;
+      }
+      if (page->page_flags[i] != PAGEFLAG_RW) {
           transport_va[i] = True;
-          page_header->flags[i] = TRANSPORT_PAGE_FLAG_IGNORE;
+          page_header->flags[i] = page->page_flags[i] | TRANSPORT_PAGEFLAG_VAONLY;
           size += VKI_PAGE_SIZE;
           continue;
       }
@@ -2220,17 +2328,17 @@ static void push_page(SocketWriteBuffer *swb, Page *page)
       }
 
       if (defined && !noaccess && !rdonly) {
-          page_header->flags[i] = TRANSPORT_PAGE_FLAG_DEFINED;
+          page_header->flags[i] |= TRANSPORT_PAGEFLAG_DEFINED;
           size += VKI_PAGE_SIZE;
           transport_page[i] = True;
       } else if (!defined && noaccess && !rdonly) {
-          page_header->flags[i] = TRANSPORT_PAGE_FLAG_NOACCESS;
+          page_header->flags[i] |= TRANSPORT_PAGEFLAG_NOACCESS;
       } else if (!defined && !noaccess && !rdonly) {
-          page_header->flags[i] = TRANSPORT_PAGE_FLAG_READONLY;
+          page_header->flags[i] |= TRANSPORT_PAGEFLAG_READONLY;
           size += VKI_PAGE_SIZE;
           transport_page[i] = True;
       } else {
-          page_header->flags[i] = TRANSPORT_PAGE_FLAG_FULL;
+          page_header->flags[i] |= TRANSPORT_PAGEFLAG_FULL;
           size += 2 * VKI_PAGE_SIZE;
           transport_page[i] = True;
           transport_va[i] = True;
@@ -2297,7 +2405,8 @@ static Page *pull_page(SocketReadBuffer *srb)
     Int j;
 
     // This forces to create a page in current_memspace if not present
-    Page **current_page = get_page_ptr(page->base);
+    get_page_ptr(page->base);
+
 
     Int flags[REAL_PAGES_IN_PAGE];
 
@@ -2309,14 +2418,17 @@ static Page *pull_page(SocketReadBuffer *srb)
 
     // Copy flags, because srb_read may overwrite header;
     for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
-         flags[j] = page_header->flags[j];
-         if (flags[j] != TRANSPORT_PAGE_FLAG_DEFINED) {
+         Int flag = page_header->flags[j];
+         flags[j] = flag;
+         page->page_flags[j] = flag & ~TRANSPORT_PAGEFLAG_MASK;
+         Int mflag = flag & TRANSPORT_PAGEFLAG_MASK;
+         if (mflag != TRANSPORT_PAGEFLAG_DEFINED) {
             defined = False;
          }
-         if (flags[j] != TRANSPORT_PAGE_FLAG_READONLY) {
+         if (mflag != TRANSPORT_PAGEFLAG_READONLY) {
             rdonly = False;
          }
-         if (flags[j] != TRANSPORT_PAGE_FLAG_NOACCESS) {
+         if (mflag != TRANSPORT_PAGEFLAG_NOACCESS) {
             noaccess = False;
          }
     }
@@ -2349,22 +2461,20 @@ static Page *pull_page(SocketReadBuffer *srb)
     page->va = va_new();
 
     for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
-        Int flag = flags[j];
-        page->ignore[j] = flag == TRANSPORT_PAGE_FLAG_IGNORE;
-        tl_assert(page->ignore[j] == (*current_page)->ignore[j]);
         Int offset = VKI_PAGE_SIZE * j;
-        switch (flag) {
-            case TRANSPORT_PAGE_FLAG_DEFINED:
+        Int flag = flags[j];
+        switch (flag & TRANSPORT_PAGEFLAG_MASK) {
+            case TRANSPORT_PAGEFLAG_DEFINED:
                 VG_(memset)(&page->va->vabits[offset], MEM_DEFINED, VKI_PAGE_SIZE);
                 break;
-            case TRANSPORT_PAGE_FLAG_NOACCESS:
+            case TRANSPORT_PAGEFLAG_NOACCESS:
                 VG_(memset)(&page->va->vabits[offset], MEM_NOACCESS, VKI_PAGE_SIZE);
                 break;
-           case TRANSPORT_PAGE_FLAG_READONLY:
+           case TRANSPORT_PAGEFLAG_READONLY:
                VG_(memset)(&page->va->vabits[offset], MEM_READONLY, VKI_PAGE_SIZE);
                break;
-           case TRANSPORT_PAGE_FLAG_IGNORE:
-           case TRANSPORT_PAGE_FLAG_FULL:
+           case TRANSPORT_PAGEFLAG_VAONLY:
+           case TRANSPORT_PAGEFLAG_FULL:
                VG_(memcpy)(&page->va->vabits[offset],
                            srb_read(srb, VKI_PAGE_SIZE),
                            VKI_PAGE_SIZE);
@@ -2375,8 +2485,8 @@ static Page *pull_page(SocketReadBuffer *srb)
     }
 
     for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
-        Int flag = flags[j];
-        if (flag != TRANSPORT_PAGE_FLAG_IGNORE && flag != TRANSPORT_PAGE_FLAG_NOACCESS) {
+        Int flag = flags[j] & TRANSPORT_PAGEFLAG_MASK;
+        if (flag != TRANSPORT_PAGEFLAG_NOACCESS && flag != TRANSPORT_PAGEFLAG_VAONLY) {
             VG_(memcpy)(&page->data[j * VKI_PAGE_SIZE],
                   srb_read(srb, VKI_PAGE_SIZE),
                   VKI_PAGE_SIZE);
@@ -2562,8 +2672,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
                 write_data(addr, VG_(strlen)(addr));
                 continue; // we want to skip "write_message" at the end of switch
          } else {
-                write_message("Error: Invalid argument\n");
-                VG_(exit)(1);
+                tl_assert(0);
          }
 
          write_message(command);
@@ -2616,6 +2725,13 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
              current_memspace->answer->args[i] = next_token_uword();
          }
          return;
+      }
+
+      if (!VG_(strcmp(cmd, "READ_BUFFER"))) {
+            UWord id = next_token_uword();
+            Buffer *buffer = buffer_lookup(id);
+            write_data((void*)buffer_data(buffer), buffer->size);
+            continue; // we want to skip "write_message" at the end of switch
       }
 
       if (!VG_(strcmp(cmd, "WRITE_BUFFER"))) {
@@ -2883,6 +2999,14 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          write_message("Error: Invalid argument\n");
          VG_(exit)(1);
       }
+
+      if (!VG_(strcmp(cmd, "DEBUG_DUMP_STATE"))) {
+         UWord state_id = next_token_uword();
+         debug_dump_state(state_id);
+         write_message("Ok\n");
+         continue;
+      }
+
 
       if (!VG_(strcmp(cmd, "DEBUG_COMPARE"))) {
             UWord state1 = next_token_uword();

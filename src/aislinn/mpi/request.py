@@ -58,6 +58,14 @@ class Request(EqMixin):
     def dec_ref(self):
         pass
 
+    def transfer(self, transfer_context):
+        request = transfer_context.translate_table.get(self)
+        if request is not None:
+            return request
+        request = copy.copy(self)
+        transfer_context.set_translate(self, request)
+        return request
+
 
 class SendRequest(Request):
 
@@ -94,6 +102,17 @@ class SendRequest(Request):
         if self.vg_buffer:
             self.vg_buffer.dec_ref()
 
+    def transfer(self, transfer_context):
+        request = transfer_context.translate_table.get(self)
+        if request is not None:
+            request.inc_ref()
+            return request
+        request = Request.transfer(self, transfer_context)
+        if request.vg_buffer:
+            request.vg_buffer = \
+                transfer_context.transfer_buffer(self.vg_buffer)
+        return request
+
     def is_standard_send(self):
         return self.send_type == SendRequest.Standard
 
@@ -112,8 +131,8 @@ class SendRequest(Request):
         return addr >= self.data_ptr and addr < self.data_ptr + sz
 
     def __repr__(self):
-        return "<SendRqst id={0} type={1} comm_id={2} target={3} tag={4}>" \
-                .format(self.id, self.send_type,
+        return "<SendRqst {0:x} id={1} type={2} comm_id={3} target={4} tag={5}>" \
+                .format(id(self), self.id, self.send_type,
                         self.comm.comm_id, self.target, self.tag)
 
 
@@ -155,6 +174,17 @@ class ReceiveRequest(Request):
     def dec_ref(self):
         if self.vg_buffer:
             self.vg_buffer.dec_ref()
+
+    def transfer(self, transfer_context):
+        request = transfer_context.translate_table.get(self)
+        if request is not None:
+            request.inc_ref()
+            return request
+        request = Request.transfer(self, transfer_context)
+        if request.vg_buffer:
+            request.vg_buffer = \
+                transfer_context.transfer_buffer(self.vg_buffer)
+        return request
 
     def is_receive(self):
         return True

@@ -46,45 +46,67 @@ def parse_threshold(value):
     return (size1, size2)
 
 
+def positive_int(value):
+    i = int(value)
+    if i <= 0:
+         raise argparse.ArgumentTypeError(
+                 "{} is not a positive value".format(i))
+    return i
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=
             "Aislinn -- Statespace analytical tool for MPI applications")
+
     parser.add_argument("program",
                         metavar="PROGRAM",
                         type=str,
                         help="Path to your program")
+
     parser.add_argument("args",
                         type=str,
                         nargs=argparse.REMAINDER,
                         help="Arguments for your program")
+
     parser.add_argument("-p",
                         metavar="N",
-                        type=int,
+                        type=positive_int,
                         default=1,
                         help="Number of processes")
+
     parser.add_argument("--verbose",
                         metavar="N",
                         type=int,
                         default=1,
                         help="Verbosity level (default: 1)")
+
     parser.add_argument("--vgv",
                         metavar="N",
                         type=int,
                         default=0,
                         help="Verbosity of valgrind tool")
+
     parser.add_argument("--heap-size",
                         metavar="SIZE",
                         type=str,
                         help="Maximal size of heap")
+
     parser.add_argument("--redzone-size",
                         metavar="SIZE",
                         type=int,
                         help="Allocation red zones")
+
     parser.add_argument("-S", "--send-protocol",
                         metavar="VALUE",
                         type=str,
                         help="Standard send protocol.",
                         default="full")
+
+    parser.add_argument("--workers",
+                        metavar="N",
+                        type=positive_int,
+                        default=1,
+                        help="Number of workers")
 
     parser.add_argument("--report-type",
                         metavar="TYPE",
@@ -167,7 +189,7 @@ def parse_args():
     elif args.verbose == 2:
         level = logging.DEBUG
     else:
-        print "Invalid verbose level (parameter --verbose)"
+        sys.stderr.write("Invalid verbose level (parameter --verbose)")
         sys.exit(1)
 
     if args.stdout_write != "all":
@@ -187,10 +209,6 @@ def parse_args():
     logging.basicConfig(format="==AN== %(levelname)s: %(message)s",
                         level=level)
     logging.info("Aislinn v%s", VERSION_STRING)
-
-    if args.p <= 0:
-        logging.error("Invalid number of processes (parameter -p)")
-        sys.exit(1)
 
     if args.search != "bfs" and args.search != "dfs":
         logging.error("Invalid argument for --search")
@@ -326,7 +344,8 @@ def main():
 
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
-        logging.info("Statespace graph written into 'statespace.dot'")
+        logging.info("Statespace graph (%s nodes) written into 'statespace.dot'",
+                     generator.statespace.nodes_count)
 
     if args.debug_statespace:
         generator.statespace.write("statespace.txt")

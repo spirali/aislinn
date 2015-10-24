@@ -18,25 +18,15 @@
 #
 
 
-from action import (ActionMatching,
-                    ActionWaitAny,
-                    ActionWaitSome,
-                    ActionFlag0,
-                    ActionProbePromise,
-                    ActionTestAll)
 from base.arc import STREAM_STDOUT, STREAM_STDERR
-from base.controller import BufferManager, poll_controllers
-from base.node import Node
+from base.controller import poll_controllers
 from base.report import Report
 from base.statespace import StateSpace
-from base.utils import power_set
-from collections import deque
 from context import Context
-from controller import Controller
 from gcontext import GlobalContext, ErrorFound
-from globalstate import GlobalState
 from mpi.ndsync import NdsyncChecker
-from state import State
+from base.node import Node
+from worker import Worker
 import consts
 import errormsg
 
@@ -51,7 +41,6 @@ class Generator:
         self.statespace = StateSpace()
         self.consts_pool = None
         self.process_count = process_count
-        self.working_queue = deque()
         self.error_messages = []
         self.message_sizes = set()
 
@@ -88,22 +77,16 @@ class Generator:
         self.debug_captured_states = None
         self.is_full_statespace = False
 
-        self.buffer_manager = BufferManager()
-        self.controllers = [ Controller(self.args)
-                             for i in xrange(process_count) ]
-
-        for i, controller in enumerate(self.controllers):
-            controller.valgrind_args = valgrind_args
-            controller.name = i
-            controller.profile = aislinn_args.profile
-
         self.profile = aislinn_args.profile
-
-        if aislinn_args.debug_by_valgrind_tool:
-            for controller in self.controllers:
-                controller.debug_by_valgrind_tool = \
-                        aislinn_args.debug_by_valgrind_tool
         self.debug_seq = aislinn_args.debug_seq
+
+        self.workers = [ Worker(i,
+                                aislinn_args.workers,
+                                self,
+                                args,
+                                valgrind_args,
+                                aislinn_args)
+                         for i in xrange(aislinn_args.workers) ]
 
     def get_statistics(self):
         if self.statistics is None:
@@ -142,63 +125,58 @@ class Generator:
         raise Exception("Invalid const id")
 
     def sanity_check(self):
-        for node, gstate in self.working_queue:
+        for node, gstate in self.queue:
             gstate.sanity_check()
 
-    def get_controller(self, pid):
-        return self.controllers[pid]
+    def sleeping_neighbours_of(self, worker_id):
+        for i in xrange(1, len(self.workers)):
+            worker = self.workers[(i + worker_id) % len(self.workers)]
+            if not worker.queue and not worker.gcontext:
+                return worker
+        return None
 
-    def start_controllers(self):
-        # We do actions separately to allow parallel initialization
-        for controller in self.controllers:
-            controller.start(capture_syscalls=["write"])
-        for controller in self.controllers:
-            controller.connect()
+    def start_workers(self):
+        for worker in self.workers:
+            worker.start_controllers()
 
-        initial_node = Node("init", None)
-        self.statespace.add_node(initial_node)
-        self.statespace.initial_node = initial_node
+        for worker in self.workers:
+            worker.connect_controllers()
 
-        gstate = GlobalState(self.process_count)
-        gcontext = GlobalContext(self, initial_node, gstate)
+        if not self.workers[0].make_initial_node():
+            return False
 
-        # TODO: Do it in parallel
-        for i in xrange(self.process_count):
-            context = gcontext.get_context(i)
-            if not context.initial_run():
-                return False
+        for worker in self.workers[1:]:
+            worker.init_nonfirst_worker()
 
-        gcontext.make_node()
-        gcontext.add_to_queue(None, False)
+        self.workers[0].start_next_in_queue();
         return True
+
+    def main_cycle(self):
+        while True:
+            controllers = sum((worker.running_controllers()
+                               for worker in self.workers if worker.gcontext),
+                              [])
+            logging.debug("Running controllers %s", controllers)
+            if not controllers:
+                return
+            controllers = poll_controllers(controllers)
+            for c in controllers:
+                worker = self.workers[c.name / self.process_count]
+                context = worker.gcontext.get_context(c.name % self.process_count)
+                logging.debug("Ready controller %s", context)
+                context.process_run_result(c.finish_async())
+                worker.continue_in_execution()
+                if worker.gcontext is None:
+                    worker.start_next_in_queue()
 
     def run(self):
         self.init_time = datetime.datetime.now()
         try:
-            if not self.start_controllers():
+            if not self.start_workers():
                 return False
-            tick = self.statistics_tick
-            tick_counter = tick
 
-            while self.working_queue:
-                if self.search == "dfs":
-                    node, gstate, action = self.working_queue.pop()
-                else: # bfs
-                    node, gstate, action = self.working_queue.popleft()
-                self.expand_node(node, gstate, action)
-                self.cleanup()
+            self.main_cycle()
 
-                if tick:
-                    tick_counter -= 1
-                    if tick_counter == 0:
-                        tick_counter = tick
-                        self.record_statistics()
-
-                if self.statespace.nodes_count > self.max_states:
-                    logging.info("Maximal number of states reached")
-                    if self.debug_compare_states is not None:
-                        self.debug_compare()
-                    return True
             self.memory_leak_check()
             self.final_check()
             if self.send_protocol == "full" and not self.error_messages:
@@ -207,8 +185,8 @@ class Generator:
         except ErrorFound:
             logging.debug("ErrorFound catched")
         finally:
-            for controller in self.controllers:
-                controller.kill()
+            for worker in self.workers:
+                worker.kill_controllers()
             self.end_time = datetime.datetime.now()
         return True
 
@@ -231,7 +209,7 @@ class Generator:
         for a in sorted(all_allocations - deterministic):
             for node in final_nodes:
                 if node.allocations and a in node.allocations:
-                    gcontext = GlobalContext(self, node, None)
+                    gcontext = GlobalContext(None, node, None, generator=self)
                     m = errormsg.MemoryLeak(gcontext.get_context(a.pid),
                                             address=a.addr,
                                             size=a.size)
@@ -246,20 +224,10 @@ class Generator:
     def final_check(self):
         if self.debug_compare_states is not None:
             self.debug_compare()
-
-        for controller in self.controllers:
-            controller.make_buffers()
-        self.cleanup()
-
-        assert self.buffer_manager.resource_count == 0
-        for controller in self.controllers:
-            # Check there is no memory leak
-            assert controller.states_count == 0
-            stats = controller.get_stats()
-            # All pages are active, i.e. we have freed everyhing else
-            assert stats["pages"] == stats["active-pages"]
-            assert stats["vas"] <= stats["pages"]
-            assert stats["buffers-size"] == 0
+        for worker in self.workers:
+            worker.before_final_check()
+        for worker in self.workers:
+            worker.final_check()
 
     def debug_compare(self):
         if self.debug_captured_states is None:
@@ -268,254 +236,32 @@ class Generator:
         if len(self.debug_captured_states) < 2:
             return
 
-        gstate1 = self.debug_captured_states[0]
-        gstate2 = self.debug_captured_states[1]
+        gstate1, worker1 = self.debug_captured_states[0]
+        gstate2, worker2 = self.debug_captured_states[1]
         logging.info("Hashes %s, %s", gstate1.compute_hash(), gstate2.compute_hash())
         for i, (s1, s2) in enumerate(zip(gstate1.states, gstate2.states)):
             if s1.vg_state and s2.vg_state:
-                logging.info("Pids %s %s %s", i, s1.vg_state.hash, s2.vg_state.hash)
-                if s1.vg_state.id == s2.vg_state.id:
-                    logging.info("States of rank %s are the same", i)
-                else:
-                    self._controller.debug_compare(s1.vg_state.id, s2.vg_state.id)
+                logging.info("Pid %s: hash1=%s hash2=%s", i, s1.vg_state.hash, s2.vg_state.hash)
+                if s1.vg_state.hash != s2.vg_state.hash:
+
+                    controller = worker1.controllers[i]
+                    controller.restore_state(s1.vg_state)
+                    controller.debug_dump_state(s1.vg_state.id)
+
+                    controller = worker2.controllers[i]
+                    controller.restore_state(s2.vg_state)
+                    controller.debug_dump_state(s2.vg_state.id)
+
                 for name in s1.__dict__.keys():
                     if getattr(s1, name) != getattr(s2, name):
                         logging.info("stateA: %s %s", name, getattr(s1, name))
                         logging.info("stateB: %s %s", name, getattr(s2, name))
 
-        for gstate in self.debug_captured_states:
+        for gstate, worker in self.debug_captured_states:
             gstate.dispose()
-        self.cleanup()
+        #self.cleanup()
 
-    def cleanup(self):
-        self.buffer_manager.cleanup()
-        for controller in self.controllers:
-            controller.cleanup_states()
-
-    def check_collective_requests(self, gcontext):
-        for state in gcontext.gstate.states:
-            for r in state.active_requests:
-                if r.is_collective():
-                    if state.gstate.get_operation_by_cc_id(
-                            r.comm.comm_id, r.cc_id).can_be_completed(state):
-                        state.finish_collective_request(r)
-                        return True
-        return False
-
-    def continue_probe(self, gcontext, state, rank):
-        logging.debug("Continue probe %s", state)
-        comm_id, source, tag, status_ptr = state.probe_data
-        pid, request = state.probe_deterministic(comm_id, rank, tag)
-        context = gcontext.prepare_context(state.pid)
-        if state.flag_ptr:
-            context.controller.write_int(state.flag_ptr, 1)
-        context.controller.write_status(
-                status_ptr, rank, request.tag, request.vg_buffer.size)
-        context.run()
-
-    def fast_expand_state(self, gcontext, state):
-        if (state.status == State.StatusWaitAll
-            and state.are_tested_requests_finished()):
-               context = gcontext.prepare_context(state.pid)
-               context.close_all_requests()
-               context.run()
-               return True
-
-        if state.status == State.StatusReady:
-            logging.debug("Continue ready with flag %s", state)
-            gcontext.prepare_context(state.pid).run()
-            return True
-
-        if state.status == State.StatusWaitSome and \
-           state.waits_for_single_non_null_request() and \
-           state.are_tested_requests_finished():
-                context = gcontext.prepare_context(state.pid)
-                context.continue_waitsome(
-                    [ state.index_of_first_non_null_request() ])
-                context.run()
-                return True
-
-        if state.status == State.StatusWaitAny and \
-                state.waits_for_single_non_null_request() and \
-                state.are_tested_requests_finished():
-                context = gcontext.prepare_context(state.pid)
-                context.continue_waitany(
-                        state.index_of_first_non_null_request())
-                context.run()
-                return True
-
-        if state.status == State.StatusProbe:
-            comm_id, source, tag, status_ptr = state.probe_data
-            rank = state.get_probe_promise(comm_id, source, tag)
-            if rank is not None:
-                self.continue_probe(gcontext, state, rank)
-                return True
-            elif state.probe_data[1] != consts.MPI_ANY_SOURCE and state.flag_ptr is None:
-                probed = state.probe_deterministic(comm_id, source, tag)
-                if probed:
-                    pid, request = probed
-                    rank = request.comm.group.pid_to_rank(pid)
-                    self.continue_probe(gcontext, state, rank)
-                    return True
-        return False
-
-    def poll_controllers(self, gcontext):
-        controllers = [ c for c in self.controllers if c.running ]
-        logging.debug("Running controllers %s", controllers)
-        if not controllers:
-            return False
-        controllers = poll_controllers(controllers)
-        for c in controllers:
-            context = gcontext.get_context(c.name)
-            logging.debug("Ready controller %s", context)
-            result = c.finish_async()
-            context.process_run_result(result)
-        return True
-
-    def fast_expand_node(self, gcontext):
-        modified = False
-        while True:
-            matching = gcontext.find_deterministic_match()
-            if matching:
-                gcontext.apply_matching(matching)
-                modified = True
-                continue
-
-            if gcontext.gstate.collective_operations \
-               and self.check_collective_requests(gcontext):
-                   modified = True
-                   continue
-
-            if self.debug_seq: # DEBUG --debug-seq
-                if all(not gcontext.is_running(state.pid)
-                       for state in gcontext.gstate.states):
-                    for state in gcontext.gstate.states:
-                        if self.fast_expand_state(gcontext, state):
-                            break
-            else: # Normal run
-                for state in gcontext.gstate.states:
-                    if not gcontext.is_running(state.pid):
-                        self.fast_expand_state(gcontext, state)
-
-            self.buffer_manager.cleanup()
-            if self.poll_controllers(gcontext):
-                modified = True
-                continue
-            return modified
-
-    def expand_waitsome(self, gcontext, state, actions):
-        indices = state.get_indices_of_tested_and_finished_requests()
-        if not indices:
-            return
-        logging.debug("Expanding waitsome %s", state)
-        for indices in power_set(indices):
-            if not indices:
-                continue # skip empty set
-            actions.append(ActionWaitSome(state.pid, indices))
-
-    def expand_testall(self, gcontext, state, actions):
-        logging.debug("Expanding testall %s", state)
-        actions.append(ActionFlag0(state.pid))
-        if state.are_tested_requests_finished():
-            actions.append(ActionTestAll(state.pid))
-
-    def expand_waitany(self, gcontext, state, actions):
-        logging.debug("Expanding waitany %s", state)
-        indices = state.get_indices_of_tested_and_finished_requests()
-        if not indices:
-            return
-        for i in indices:
-            actions.append(ActionWaitAny(state.pid, i))
-
-    def expand_probe(self, gcontext, state, actions):
-        logging.debug("Expanding probe %s", state)
-        comm_id, source, tag, status_ptr = state.probe_data
-        if state.get_probe_promise(comm_id, source, tag) is not None:
-            return
-
-        if state.flag_ptr:
-            actions.append(ActionFlag0(state.pid))
-            if source != consts.MPI_ANY_SOURCE:
-                 probed = state.probe_deterministic(comm_id, source, tag)
-                 if probed:
-                     pid, request = probed
-                     rank = request.comm.group.pid_to_rank(pid)
-                     actions.append(ActionProbePromise(
-                        state.pid, comm_id, source, tag, rank))
-        if source != consts.MPI_ANY_SOURCE:
-            return
-        for pid, request in state.probe_nondeterministic(comm_id, tag):
-            rank = request.comm.group.pid_to_rank(pid)
-            actions.append(ActionProbePromise(
-               state.pid, comm_id, source, tag, rank))
-
-    def get_actions(self, gcontext):
-        actions = [ ActionMatching(matching)
-                    for matching in gcontext.find_nondeterministic_matches() ]
-        for state in gcontext.gstate.states:
-            if state.status == State.StatusWaitAny:
-               self.expand_waitany(gcontext, state, actions)
-            elif state.status == State.StatusProbe:
-                self.expand_probe(gcontext, state, actions)
-            elif state.status == State.StatusWaitSome:
-                self.expand_waitsome(gcontext, state, actions)
-            elif state.status == State.StatusTest:
-                self.expand_testall(gcontext, state, actions)
-        return actions
-
-    def slow_expand(self, gcontext):
-        actions = self.get_actions(gcontext)
-        if actions:
-            for action in actions:
-                gcontext.add_to_queue(action, True)
-        return bool(actions)
-
-    def add_to_queue(self, node, gstate, action):
-        self.working_queue.append((node, gstate, action))
-
-    def expand_node(self, node, gstate, action):
-        logging.debug("--------- Expanding node %s %s ------------", node.uid, gstate)
-
-        if self.debug_compare_states is not None \
-                and node.uid in self.debug_compare_states:
-            if self.debug_captured_states is None:
-                self.debug_captured_states = []
-            self.debug_captured_states.append(gstate.copy())
-
-        gcontext = GlobalContext(self, node, gstate)
-
-        if action:
-            action.apply_action(gcontext)
-
-        self.fast_expand_node(gcontext)
-
-        if not gcontext.make_node():
-            gstate.dispose()
-            return
-
-        if not self.slow_expand(gcontext):
-            node = gcontext.node
-            if any(state.status != State.StatusFinished
-                   for state in gstate.states):
-                active_pids = [ state.pid for state in gstate.states
-                                if state.status != State.StatusFinished ]
-                gcontext = GlobalContext(self, node, gstate)
-                message = errormsg.Deadlock(None,
-                                            gcontext=gcontext,
-                                            active_pids=active_pids)
-                gcontext.add_error_and_throw(message)
-            else:
-                gstate.mpi_leak_check(self, node)
-                node.allocations = sum((state.allocations
-                                        for state in gstate.states), [])
-        gstate.dispose()
-
-    def make_context(self, node, state):
-        # This function exists to avoid importing GlobalContext in state.py
-        gcontext = GlobalContext(self, node, state.gstate)
-        return gcontext.get_context(state.pid)
-
-    def add_node(self, prev, gstate, do_hash=True):
+    def add_node(self, prev, worker, gstate, do_hash=True):
         if do_hash:
             hash = gstate.compute_hash()
             if hash is not None:
@@ -531,6 +277,20 @@ class Generator:
         if prev:
             node.prev = prev
         self.statespace.add_node(node)
+
+        if self.debug_compare_states is not None \
+                and node.uid in self.debug_compare_states:
+            if self.debug_captured_states is None:
+                self.debug_captured_states = []
+            logging.debug("Capturing %s", node)
+            self.debug_captured_states.append((gstate.copy(), worker))
+
+
+        if self.statespace.nodes_count > self.max_states:
+            logging.info("Maximal number of states reached")
+            if self.debug_compare_states is not None:
+                self.debug_compare()
+            raise ErrorFound()
 
         if self.debug_state == uid:
             context = Context(self, node, None)

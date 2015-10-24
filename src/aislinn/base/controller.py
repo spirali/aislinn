@@ -54,6 +54,7 @@ class Controller:
     FUNCTION_2_INT_2_POINTER = 2
     FUNCTION_2_INT_4_POINTER = 3
 
+    debug = False
     debug_by_valgrind_tool = None
 
     stdout_arg = None
@@ -139,10 +140,10 @@ class Controller:
         self.send_and_receive_ok("WRITE {0} {1} addr {2} {3}\n" \
                 .format(check_str(check), addr, source, size))
 
-    def write_into_buffer(self, buffer_addr, index, addr, size):
+    def write_into_buffer(self, buffer_id, index, addr, size):
         # Copy a memory from client addres to the buffer
         self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n" \
-                    .format(buffer_addr, index, addr, size))
+                    .format(buffer_id, index, addr, size))
 
     def write_data_into_buffer(self, buffer_addr, index, data):
         # Write a literal data into the buffer
@@ -213,6 +214,9 @@ class Controller:
 
     def read_string(self, addr):
         return self.send_and_receive_data("READ {0} string\n".format(addr))
+
+    def read_buffer(self, buffer_id):
+        return self.send_and_receive_data("READ_BUFFER {0}\n".format(buffer_id))
 
     def hash_state(self):
         #s = time.time()
@@ -335,6 +339,9 @@ class Controller:
         self.send_and_receive_ok(
              "DEBUG_COMPARE {0} {1}\n".format(state_id1, state_id2))
 
+    def debug_dump_state(self, state_id):
+        self.send_and_receive_ok("DEBUG_DUMP_STATE {0}\n".format(state_id))
+
     def set_capture_syscall(self, syscall, value):
         self.send_and_receive_ok(
              "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
@@ -426,12 +433,18 @@ class VgState(Resource):
     def controller(self):
         return self.manager.controller
 
+    def __repr__(self):
+        return "<VgState {0:x} id={1.id} " \
+               "ctrl={1.controller.name} hash={1.hash}>" \
+                    .format(id(self), self)
+
 
 class BufferManager(ResourceManager):
 
-    def __init__(self):
+    def __init__(self, init_value, step):
         ResourceManager.__init__(self, VgBuffer)
-        self.buffer_id_counter = 10
+        self.buffer_id_counter = init_value
+        self.buffer_id_step = step
 
     def cleanup(self):
         if self.not_used_resources:
@@ -440,7 +453,7 @@ class BufferManager(ResourceManager):
 
     def new_buffer(self, data):
         buffer_id = self.buffer_id_counter
-        self.buffer_id_counter += 1
+        self.buffer_id_counter += self.buffer_id_step
         buffer = self.new(buffer_id)
         buffer.set_data(data)
         # We add a special referece, this refence is
@@ -460,10 +473,13 @@ class VgBuffer(Resource):
         self.hash = None
         self.controllers = []
         self.remaining_controllers = None
+        logging.debug("New buffer: %s", self)
 
     def cleanup(self):
+        logging.debug("Cleaning buffer: %s", self)
         for controller in self.controllers:
             controller.free_buffer(self.id)
+        self.controllers = None
 
     def set_data(self, data):
         self.data = data
@@ -523,6 +539,23 @@ class ControllerWithResources(Controller):
             self.state_cache[hash] = state
         return state
 
+    def get_cached_state(self, hash):
+        return self.state_cache.get(hash)
+
+    def pull_state(self, socket, hash=None):
+        state = self.states.new(Controller.pull_state(self, socket))
+        if self.debug:
+            self.restore_state(state)
+            assert hash == self.hash_state()
+        if hash is not None:
+            state.hash = hash
+            self.state_cache[hash] = state
+        return state
+
+    def push_state(self, socket, state):
+        self.hash_state()
+        Controller.push_state(self, socket, state.id)
+
     def save_state_with_hash(self):
         return self.save_state(self.hash_state())
 
@@ -555,10 +588,18 @@ def make_interconnection(controllers):
         s = []
         for j, d in enumerate(controllers[:i]):
             port = c.interconn_listen()
-            host = "127.0.0.1:" + str(port)
+            host = "127.0.0.1:{0}".format(port)
             d.interconn_connect(host)
             s.append(c.interconn_listen_finish())
             sockets[j].append(d.interconn_connect_finish())
         s.append(None)
         sockets.append(s)
     return sockets
+
+def make_interconnection_pairs(controllers1, controllers2):
+    ports = [c.interconn_listen() for c in controllers1]
+    for port, c in zip(ports, controllers2):
+        host = "127.0.0.1:{0}".format(port)
+        c.interconn_connect(host)
+    return ([c.interconn_listen_finish() for c in controllers1],
+            [c.interconn_connect_finish() for c in controllers2])

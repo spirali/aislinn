@@ -122,7 +122,7 @@ class Context:
         # Restore the state and forget about the restored state
         # The state is forgotten because we are going to modify it
         assert self.controller is None
-        self.controller = self.gcontext.generator.get_controller(self.state.pid)
+        self.controller = self.gcontext.worker.get_controller(self.state.pid)
         # Register context into controller to capture unexpected outputs
         self.controller.context = self
         self.controller.restore_state(self.state.vg_state)
@@ -203,7 +203,7 @@ class Context:
         self.gcontext.make_node()
 
     def initial_run(self):
-        controller = self.gcontext.generator.get_controller(self.state.pid)
+        controller = self.gcontext.worker.get_controller(self.state.pid)
         controller.context = self
         self.controller = controller
         result = controller.receive_line()
@@ -317,12 +317,12 @@ class Context:
     def make_buffer(self, pointer, datatype, count):
         data = []
         datatype.pack2(self.controller, pointer, count, data.append)
-        return self.gcontext.generator.buffer_manager.new_buffer("".join(data))
+        return self.gcontext.worker.buffer_manager.new_buffer("".join(data))
 
     def make_buffer_for_one(self, pid, pointer, datatype, count):
         buffer = self.make_buffer(pointer, datatype, count)
         buffer.remaining_controllers = 1
-        controller = self.gcontext.generator.get_controller(pid)
+        controller = self.gcontext.worker.get_controller(pid)
         controller.add_buffer(buffer)
         return buffer
 
@@ -330,7 +330,7 @@ class Context:
         buffer = self.make_buffer(pointer, datatype, count)
         buffer.remaining_controllers = len(pids)
         for pid in pids:
-            controller = self.gcontext.generator.get_controller(pid)
+            controller = self.gcontext.worker.get_controller(pid)
             controller.add_buffer(buffer)
         return buffer
 

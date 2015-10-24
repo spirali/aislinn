@@ -45,11 +45,22 @@ class GlobalState(EqMixin):
                                              for op in self.collective_operations ]
         return gstate
 
+    def transfer(self, transfer_context):
+        logging.debug("Transfering gstate %s", self)
+        gstate = copy.copy(self)
+        gstate.states = [ state.transfer(gstate, transfer_context)
+                          for state in self.states ]
+        if self.collective_operations is not None:
+            gstate.collective_operations = [ op.transfer(transfer_context)
+                                             for op in self.collective_operations ]
+        return gstate
+
     @property
     def process_count(self):
         return len(self.states)
 
     def dispose(self):
+        logging.debug("Disposing %s", self)
         for state in self.states:
             state.dispose()
         if self.collective_operations:
@@ -135,3 +146,5 @@ class GlobalState(EqMixin):
     def mpi_leak_check(self, generator, node):
         for state in self.states:
             state.mpi_leak_check(generator, node)
+
+

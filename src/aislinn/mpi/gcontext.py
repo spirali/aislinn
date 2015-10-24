@@ -31,13 +31,20 @@ class ErrorFound(Exception):
 
 class GlobalContext:
 
-    def __init__(self, generator, node, gstate):
-        self.generator = generator
+    def __init__(self, worker, node, gstate, generator=None):
+        self.worker = worker
         self.node = node
         self.gstate = gstate
-        self.contexts = [ None ] * generator.process_count
+        if generator is not None:
+            self.contexts = [ None ] * generator.process_count
+        else:
+            self.contexts = [ None ] * worker.generator.process_count
         self.events = []
         self.data = []
+
+    @property
+    def generator(self):
+        return self.worker.generator
 
     def get_context(self, pid):
         context = self.contexts[pid]
@@ -71,13 +78,16 @@ class GlobalContext:
 
     def make_node(self):
         self.save_states()
-        node, is_new = self.generator.add_node(self.node, self.gstate)
+        node, is_new = self.generator.add_node(self.node, self.worker, self.gstate)
         arc = Arc(node, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
         self.events = None
         self.data = None
         self.contexts = None
+
+        # DEBUG
+        arc.worker = self.worker.worker_id
         return is_new
 
     def add_to_queue(self, action, copy):
@@ -87,13 +97,13 @@ class GlobalContext:
             gstate = gstate.copy()
         else:
             self.gstate = None
-        self.generator.add_to_queue(self.node, gstate, action)
+        self.worker.add_to_queue(self.node, gstate, action)
 
     def make_fail_node(self):
         if not self.events and not self.data:
             # There is no visible change, so no new node is made
             return
-        node, is_new = self.generator.add_node(self.node, self.gstate, do_hash=False)
+        node, is_new = self.generator.add_node(self.node, self.worker, self.gstate, do_hash=False)
         arc = Arc(node, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
@@ -144,8 +154,12 @@ class GlobalContext:
                 r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)
         self.gstate.states[source_pid].finish_send_request(s)
 
-    def is_running(self, pid):
+    def is_pid_running(self, pid):
         context = self.contexts[pid]
         return context and context.controller.running
 
-
+    def is_running(self):
+        for context in self.contexts:
+            if context and context.controller.running:
+                return True
+        return False

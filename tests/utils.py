@@ -105,6 +105,7 @@ class TestCase(unittest.TestCase):
             profile=False,
             ):
         aislinn_args = { "report-type" : "xml",
+                         "workers" : 2,
                          "verbose" : 0,
                          "stderr-write" : "1000" }
 
