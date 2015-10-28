@@ -126,8 +126,8 @@ class Generator:
             stats = controller.get_stats()
             pages += stats["pages"]
             vas += stats["vas"]
-            active_pages = stats["active-pages"]
-            buffers_size = stats["buffers-size"]
+            active_pages += stats["active-pages"]
+            buffers_size += stats["buffers-size"]
         self.statistics.append((
             len(self.working_queue), pages, vas, active_pages, buffers_size))
 
