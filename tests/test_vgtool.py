@@ -10,7 +10,7 @@ class VgToolTests(TestCase):
 
     def test_simple(self):
         self.program("simple")
-        c = self.controller()
+        c = self.controller(verbose=0)
         #c.valgrind_args = ("--verbose=1",)
         self.assertEquals(c.start_and_connect(), "CALL Hello 1")
         h = c.hash_state()
@@ -363,6 +363,53 @@ class VgToolTests(TestCase):
         s.send_data("STATS\n")
         self.assertEquals(s.read_line(), "0 0")
 
+    def test_printf(self):
+        self.program("printf")
+        c = self.controller(verbose=0)
+        c.start_and_connect()
+        c.set_capture_syscall("write", True)
+        state1 = c.save_state()
+        assert c.run_process().startswith("SYSCALL")
+        c.run_drop_syscall()
+        hash2 = c.hash_state()
+        state2 = c.save_state()
+        c.run_process()
+        c.restore_state(state2)
+        assert hash2 == c.hash_state()
+        c.run_process()
+        c.restore_state(state1)
+        c.run_process()
+
+    def test_mmap(self):
+        self.program("mmap")
+        c = self.controller(verbose=0)
+        c.start_and_connect()
+        hash1 = c.hash_state()
+        state1 = c.save_state()
+        assert c.run_process() == "CALL Second"
+        hash2 = c.hash_state()
+        state2 = c.save_state()
+        assert c.run_process() == "CALL Third"
+        hash3 = c.hash_state()
+        assert c.run_process() == "EXIT 0"
+        hash4 = c.hash_state()
+        #state3 = c.save_state()
+
+        c.restore_state(state2)
+        assert c.hash_state() == hash2
+        assert c.run_process() == "CALL Third"
+        assert c.hash_state() == hash3
+
+        c.restore_state(state2)
+        c.restore_state(state1)
+        assert c.hash_state() == hash1
+        assert c.run_process() == "CALL Second"
+        assert c.hash_state() == hash2
+
+        assert c.run_process() == "CALL Third"
+        assert c.run_process() == "EXIT 0"
+        assert c.hash_state() == hash4
+
     def test_profile(self):
         def get_profile(value):
             data = value.split()
@@ -385,6 +432,8 @@ class VgToolTests(TestCase):
         c = self.controller()
         ptr1 = c.start_and_connect().split()[2]
         assert c.read_string(ptr1) == "This is\n my\n string!"
+
+
 
 if __name__ == "__main__":
     unittest.main()

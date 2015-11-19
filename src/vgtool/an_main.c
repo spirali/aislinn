@@ -42,6 +42,7 @@
 #include "pub_tool_debuginfo.h"
 #include "pub_tool_stacktrace.h"
 #include "pub_tool_replacemalloc.h"
+#include "pub_tool_transtab.h"
 #include "pub_tool_machine.h"     // VG_(fnptr_to_fnentry)
 #include "pub_tool_vki.h"
 #include "../../include/aislinn.h"
@@ -56,6 +57,9 @@
 #include "../coregrind/pub_core_threadstate.h"
 #include "../coregrind/pub_core_libcfile.h"
 #include "../coregrind/pub_core_syscall.h"
+#include "../coregrind/pub_core_aspacemgr.h"
+#include "../coregrind/pub_core_mallocfree.h"
+extern SysRes ML_(am_do_munmap_NO_NOTIFY)(Addr start, SizeT length);
 
 #define INLINE    inline __attribute__((always_inline))
 #define NOINLINE __attribute__ ((noinline))
@@ -76,6 +80,14 @@
 #define MEM_READONLY  2 // 10
 #define MEM_DEFINED   3 // 11
 
+#define PAGEFLAG_UNMAPPED 0 // 0000
+#define PAGEFLAG_MAPPED   1 // 0001
+#define PAGEFLAG_READ     2 // 0100
+#define PAGEFLAG_WRITE    4 // 0010
+#define PAGEFLAG_EXECUTE  8 // 1000
+
+#define PAGEFLAG_RW (PAGEFLAG_MAPPED | PAGEFLAG_READ | PAGEFLAG_WRITE)
+
 typedef
    struct {
       Int ref_count;
@@ -93,11 +105,11 @@ typedef
    struct {
       Addr base;
       Int ref_count;
+      UChar page_flags[REAL_PAGES_IN_PAGE];
       VA *va;
       UChar *data;
       PageStatus status;
       MD5_Digest hash;
-      UChar ignore[REAL_PAGES_IN_PAGE];
    } Page;
 
 typedef
@@ -125,6 +137,7 @@ typedef
    struct {
       OSet* auxmap;
       Addr heap_space;
+      Addr heap_space_end;
       XArray *allocation_blocks;
       Vg_AislinnCallAnswer *answer;
    } MemorySpace;
@@ -275,7 +288,9 @@ static void memspace_init(void)
     * through new_mem_mmap and it causes that the whole heap space would be marked through VA flags.
     * ?? Probably VG_(am_mmap_anon_float_client) should be called
     */
-   Addr heap_space = (Addr) VG_(malloc)("heap", heap_max_size);
+   Addr heap_space = (Addr) VG_(arena_memalign)
+           (VG_AR_CORE, "an.heap", PAGE_SIZE, heap_max_size);
+   tl_assert(heap_space % PAGE_SIZE == 0); // Heap is propertly aligned
 
 
    tl_assert(heap_space != 0);
@@ -287,6 +302,7 @@ static void memspace_init(void)
                                     /*fastCmp*/ NULL,
                                     VG_(malloc), "an.auxmap", VG_(free));
    ms->heap_space = heap_space;
+   ms->heap_space_end = heap_space + heap_max_size;
    ms->allocation_blocks = VG_(newXA)
       (VG_(malloc), "an.allocations", VG_(free), sizeof(AllocationBlock));
    AllocationBlock block;
@@ -387,7 +403,7 @@ static void memspace_sanity_check(void)
 
 static
 Addr memspace_alloc(SizeT alloc_size, SizeT allign)
-{   
+{
    profile.count_allocations += 1;
    profile.size_allocations += alloc_size;
 
@@ -591,7 +607,7 @@ static VA *va_clone(VA *va)
 static void va_dispose(VA *va)
 {
    va->ref_count--;
-   if (va->ref_count <= 0) {      
+   if (va->ref_count <= 0) {
       tl_assert(va->ref_count == 0);
       VG_(free)(va);
       stats.vas--;
@@ -607,7 +623,6 @@ static Page *page_new(Addr a)
     page->ref_count = 1;
     page->status = EMPTY;
     page->data = NULL;
-    VG_(memset)(page->ignore, 0, sizeof(page->ignore));
     page->va = NULL;
     VPRINT(3, "page_new %p base=%lx\n", page, a);
     return page;
@@ -618,6 +633,13 @@ static Page *page_new_empty(Addr a)
    Page *page = page_new(a);
    page->va = uniform_va[MEM_NOACCESS];
    page->va->ref_count++;
+   int flags;
+   if (a >= current_memspace->heap_space && a < current_memspace->heap_space_end) {
+       flags = PAGEFLAG_RW;
+   } else {
+       flags = PAGEFLAG_UNMAPPED;
+   }
+   VG_(memset)(page->page_flags, flags, sizeof(page->page_flags));
    return page;
 }
 
@@ -626,10 +648,9 @@ static Page* page_clone(Page *page)
 {
    Page *new_page = page_new(page->base);
    new_page->status = page->status;
-   VG_(memcpy)(new_page->ignore, page->ignore, sizeof(page->ignore));
-   //VG_(memcpy)(new_page->va, page->va, sizeof(VA));
    page->va->ref_count++;
    new_page->va = page->va;
+   VG_(memcpy)(new_page->page_flags, page->page_flags, sizeof(page->page_flags));
    return new_page;
 }
 
@@ -937,18 +958,20 @@ static Bool check_is_readable(Addr addr, SizeT size, Addr *first_invalid_addr)
 }
 
 static
-void set_address_range_ignore(Addr a, SizeT lenT, UChar value)
+void set_address_range_page_flags(Addr a, SizeT lenT, UChar value)
 {
    tl_assert(a % VKI_PAGE_SIZE == 0);
    if (lenT == 0) {
       return;
    }
    for(;;) {
-      Page *page = *get_page_ptr(a);
+      Page **page_ptr = get_page_ptr(a);
+      Page *page = *page_ptr;
+      tl_assert(page->ref_count == 1);
       UWord pg_off = PAGE_OFF(a);
       UInt i;
       for (i = pg_off / VKI_PAGE_SIZE; i < REAL_PAGES_IN_PAGE; i++) {
-         page->ignore[i] = value;
+         page->page_flags[i] = value;
          if (lenT <= VKI_PAGE_SIZE) {
             //page_dump(page);
             return;
@@ -1075,9 +1098,10 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
          Bool empty = True;
 
          for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
-             if (!page->ignore[i]) {
+             if ((page->page_flags[i] & PAGEFLAG_RW) == PAGEFLAG_RW) {
+                 VA *va = page->va;
                  for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++)
-                     if (page->va->vabits[j] != MEM_NOACCESS) {
+                     if (va->vabits[j] != MEM_NOACCESS) {
                          if (s == 0) {
                              b = base + j;
                          }
@@ -1130,7 +1154,7 @@ static void memimage_save_page_content(Page *page)
       return;
    }
    for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
-      if (!page->ignore[i]) {
+      if (page->page_flags[i] & PAGEFLAG_READ) {
          for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {
             if (va->vabits[j] != MEM_NOACCESS) {
                dst[j] = src[j];
@@ -1141,36 +1165,88 @@ static void memimage_save_page_content(Page *page)
    }
 }
 
-static void memimage_restore_page_content(Page *page)
+static int flags_to_mmap_protection(int flags)
 {
-   //page_dump(page);
-   //VPRINT(2, "memimage_restore_page_content base=%lx\n", page->base);
+    int prot = 0;
+    if (flags & PAGEFLAG_READ) {
+        prot |= VKI_PROT_READ;
+    }
 
-   if (page->va == uniform_va[MEM_NOACCESS]) {
-      return;
-   }
+    if (flags & PAGEFLAG_WRITE) {
+        prot |= VKI_PROT_WRITE;
+    }
 
-   UWord i, j;
-   UChar *dst = (UChar*) page->base;
-   VA *va = page->va;
-   tl_assert(page->data);
-   UChar *src = page->data;
-
-   if (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY]) {
-      VG_(memcpy)(dst, src, PAGE_SIZE);
-      return;
-   }
-
-   for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
-      if (!page->ignore[i]) {
-         for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {
-            if (va->vabits[j] != MEM_NOACCESS) {
-               dst[j] = src[j];
-            }
-         }
-      }
-   }
+    if (flags & PAGEFLAG_EXECUTE) {
+        prot |= VKI_PROT_EXEC;
+    }
+    return prot;
 }
+
+static void memimage_restore_page_content(Page *page, Page *old_page)
+{
+    tl_assert(page->base == old_page->base);
+    //page_dump(page);
+    VPRINT(2, "memimage_restore_page_content base=%lx\n", page->base);
+
+    if (page->va == uniform_va[MEM_NOACCESS]) {
+        return;
+    }
+
+    UWord i, j;
+    UChar *dst = (UChar*) page->base;
+    VA *va = page->va;
+    tl_assert(page->data);
+    UChar *src = page->data;
+
+    if (va == uniform_va[MEM_DEFINED] || va == uniform_va[MEM_READONLY]) {
+        VG_(memcpy)(dst, src, PAGE_SIZE);
+        return;
+    }
+
+
+
+    for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
+        int flags = page->page_flags[i];
+        int old_flags = old_page->page_flags[i];
+
+        if (flags != old_flags) {
+            Addr base = page->base + VKI_PAGE_SIZE * i;
+            /* The following code handles only the situation when
+             old page is unmapped and new flag is RW,
+             other situation needs to be handled separately
+          */
+            if (flags == PAGEFLAG_UNMAPPED) {
+                VPRINT(1, "restore page munmap addr=%lx size=%lu\n", base, VKI_PAGE_SIZE);
+                SysRes sr = ML_(am_do_munmap_NO_NOTIFY)(base, VKI_PAGE_SIZE);
+                tl_assert(!sr_isError(sr));
+                VG_(am_notify_munmap)(base, VKI_PAGE_SIZE);
+                continue;
+            }
+
+            tl_assert(old_flags == PAGEFLAG_UNMAPPED);
+            tl_assert(flags == PAGEFLAG_RW);
+
+
+            const int mmap_flags = VKI_MAP_PRIVATE | VKI_MAP_FIXED | VKI_MAP_ANONYMOUS;
+            const int prot = flags_to_mmap_protection(flags);
+            VPRINT(1, "restore page mmap addr=%lx size=%lu page_flags=%d prot=%d\n", base, VKI_PAGE_SIZE, flags, prot);
+            SysRes sr = VG_(am_do_mmap_NO_NOTIFY)(base, VKI_PAGE_SIZE, prot, mmap_flags, -1, 0);
+
+            tl_assert(!sr_isError(sr));
+            tl_assert(sr._val == base);
+
+            VG_(am_notify_client_mmap)(base, VKI_PAGE_SIZE, prot, mmap_flags, -1, 0);
+        }
+        if ((flags & PAGEFLAG_RW) == PAGEFLAG_RW) {
+            for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {
+                if (va->vabits[j] != MEM_NOACCESS) {
+                    dst[j] = src[j];
+                }
+            }
+        }
+    }
+}
+
 
 static void memimage_save(MemoryImage *memimage)
 {
@@ -1215,10 +1291,10 @@ static void memimage_restore(MemoryImage *memimage)
         Page *page = memimage->pages[i];
         if (LIKELY(page->base == elem->base)) {
             if (elem->page != page) {
+                memimage_restore_page_content(page, elem->page);               
+                page->ref_count++;                
                 page_dispose(elem->page);
                 elem->page = page;
-                page->ref_count++;
-                memimage_restore_page_content(page);
             }
             i++;
         } else {
@@ -2416,21 +2492,37 @@ Bool an_handle_client_request ( ThreadId tid, UWord* arg, UWord* ret )
    return True;
 }
 
+static int make_page_flags(Bool rr, Bool ww, Bool xx)
+{
+    int flags = PAGEFLAG_MAPPED;
+    if (rr) {
+        flags |= PAGEFLAG_READ;
+    }
+    if (ww) {
+        flags |= PAGEFLAG_WRITE;
+    }
+    if (xx) {
+        flags |= PAGEFLAG_EXECUTE;
+    }
+    return flags;
+}
+
+
 static
 void new_mem_mmap (Addr a, SizeT len, Bool rr, Bool ww, Bool xx,
                    ULong di_handle)
 {
    VPRINT(2, "new_mem_mmap %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+
    if (rr && ww) {
       make_mem_defined(a, len);
-      set_address_range_ignore(a, len, 0);
    } else if (rr) {
       make_mem_readonly(a, len);
-      set_address_range_ignore(a, len, 1);
    } else {
       make_mem_noaccess(a, len);
-      set_address_range_ignore(a, len, 1);
    }
+
+   set_address_range_page_flags(a, len, make_page_flags(rr, ww, xx));
 
    //memspace_dump();
 }
@@ -2441,22 +2533,21 @@ void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
    VPRINT(2, "new_mem_mprotect %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
    if (rr && ww) {
       make_mem_defined(a, len);
-      set_address_range_ignore(a, len, 0);
    } else if (rr) {
       make_mem_readonly(a, len);
-      set_address_range_ignore(a, len, 1);
    } else {
       make_mem_noaccess(a, len);
-      set_address_range_ignore(a, len, 1);
    }
+   set_address_range_page_flags(a, len, make_page_flags(rr, ww, xx));
 }
 
 static
 void mem_unmap(Addr a, SizeT len)
 {
    VPRINT(2, "unmap %lx-%lx %lu\n", a, a + len, len);
+
    make_mem_noaccess(a, len);
-   set_address_range_ignore(a, len, 1);
+   set_address_range_page_flags(a, len, PAGEFLAG_UNMAPPED);
 }
 
 static
@@ -2473,13 +2564,13 @@ void new_mem_startup(Addr a, SizeT len,
    VPRINT(2, "new_mem_startup %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
    if (rr && ww) {
       make_mem_defined(a, len);
-      //set_address_range_ignore(a, len, 0);
    } else if (rr) {
       make_mem_readonly(a, len);
-      set_address_range_ignore(a, len, 1);
    } else {
       make_mem_noaccess(a, len);
    }
+   Addr offset = a % VKI_PAGE_SIZE;
+   set_address_range_page_flags(a - offset, len + offset, make_page_flags(rr, ww, xx));
 }
 
 static void new_mem_stack (Addr a, SizeT len)
