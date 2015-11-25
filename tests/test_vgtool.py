@@ -433,6 +433,26 @@ class VgToolTests(TestCase):
         ptr1 = c.start_and_connect().split()[2]
         assert c.read_string(ptr1) == "This is\n my\n string!"
 
+    def test_bigstack(self):
+        size = 5 * 1024  # 500KiB
+        self.program("bigstack")
+        c = self.controller(verbose=0)
+        c.start_and_connect()
+        state1 = c.save_state()
+        call, name, addr = c.run_process().split()
+        state2 = c.save_state()
+        c.run_process()
+        state3 = c.save_state()
+        c.run_process()
+        c.hash_state()
+
+        c.restore_state(state1)
+        c.restore_state(state2)
+        v = c.read_mem(addr, size)
+        assert map(ord, v) == [ 0xaa ] * size
+        c.restore_state(state3)
+        v = c.read_mem(addr, size)
+        assert map(ord, v) == [ 0xbb ] * size
 
 
 if __name__ == "__main__":

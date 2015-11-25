@@ -59,6 +59,7 @@
 #include "../coregrind/pub_core_syscall.h"
 #include "../coregrind/pub_core_aspacemgr.h"
 #include "../coregrind/pub_core_mallocfree.h"
+#include "../coregrind/pub_core_clientstate.h"
 extern SysRes ML_(am_do_munmap_NO_NOTIFY)(Addr start, SizeT length);
 
 #define INLINE    inline __attribute__((always_inline))
@@ -309,6 +310,7 @@ static void memspace_init(void)
    block.address = heap_space;
    block.type = BLOCK_END;
    VG_(addToXA)(ms->allocation_blocks, &block);
+
    tl_assert(current_memspace == NULL);
    current_memspace = ms;
 }
@@ -322,12 +324,24 @@ static void page_dump(Page *page)
    char prev = va->vabits[0];
    int chunk_size = 1;
 
-   for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
-         tmp[i] = page->ignore[i] ? '1' : '0';
+   for (i = 0; i < REAL_PAGES_IN_PAGE; i+=1) {
+         if (page->page_flags[i] == PAGEFLAG_UNMAPPED) {
+              tmp[i] = '!'; // Unmapped
+         } else if (page->page_flags[i] & PAGEFLAG_RW) {
+             tmp[i] = '*'; // RW
+         } else if (page->page_flags[i] & PAGEFLAG_READ) {
+             tmp[i] = 'R'; // Readonly
+         } else if (page->page_flags[i] & PAGEFLAG_WRITE) {
+             tmp[i] = 'W'; // write only
+         } else if (page->page_flags[i] & PAGEFLAG_MAPPED) {
+             tmp[i] = '-'; // No access
+         } else {
+             tmp[i] = '?'; // All other cases
+         }
    }
    tmp[REAL_PAGES_IN_PAGE] = 0;
 
-   VG_(printf)("~~~ Page %p addr=0x%lx %s ~~~\n", page, page->base, tmp);
+   VG_(printf)("~~~ Page %p base=0x%lx %s ~~~\n", page, page->base, tmp);
    for (i = 1; i < PAGE_SIZE; i++) {
       if (va->vabits[i] == prev) {
          chunk_size++;
@@ -352,8 +366,8 @@ static void page_dump(Page *page)
                   chunk_size,
                   prev);
    }
-}
-*/
+}*/
+
 /*
 static
 void memspace_dump(void)
@@ -633,13 +647,26 @@ static Page *page_new_empty(Addr a)
    Page *page = page_new(a);
    page->va = uniform_va[MEM_NOACCESS];
    page->va->ref_count++;
-   int flags;
    if (a >= current_memspace->heap_space && a < current_memspace->heap_space_end) {
-       flags = PAGEFLAG_RW;
+       VG_(memset)(page->page_flags, PAGEFLAG_RW, sizeof(page->page_flags));
    } else {
-       flags = PAGEFLAG_UNMAPPED;
+       VG_(memset)(page->page_flags, PAGEFLAG_UNMAPPED, sizeof(page->page_flags));
+
+       Addr start = VG_(clstk_start_base);
+       Addr end = VG_(clstk_end);
+       if (a >= start_of_this_page(start) &&
+           a <= start_of_this_page(end))
+       {
+            tl_assert(start % VKI_PAGE_SIZE == 0);
+            Int i;
+            for (i = 0; i < REAL_PAGES_IN_PAGE; i++, a += VKI_PAGE_SIZE) {
+                if (a >= start && a <= end) {
+                    page->page_flags[i] = PAGEFLAG_RW;
+                }
+            }
+       }
    }
-   VG_(memset)(page->page_flags, flags, sizeof(page->page_flags));
+
    return page;
 }
 
@@ -2588,6 +2615,7 @@ void new_mem_stack_signal(Addr a, SizeT len, ThreadId tid)
 {
    //VG_(printf)("STACK SIGNAL %lx %lu", a - VG_STACK_REDZONE_SZB, len);
    /* Same reason for reseting stack as in new_mem_stack */
+
    VG_(memset)((void*) (a - VG_STACK_REDZONE_SZB), 0, len);
    make_mem_undefined(a - VG_STACK_REDZONE_SZB, len);
 }
