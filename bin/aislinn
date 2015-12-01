@@ -1,2 +1,12 @@
 #!/bin/sh
-exec python `dirname $0`/../src/aislinn/aislinn.py $@
+
+ROOT=`dirname $0`/..
+if [ -d "$ROOT/lib/aislinn/aislinn" ]; then
+# Aislinn is installed
+AISLINN_PY=$ROOT/lib/aislinn/aislinn/aislinn.py
+else
+# Without installation
+AISLINN_PY=$ROOT/src/aislinn/aislinn.py
+fi
+
+exec python ${AISLINN_PY} $@

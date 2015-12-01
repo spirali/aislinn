@@ -6,6 +6,6 @@ def build(ctx):
     ctx.stlib(source=source_files,
               includes=['#/valgrind/include'],
               target="aislinn",
-              name="aislinn")
-
-
+              name="aislinn",
+              install_path="${PREFIX}/lib/aislinn/lib")
+    ctx.install_files("${PREFIX}/include/aislinn", [ "aislinn.h" ])

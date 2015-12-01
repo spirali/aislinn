@@ -156,6 +156,22 @@ PATH like this:
 NOTE: If you later update a repository with Aislinn, do not forget to update
 also Valgrind repository and run `make` in it.
 
+=== Optional: Installation into the system
+
+Aislinn can be used directly from the directory `aislinn` where it was
+compiled.  However it can be also installed into the system. We recommed to
+setup **prefix** to prevent overwriting system Valgrind with Aislinn-specific
+Valgrind.
+
+To install Aislinn with prefix run the following commands:
+
+    $ cd valgrind
+    $ ./configure --prefix=/path/to/prefix
+    $ ./make install
+    $ cd ..
+    $ ./waf configure --prefix=/path/to/prefix
+    $ ./waf install
+
 == The first run
 
 Let assume that we have a source file `main.c` that contains our

@@ -1,3 +1,10 @@
 #!/bin/sh
-AISLINN_ROOT=`dirname $0`/..
-g++ -I${AISLINN_ROOT}/include -I${AISLINN_ROOT}/valgrind/include -L${AISLINN_ROOT}/build/src/libs/mpi -L${AISLINN_ROOT}/build/src/libs/aislinn $@ -laislinn_mpi -laislinn
+ROOT=`dirname $0`/..
+if [ -d "$ROOT/lib/aislinn" ]; then
+# Aislinn is installed
+FLAGS="-L${ROOT}/lib/aislinn/lib -I${ROOT}/include/aislinn -I${ROOT}/include/valgrind"
+else 
+# Without installation
+FLAGS="-L${ROOT}/build/src/libs/mpi -L${ROOT}/build/src/libs/aislinn -I${ROOT}/include -I${ROOT}/valgrind/include"
+fi
+g++ ${FLAGS} $@ -laislinn_mpi -laislinn

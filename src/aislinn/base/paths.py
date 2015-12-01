@@ -20,13 +20,13 @@
 
 import os
 
+SRC_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AISLINN_ROOT = os.path.dirname(os.path.dirname(SRC_DIR))
 
-AISLINN_ROOT = os.path.dirname(
-                os.path.dirname(
-                   os.path.dirname(
-                     os.path.dirname(os.path.abspath(__file__)))))
+AISLINN_TEMPLATE = os.path.join(SRC_DIR, "template")
 
-AISLINN_TEMPLATE = os.path.join(AISLINN_ROOT, "src", "aislinn", "template")
+VALGRIND_LOCAL = os.path.join(AISLINN_ROOT, "valgrind")
+VALGRIND_LOCAL_BIN = os.path.join(VALGRIND_LOCAL, "vg-in-place")
+VALGRIND_INSTALL_BIN = os.path.join(os.path.dirname(AISLINN_ROOT), "bin", "valgrind")
 
-VALGRIND = os.path.join(AISLINN_ROOT, "valgrind")
-VALGRIND_BIN = os.path.join(VALGRIND, "vg-in-place")
+VALGRIND_BIN = None # Need to be configured

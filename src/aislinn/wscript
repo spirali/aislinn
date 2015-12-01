@@ -1,0 +1,27 @@
+
+def build(ctx):
+    """ctx.path.ant_glob("**/*.py")
+    files = ["aislinn.py"]
+    ctx.install_files("${PREFIX}/lib/aislinn/aislinn", files)
+    """
+    """
+    for x in dir(ctx):
+        print x
+    print(dir(ctx))
+    ctx.install_pyfile("aislinn.py")
+    """
+
+    # Aislinn py
+    ctx(features="py", source=["aislinn.py"], install_path="${PREFIX}/lib/aislinn/aislinn")
+
+    # Base dir
+    files = ctx.path.ant_glob("base/*.py")
+    ctx(features="py", source=files, install_path="${PREFIX}/lib/aislinn/aislinn/base")
+
+    # MPI dir
+    files = ctx.path.ant_glob("mpi/*.py")
+    ctx(features="py", source=files, install_path="${PREFIX}/lib/aislinn/aislinn/mpi")
+
+    # Templates
+    files = ctx.path.ant_glob("template/*.html")
+    ctx.install_files("${PREFIX}/lib/aislinn/aislinn/template", files)

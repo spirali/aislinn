@@ -10,6 +10,8 @@ def build(ctx):
     ctx.stlib(source=source_files,
               includes=['#/valgrind/include', '#/include'],
               target="aislinn_mpi",
-              name="aislinn_mpi")
+              name="aislinn_mpi",
+              install_path="${PREFIX}/lib/aislinn/lib")
+    ctx.install_files("${PREFIX}/include/aislinn", [ "mpi.h" ])
 
 
