@@ -91,6 +91,22 @@ class Worker:
             for controller in self.controllers:
                 controller.debug_by_valgrind_tool = \
                         aislinn_args.debug_by_valgrind_tool
+
+        if aislinn_args.debug_vglogfile is not None:
+            for controller in self.controllers:
+                prefix = aislinn_args.debug_vglogfile
+                filename = prefix + ".out." + str(controller.name)
+                logging.debug(
+                        "Openining logfile '%s' for %s", filename, controller)
+                controller.stdout_file = open(filename, "w")
+
+                filename = prefix + ".err." + str(controller.name)
+                logging.debug(
+                        "Openining logfile '%s' for %s", filename, controller)
+                controller.stderr_file = open(filename, "w")
+
+
+
         self.queue = deque()
 
     def get_controller(self, pid):

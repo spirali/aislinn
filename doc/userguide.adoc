@@ -414,6 +414,10 @@ Set verbosity level of valgrind tool. (default: 0)
 
 **--debug-statespace**
 
+**--debug-vglogfile=PREFIX**
+
+Writes stdout and stderr of vgclients into files with a given PREFIX
+
 == Aislinn and PETSc
 
 If you want to verify a program that uses http://www.mcs.anl.gov/petsc/[_Portable, Extensible Toolkit for Scientific

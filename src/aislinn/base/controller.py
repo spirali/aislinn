@@ -57,7 +57,8 @@ class Controller:
     debug = False
     debug_by_valgrind_tool = None
 
-    stdout_arg = None
+    stdout_file = None
+    stderr_file = None
     buffer_server_port = None
     profile = False
 
@@ -408,7 +409,8 @@ class Controller:
 
         logging.debug("Starting valgrind with %s", args)
         self.process = subprocess.Popen(
-            args, cwd=self.cwd, stdout=self.stdout_arg)
+            args, cwd=self.cwd,
+            stdout=self.stdout_file, stderr=self.stderr_file)
 
     def _start_server(self):
         HOST = "127.0.0.1" # Connection only from localhost

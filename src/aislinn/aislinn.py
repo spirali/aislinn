@@ -180,6 +180,12 @@ def parse_args():
                         default=None)
     parser.add_argument("--debug-profile",
                        action="store_true")
+    parser.add_argument("--debug-vglogfile",
+                        metavar="PREFIX",
+                        type=str,
+                        default=None,
+                        help="Save output of vgclients into files")
+
     args = parser.parse_args()
 
     if args.verbose == 0:

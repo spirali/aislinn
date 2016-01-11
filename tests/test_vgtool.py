@@ -124,7 +124,7 @@ class VgToolTests(TestCase):
     def test_syscall(self):
         self.program("syscall")
         c = self.controller()
-        c.stdout_arg = open(os.devnull, "rb")
+        c.stdout_file = open(os.devnull, "rb")
         c.start_and_connect()
         s = c.save_state()
 
@@ -150,7 +150,7 @@ class VgToolTests(TestCase):
     def test_syscall2(self):
         self.program("syscall")
         c = self.controller()
-        c.stdout_arg = subprocess.PIPE
+        c.stdout_file = subprocess.PIPE
         c.start_and_connect()
         c.set_capture_syscall("write", True)
         c.run_process()
