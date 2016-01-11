@@ -105,7 +105,12 @@ class Worker:
                         "Openining logfile '%s' for %s", filename, controller)
                 controller.stderr_file = open(filename, "w")
 
-
+        if workers_count > 1:
+            # There is a weird bug, that transfering states broke down
+            # dynamic resolving of symbols, or at least LD_PRELOAD symbols
+            # Hence we force resolve all symbols at runtime
+            for controller in self.controllers:
+                controller.extra_env = { "LD_BIND_NOW" : "1" }
 
         self.queue = deque()
 

@@ -26,6 +26,7 @@ import paths
 import logging
 import hashlib
 import select
+import os
 
 
 class UnexpectedOutput(Exception):
@@ -61,6 +62,7 @@ class Controller:
     stderr_file = None
     buffer_server_port = None
     profile = False
+    extra_env = None
 
     name = "" # For debug purpose
 
@@ -408,8 +410,16 @@ class Controller:
                 "--run-libc-freeres=no") + args
 
         logging.debug("Starting valgrind with %s", args)
+
+        if self.extra_env:
+            env = os.environ.copy()
+            for v in self.extra_env:
+                env[v] = self.extra_env[v]
+        else:
+            env = None
+
         self.process = subprocess.Popen(
-            args, cwd=self.cwd,
+            args, cwd=self.cwd, env=env,
             stdout=self.stdout_file, stderr=self.stderr_file)
 
     def _start_server(self):
