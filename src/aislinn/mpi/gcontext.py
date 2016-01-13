@@ -35,6 +35,8 @@ class GlobalContext:
         self.worker = worker
         self.node = node
         self.gstate = gstate
+        self.action = None
+
         if generator is not None:
             self.contexts = [ None ] * generator.process_count
         else:
@@ -78,13 +80,15 @@ class GlobalContext:
 
     def make_node(self):
         self.save_states()
-        node, is_new = self.generator.add_node(self.node, self.worker, self.gstate)
-        arc = Arc(node, self.events, self.get_compact_data())
+        node, is_new = self.generator.add_node(
+            self.node, self.worker, self.gstate)
+        arc = Arc(node, self.action, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
         self.events = None
         self.data = None
         self.contexts = None
+        self.action = None
 
         # DEBUG
         arc.worker = self.worker.worker_id
@@ -104,9 +108,14 @@ class GlobalContext:
             # There is no visible change, so no new node is made
             return
         node, is_new = self.generator.add_node(self.node, self.worker, self.gstate, do_hash=False)
-        arc = Arc(node, self.events, self.get_compact_data())
+        arc = Arc(node, self.action, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
+
+        self.events = None
+        self.data = None
+        self.contexts = None
+        self.action = None
 
     def add_event(self, event):
         self.events.append(event)

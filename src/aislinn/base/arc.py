@@ -31,13 +31,19 @@ class Arc:
 
     worker = None
 
-    def __init__(self, node, events=(), data=()):
+    def __init__(self, node, action, events=(), data=()):
         self.node = node
+        self.action = action
         self.events = events
         self.data = data # list of ArcData
 
     @property
     def label(self):
+        return "{}/{}/{}".format(
+            self.action.action_index if self.action else "",
+            self.action.name if self.action else "no-act",
+            self.worker)
+
         if not self.events and not self.data:
             return "no-events"
         pids = list(set(e.pid for e in self.events if hasattr(e, "pid")))

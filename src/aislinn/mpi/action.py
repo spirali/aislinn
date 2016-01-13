@@ -22,6 +22,8 @@ import copy
 
 class Action(utils.EqMixin):
 
+    action_index = 0
+
     def transfer(self, transfer_context):
         return self
 
@@ -42,6 +44,10 @@ class ActionMatching(utils.EqMixin):
         action.matching = (source_pid, s, target_pid, r)
         return action
 
+    @property
+    def name(self):
+        return "M[{},{}]".format(self.matching[0], self.matching[2])
+
     """
     def is_dependent(self, action):
         return (self.matching[2] == action.matching[2]
@@ -60,6 +66,10 @@ class ActionWaitAny(Action):
         context.continue_waitany(self.index)
         context.state.set_ready()
 
+    @property
+    def name(self):
+        return "WA[{},{}]".format(self.pid, self.index)
+
 
 class ActionWaitSome(Action):
 
@@ -72,6 +82,10 @@ class ActionWaitSome(Action):
         context.continue_waitsome(self.indices)
         context.state.set_ready()
 
+    @property
+    def name(self):
+        return "WS[{},{}]".format(self.pid, self.indices)
+
 
 class ActionFlag0(Action):
 
@@ -82,6 +96,10 @@ class ActionFlag0(Action):
         context = gcontext.prepare_context(self.pid)
         context.controller.write_int(context.state.flag_ptr, 0)
         context.state.set_ready()
+
+    @property
+    def name(self):
+        return "F0[{}]".format(self.pid)
 
 
 class ActionProbePromise(Action):
@@ -97,6 +115,10 @@ class ActionProbePromise(Action):
         state = gcontext.gstate.states[self.pid]
         state.set_probe_promise(self.comm_id, self.source, self.tag, self.rank)
 
+    @property
+    def name(self):
+        return "PP[{}]".format(self.pid)
+
 
 class ActionTestAll(Action):
 
@@ -107,3 +129,7 @@ class ActionTestAll(Action):
         context = gcontext.prepare_context(self.pid)
         context.continue_testall()
         context.state.set_ready()
+
+    @property
+    def name(self):
+        return "TA[{}]".format(self.pid)

@@ -171,6 +171,7 @@ class Worker:
         self.gcontext = gcontext
         if action:
             action.apply_action(gcontext)
+            gcontext.action = action
         return self.continue_in_execution()
 
     def check_collective_requests(self, gcontext):
@@ -335,7 +336,8 @@ class Worker:
     def slow_expand(self, gcontext):
         actions = self.get_actions(gcontext)
         if actions:
-            for action in actions:
+            for i, action in enumerate(actions):
+                action.action_index = i
                 gcontext.add_to_queue(action, True)
         return bool(actions)
 
