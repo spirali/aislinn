@@ -4,13 +4,13 @@ Stanislav Böhm <stanislav.bohm [at] vsb [dot] cz>
 .Overview
 ****
 
-* _Aislinn_ is a dynamic verifier for MPI programs;
-    it can check all possible runs with respect to nondeterminism introduced
+* _Aislinn_ is a dynamic verifier for MPI programs.
+    For a fixed input it checks all possible runs with respect to nondeterminism introduced
     by MPI.
 
 * _Aislinn_ operates directly on an unmodified C/C++ code.
 
-* _Aislinn_ can detect problems like invalid memory writes, misuse of MPI,
+* _Aislinn_ detects problems like invalid memory accesses, misuse of MPI,
     and resource leaks.
 
 * _Aislinn_ is released under GPLv2.
