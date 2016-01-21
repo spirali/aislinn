@@ -73,6 +73,11 @@ int main(int argc, char **argv)
 		MPI_Recv(rbuffer, COUNT, type, 0, 10, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
 		char *x = (char*) rbuffer; char *y = (char*) mem;
 		if (memcmp(rbuffer, mem, datasize)) {
+			/*for (int i = 0; i < datasize; i++) {
+				if (x[i] != y[i]) {
+					printf("%i : %i %i\n", i, x[i], y[i]);
+				}
+			}*/
 			return 2;
 		}
 		free(rbuffer);

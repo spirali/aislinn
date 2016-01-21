@@ -77,9 +77,12 @@ extern SysRes ML_(am_do_munmap_NO_NOTIFY)(Addr start, SizeT length);
 #define PAGE_OFF(a) ((a) & PAGE_MASK)
 
 #define MEM_NOACCESS  0 // 00
-#define MEM_UNDEFINED 1 // 01 NOT SUPPORTED YET
+#define MEM_UNDEFINED 1 // 01
 #define MEM_READONLY  2 // 10
 #define MEM_DEFINED   3 // 11
+
+#define MEM_READ_MASK  2 // 10
+#define MEM_WRITE_MASK 1 // 01
 
 #define PAGEFLAG_UNMAPPED 0 // 0000
 #define PAGEFLAG_MAPPED   1 // 0001
@@ -113,13 +116,14 @@ typedef
       MD5_Digest hash;
    } Page;
 
-// Must be nonconflicting with PAGEFLAG
-#define TRANSPORT_PAGEFLAG_MASK     0xF0 // 11110000
-#define TRANSPORT_PAGEFLAG_NOACCESS 0x10 // 00010000
-#define TRANSPORT_PAGEFLAG_FULL     0x20 // 00100000
-#define TRANSPORT_PAGEFLAG_DEFINED  0x30 // 00110000
-#define TRANSPORT_PAGEFLAG_READONLY 0x40 // 01000000
-#define TRANSPORT_PAGEFLAG_VAONLY   0x50 // 01010000
+// Must be nonconflicting with bits in PAGEFLAG
+#define TRANSPORT_PAGEFLAG_MASK      0xF0 // 11110000
+#define TRANSPORT_PAGEFLAG_NOACCESS  0x00 // 00000000
+#define TRANSPORT_PAGEFLAG_UNDEFINED 0x10 // 00010000
+#define TRANSPORT_PAGEFLAG_FULL      0x20 // 00100000
+#define TRANSPORT_PAGEFLAG_DEFINED   0x30 // 00110000
+#define TRANSPORT_PAGEFLAG_READONLY  0x40 // 01000000
+#define TRANSPORT_PAGEFLAG_VAONLY    0x50 // 01010000
 
 typedef
    struct {
@@ -899,7 +903,7 @@ static INLINE Page** get_page_ptr_or_null(Addr a)
 
 static
 Bool check_address_range_perms (
-                Addr a, SizeT lenT, UChar perm, Addr *first_invalid_mem)
+                Addr a, SizeT lenT, UChar perm_mask, Addr *first_invalid_mem)
 {
    VA* va;
    Page **page_ptr;
@@ -932,7 +936,7 @@ Bool check_address_range_perms (
    va = (*page_ptr)->va;
    pg_off = PAGE_OFF(a);
    while (lenA > 0) {
-      if (UNLIKELY(va->vabits[pg_off] != perm)) {
+      if (UNLIKELY(!(va->vabits[pg_off] & perm_mask))) {
           if (first_invalid_mem) {
             *first_invalid_mem = start_of_this_page(a) + pg_off;
           }
@@ -956,7 +960,7 @@ part2:
       va = (*page_ptr)->va;
 
       for (pg_off = 0; pg_off < PAGE_SIZE; pg_off++) {
-         if (UNLIKELY(va->vabits[pg_off] != perm)) {
+         if (UNLIKELY(!(va->vabits[pg_off] & perm_mask))) {
              if (first_invalid_mem) {
                *first_invalid_mem = start_of_this_page(a) + pg_off;
              }
@@ -983,7 +987,7 @@ part2:
    va = (*page_ptr)->va;
    pg_off = 0;
    while (lenB > 0) {
-      if (UNLIKELY(va->vabits[pg_off] != perm)) {
+      if (UNLIKELY((!(va->vabits[pg_off] & perm_mask)))) {
           if (first_invalid_mem) {
             *first_invalid_mem = start_of_this_page(a) + pg_off;
           }
@@ -995,101 +999,16 @@ part2:
    return True;
 }
 
-static
-Bool check_address_range_perms_not (
-                Addr a, SizeT lenT, UChar perm, Addr *first_invalid_mem)
-{
-   VA* va;
-   Page **page_ptr;
-   UWord pg_off;
 
-   UWord aNext = start_of_this_page(a) + PAGE_SIZE;
-   UWord len_to_next_secmap = aNext - a;
-   UWord lenA, lenB;
-
-   // lenT = lenA + lenB (lenA upto first page, lenB is rest)
-   if (is_start_of_page(a)) {
-      lenA = 0;
-      lenB = lenT;
-      goto part2;
-   } else if ( lenT <= len_to_next_secmap ) {
-      lenA = lenT;
-      lenB = 0;
-   } else {
-      lenA = len_to_next_secmap;
-      lenB = lenT - lenA;
-   }
-
-   page_ptr = get_page_ptr_or_null(a);
-   if (!page_ptr) {
-        *first_invalid_mem = a;
-       return False;
-   }
-   va = (*page_ptr)->va;
-   pg_off = PAGE_OFF(a);
-   while (lenA > 0) {
-      if (UNLIKELY(va->vabits[pg_off] == perm)) {
-          *first_invalid_mem = start_of_this_page(a) + pg_off;
-          return False;
-      }
-      pg_off++;
-      lenA--;
-   }
-
-   a = start_of_this_page (a) + PAGE_SIZE;
-
-part2:
-   while (lenB >= PAGE_SIZE) {
-      page_ptr = get_page_ptr_or_null(a);
-      if (!page_ptr) {
-           *first_invalid_mem = a;
-          return False;
-      }
-      va = (*page_ptr)->va;
-
-      for (pg_off = 0; pg_off < PAGE_SIZE; pg_off++) {
-         if (UNLIKELY(va->vabits[pg_off] == perm)) {
-             *first_invalid_mem = start_of_this_page(a) + pg_off;
-             return False;
-         }
-      }
-      lenB -= PAGE_SIZE;
-      a += PAGE_SIZE;
-   }
-
-   if (lenB == 0) {
-      return True;
-   }
-
-   tl_assert(lenB < PAGE_SIZE);
-
-   page_ptr = get_page_ptr_or_null(a);
-   if (!page_ptr) {
-        *first_invalid_mem = a;
-       return False;
-   }
-   va = (*page_ptr)->va;
-   pg_off = 0;
-   while (lenB > 0) {
-      if (UNLIKELY(va->vabits[pg_off] == perm)) {
-           *first_invalid_mem = start_of_this_page(a) + pg_off;
-           return False;
-      }
-      pg_off++;
-      lenB--;
-   }
-   return True;
-}
-
-static Bool check_is_writable(Addr addr, SizeT size, Addr *first_invalid_addr)
+static INLINE Bool check_is_writable(Addr addr, SizeT size, Addr *first_invalid_addr)
 {
     //memspace_dump();
-    return check_address_range_perms(addr, size, MEM_DEFINED, first_invalid_addr);
+    return check_address_range_perms(addr, size, MEM_WRITE_MASK, first_invalid_addr);
 }
 
-static Bool check_is_readable(Addr addr, SizeT size, Addr *first_invalid_addr)
+static INLINE Bool check_is_readable(Addr addr, SizeT size, Addr *first_invalid_addr)
 {
-    return check_address_range_perms_not(addr, size, MEM_NOACCESS, first_invalid_addr);
+    return check_address_range_perms(addr, size, MEM_DEFINED, first_invalid_addr);
 }
 
 static
@@ -1197,8 +1116,7 @@ part2:
 
 static INLINE void make_mem_undefined(Addr a, SizeT len)
 {
-   // Same as defined now, we do not support tracking undefined memory yet
-   set_address_range_perms(a, len, MEM_DEFINED);
+   set_address_range_perms(a, len, MEM_UNDEFINED);
 }
 
 static INLINE void make_mem_defined(Addr a, SizeT len)
@@ -1219,7 +1137,7 @@ static INLINE void make_mem_noaccess(Addr a, SizeT len)
 static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
 {
    if (page->status == INVALID_HASH) {
-      if (page->va == uniform_va[MEM_NOACCESS]) {
+      if (page->va == uniform_va[MEM_NOACCESS] || page->va == uniform_va[MEM_UNDEFINED]) {
          page->status = EMPTY;
          return;
       }
@@ -1252,7 +1170,7 @@ static void page_hash(AN_(MD5_CTX) *ctx, Page *page)
              if ((page->page_flags[i] & PAGEFLAG_RW) == PAGEFLAG_RW) {
                  VA *va = page->va;
                  for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++)
-                     if (va->vabits[j] != MEM_NOACCESS) {
+                     if (va->vabits[j] & MEM_READ_MASK) {
                          if (s == 0) {
                              b = base + j;
                          }
@@ -1311,7 +1229,7 @@ static void memimage_save_page_content(Page *page)
    for (i = 0; i < REAL_PAGES_IN_PAGE; i++) {
       if (page->page_flags[i] & PAGEFLAG_READ) {
          for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {
-            if (va->vabits[j] != MEM_NOACCESS) {
+            if (va->vabits[j] & MEM_READ_MASK) {
                dst[j] = src[j];
                //c++;
             }
@@ -1353,7 +1271,7 @@ static void memimage_restore_page_content(Page *page, Page *old_page)
     //page_dump(page);
     VPRINT(2, "memimage_restore_page_content base=%lx\n", page->base);
 
-    if (page->va == uniform_va[MEM_NOACCESS]) {
+    if (page->va == uniform_va[MEM_NOACCESS] || page->va == uniform_va[MEM_UNDEFINED]) {
         return;
     }
 
@@ -1403,7 +1321,7 @@ static void memimage_restore_page_content(Page *page, Page *old_page)
         }
         if ((flags & PAGEFLAG_RW) == PAGEFLAG_RW) {
             for (j = VKI_PAGE_SIZE * i; j < VKI_PAGE_SIZE * (i + 1); j++) {
-                if (va->vabits[j] != MEM_NOACCESS) {
+                if (va->vabits[j] & MEM_READ_MASK) {
                     dst[j] = src[j];
                 }
             }
@@ -1629,10 +1547,11 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
       if (UNLIKELY(offset + i >= PAGE_SIZE)) {
            break;
       }
-      if (UNLIKELY(page->va->vabits[offset + i] != MEM_DEFINED)) {
+      if (UNLIKELY(!(page->va->vabits[offset + i] & MEM_WRITE_MASK))) {
          report_error_write(addr, size);
          tl_assert(0); // no return here
       }
+      page->va->vabits[offset + i] = MEM_DEFINED;
       /*if (UNLIKELY(page->va->vabits[offset + i] == MEM_LOCKED)) {
          report_error_write(addr, size, True);
          tl_assert(0); // no return here
@@ -1661,9 +1580,20 @@ static VG_REGPARM(2) void trace_read(Addr addr, SizeT size)
       to solve problem of partial_loads in functions
       like 'strlen' */
 
-   if (UNLIKELY(page->va->vabits[offset] == MEM_NOACCESS)) {
-         report_error_read(addr, size);
-         tl_assert(0); // no return here
+   if (UNLIKELY(!(page->va->vabits[offset] & MEM_READ_MASK))) {
+         if (UNLIKELY(page->va->vabits[offset] == MEM_NOACCESS)) {
+            report_error_read(addr, size);
+            tl_assert(0); // no return here
+         }
+
+         SizeT i; // Zero undefined memory before reading
+         for (i = 0; i < size; i++) {
+             if (page->va->vabits[offset + i] == MEM_UNDEFINED) {
+                HChar *d = (HChar*) (offset + i + page->base);
+                *d = 0;
+             }
+         }
+
    }
 
    /*
@@ -1689,6 +1619,7 @@ static void extern_write(Addr addr, SizeT size, Bool check)
               tl_assert(0);
     }
     prepare_for_write(addr, size);
+    make_mem_defined(addr, size);
 }
 
 
@@ -2309,34 +2240,29 @@ static void push_page(SocketWriteBuffer *swb, Page *page)
       }
       Int j;
       Int offset = i * VKI_PAGE_SIZE;
-      Bool noaccess = False;
-      Bool rdonly = False;
-      Bool defined = False;
-      for (j = 0; j < VKI_PAGE_SIZE; j++) {
-          switch(va->vabits[offset + j])
-          {
-                case MEM_DEFINED:
-                    defined = True;
-                    break;
-                case MEM_NOACCESS:
-                    noaccess = True;
-                    break;
-                case MEM_READONLY:
-                    rdonly = True;
-                    break;
+      UChar perm = va->vabits[offset];
+      for (j = 1; j < VKI_PAGE_SIZE; j++) {
+          if (va->vabits[offset + j] != perm) {
+              break;
           }
       }
 
-      if (defined && !noaccess && !rdonly) {
-          page_header->flags[i] |= TRANSPORT_PAGEFLAG_DEFINED;
-          size += VKI_PAGE_SIZE;
-          transport_page[i] = True;
-      } else if (!defined && noaccess && !rdonly) {
-          page_header->flags[i] |= TRANSPORT_PAGEFLAG_NOACCESS;
-      } else if (!defined && !noaccess && !rdonly) {
-          page_header->flags[i] |= TRANSPORT_PAGEFLAG_READONLY;
-          size += VKI_PAGE_SIZE;
-          transport_page[i] = True;
+      if (j == VKI_PAGE_SIZE) {
+          if (perm == MEM_DEFINED) {
+              page_header->flags[i] |= TRANSPORT_PAGEFLAG_DEFINED;
+              size += VKI_PAGE_SIZE;
+              transport_page[i] = True;
+          } else if (perm == MEM_NOACCESS) {
+              page_header->flags[i] |= TRANSPORT_PAGEFLAG_NOACCESS;
+          } else if (perm == MEM_UNDEFINED) {
+              page_header->flags[i] |= TRANSPORT_PAGEFLAG_UNDEFINED;
+          } else if (perm == MEM_READONLY) {
+              page_header->flags[i] |= TRANSPORT_PAGEFLAG_READONLY;
+              size += VKI_PAGE_SIZE;
+              transport_page[i] = True;
+          } else {
+              tl_assert(0);
+          }
       } else {
           page_header->flags[i] |= TRANSPORT_PAGEFLAG_FULL;
           size += 2 * VKI_PAGE_SIZE;
@@ -2415,6 +2341,7 @@ static Page *pull_page(SocketReadBuffer *srb)
     Bool defined = True;
     Bool rdonly = True;
     Bool noaccess = True;
+    Bool undefined = True;
 
     // Copy flags, because srb_read may overwrite header;
     for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
@@ -2431,6 +2358,9 @@ static Page *pull_page(SocketReadBuffer *srb)
          if (mflag != TRANSPORT_PAGEFLAG_NOACCESS) {
             noaccess = False;
          }
+         if (mflag != TRANSPORT_PAGEFLAG_UNDEFINED) {
+            undefined = False;
+         }
     }
 
     if (defined) {
@@ -2444,6 +2374,13 @@ static Page *pull_page(SocketReadBuffer *srb)
 
     if (noaccess) {
        page->va = uniform_va[MEM_NOACCESS];
+       page->va->ref_count++;
+       VG_(memset)(page->data, 0, PAGE_SIZE);
+       return page;
+    }
+
+    if (undefined) {
+       page->va = uniform_va[MEM_UNDEFINED];
        page->va->ref_count++;
        VG_(memset)(page->data, 0, PAGE_SIZE);
        return page;
@@ -2470,6 +2407,9 @@ static Page *pull_page(SocketReadBuffer *srb)
             case TRANSPORT_PAGEFLAG_NOACCESS:
                 VG_(memset)(&page->va->vabits[offset], MEM_NOACCESS, VKI_PAGE_SIZE);
                 break;
+            case TRANSPORT_PAGEFLAG_UNDEFINED:
+                VG_(memset)(&page->va->vabits[offset], MEM_UNDEFINED, VKI_PAGE_SIZE);
+                break;
            case TRANSPORT_PAGEFLAG_READONLY:
                VG_(memset)(&page->va->vabits[offset], MEM_READONLY, VKI_PAGE_SIZE);
                break;
@@ -2486,7 +2426,9 @@ static Page *pull_page(SocketReadBuffer *srb)
 
     for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
         Int flag = flags[j] & TRANSPORT_PAGEFLAG_MASK;
-        if (flag != TRANSPORT_PAGEFLAG_NOACCESS && flag != TRANSPORT_PAGEFLAG_VAONLY) {
+        if (flag != TRANSPORT_PAGEFLAG_NOACCESS
+            && flag != TRANSPORT_PAGEFLAG_VAONLY
+            && flag != TRANSPORT_PAGEFLAG_UNDEFINED) {
             VG_(memcpy)(&page->data[j * VKI_PAGE_SIZE],
                   srb_read(srb, VKI_PAGE_SIZE),
                   VKI_PAGE_SIZE);
@@ -3007,7 +2949,6 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          continue;
       }
 
-
       if (!VG_(strcmp(cmd, "DEBUG_COMPARE"))) {
             UWord state1 = next_token_uword();
             UWord state2 = next_token_uword();
@@ -3115,8 +3056,9 @@ static
 void new_mem_mprotect ( Addr a, SizeT len, Bool rr, Bool ww, Bool xx )
 {
    VPRINT(2, "new_mem_mprotect %lx-%lx %lu %d %d %d\n", a, a + len, len, rr, ww, xx);
+
    if (rr && ww) {
-      make_mem_defined(a, len);
+       make_mem_undefined(a, len);
    } else if (rr) {
       make_mem_readonly(a, len);
    } else {
@@ -3209,7 +3151,8 @@ static void an_post_clo_init(void)
    buffer_table = VG_(HT_construct)("an.buffers");
    uniform_va[MEM_NOACCESS] = va_new();
    VG_(memset)(uniform_va[MEM_NOACCESS]->vabits, MEM_NOACCESS, VA_CHUNKS);
-   uniform_va[MEM_UNDEFINED] = NULL; // Not used now
+   uniform_va[MEM_UNDEFINED] = va_new();
+   VG_(memset)(uniform_va[MEM_UNDEFINED]->vabits, MEM_UNDEFINED, VA_CHUNKS);
    uniform_va[MEM_READONLY] = va_new();
    VG_(memset)(uniform_va[MEM_READONLY]->vabits, MEM_READONLY, VA_CHUNKS);
    uniform_va[MEM_DEFINED] = va_new();
@@ -3435,7 +3378,7 @@ void* user_memalign (ThreadId tid, SizeT alignB, SizeT n)
 {
     Addr addr = memspace_alloc(n, alignB);
     VG_(memset)((void*)addr, 0, n);
-    make_mem_defined(addr, n);
+    make_mem_undefined(addr, n);
     VPRINT(2, "client_memalign address=%lx size=%lu\n", addr, n);
     return (void*) addr;
 }
@@ -3455,7 +3398,8 @@ static
 void* user_realloc(ThreadId tid, void* p_old, SizeT new_szB)
 {
     Addr addr = memspace_alloc(new_szB, 1);
-    make_mem_undefined(addr, new_szB);
+    // TODO: We should properly copy VA values from the original block
+    make_mem_defined(addr, new_szB);
     VPRINT(2, "client_realloc address=%lx size=%lu\n", addr, new_szB);
     if (p_old == NULL) {
         VG_(memset)((void*)addr, 0, new_szB);

@@ -13,6 +13,7 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	const int size = 123;
 	int d[size * 2 * 3];
+	memset(d, 0, sizeof(d));
 	MPI_Request r;
 	if (rank == 1) {
 		MPI_Status s;

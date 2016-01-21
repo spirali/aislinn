@@ -131,7 +131,7 @@ class CollectiveTests(TestCase):
         self.output(1, output)
         self.execute(3, "ok")
 
-    def test_reduce(self):
+    def test_reduce1(self):
         output = "OUT1: 600 603 606 609\n" \
                  "OUT2: 6000000 6110601 6222408 6335427\n" \
                  "OUT3: 100 101 102 103\n" \

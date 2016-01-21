@@ -13,7 +13,7 @@ int main(int argc, char **argv)
 	int rank;
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	int d, d2;
+	int d = -1, d2 = -1;
 	MPI_Request r;
 	if (rank == 1) {
 		if (!strcmp(argv[1], "wait")) {

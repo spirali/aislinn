@@ -66,6 +66,9 @@ class Request(EqMixin):
         transfer_context.set_translate(self, request)
         return request
 
+    def is_send_recv_not_proc_null(self):
+        return False
+
 
 class SendRequest(Request):
 
@@ -82,6 +85,9 @@ class SendRequest(Request):
         self.datatype = datatype
         self.count = count
         self.vg_buffer = None
+
+    def is_send_recv_not_proc_null(self):
+        return self.target != consts.MPI_PROC_NULL
 
     def create_message(self, context):
         assert self.vg_buffer is None
@@ -152,6 +158,9 @@ class ReceiveRequest(Request):
         self.vg_buffer = None
         self.source_rank = None
         self.source_tag = None
+
+    def is_send_recv_not_proc_null(self):
+        return self.source != consts.MPI_PROC_NULL
 
     def make_finished_request(self, rank, tag, vg_buffer):
         assert self.vg_buffer is None
