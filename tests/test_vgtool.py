@@ -558,12 +558,12 @@ class VgToolTests(TestCase):
 
     def test_bigstack_pushpull(self):
         self.program("bigstack2")
-        c = self.controller(verbose=1)
+        c = self.controller()
         c.start_and_connect()
         state_id = c.save_state()
         h1 = c.hash_state()
 
-        d = self.controller(verbose=1)
+        d = self.controller()
         d.start_and_connect()
         sockets = make_interconnection((c, d))
 
@@ -576,6 +576,21 @@ class VgToolTests(TestCase):
         h2 = d.hash_state()
 
         assert h1 == h2
+
+    def test_stack_pollution(self):
+        self.program("stackpollution")
+        c = self.controller()
+        c.start_and_connect()
+        s1 = c.save_state()
+        c.run_process() # call g
+        hash1 = c.hash_state()
+        c.run_process() # finish
+        c.restore_state(s1)
+        c.run_process() # call g
+
+        hash2 = c.hash_state()
+
+        assert hash1 == hash2
 
 
 if __name__ == "__main__":
