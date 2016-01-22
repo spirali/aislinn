@@ -130,4 +130,5 @@ class VgToolTests(TestCase):
                 else:
                     assert s > 0
 
-
+if __name__ == "__main__":
+    unittest.main()

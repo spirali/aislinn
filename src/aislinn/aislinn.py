@@ -290,19 +290,6 @@ def check_program(program):
         program = os.path.join(".", program)
     return program
 
-def configure():
-    if os.path.isfile(paths.VALGRIND_LOCAL_BIN):
-        paths.VALGRIND_BIN = paths.VALGRIND_LOCAL_BIN
-        logging.debug("Using local version of valgrind: %s",
-                      paths.VALGRIND_BIN)
-    elif os.path.isfile(paths.VALGRIND_INSTALL_BIN):
-        paths.VALGRIND_BIN = paths.VALGRIND_INSTALL_BIN
-        logging.debug("Using installed version of valgrind: %s",
-                      paths.VALGRIND_BIN)
-    else:
-        logging.error("Valgrind binary not found")
-        sys.exit(2)
-
 def main():
     args, valgrind_args = parse_args()
     run_args = [ check_program(args.program) ] + args.args
@@ -322,7 +309,11 @@ def main():
 
     logging.debug("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
 
-    configure()
+    paths.configure()
+    if paths.VALGRIND_BIN is None:
+        logging.error("Valgrind not found")
+        sys.exit(2)
+    logging.debug("Path to Valgrind: %s", paths.VALGRIND_BIN)
 
     if args.debug_profile:
         import cProfile

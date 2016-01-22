@@ -18,8 +18,11 @@ AISLINN_CPP = os.path.join(AISLINN_BIN, "aislinn-c++")
 REPORT_GALLERY = False
 
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
+import base.paths
 import base.controller
 import base.bufserver
+
+base.paths.configure()
 
 def set_to_sorted_list(s):
     lst = list(s)

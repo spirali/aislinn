@@ -30,3 +30,10 @@ VALGRIND_LOCAL_BIN = os.path.join(VALGRIND_LOCAL, "vg-in-place")
 VALGRIND_INSTALL_BIN = os.path.join(os.path.dirname(AISLINN_ROOT), "bin", "valgrind")
 
 VALGRIND_BIN = None # Need to be configured
+
+def configure():
+    global VALGRIND_BIN
+    if os.path.isfile(VALGRIND_LOCAL_BIN):
+        VALGRIND_BIN = VALGRIND_LOCAL_BIN
+    elif os.path.isfile(VALGRIND_INSTALL_BIN):
+        VALGRIND_BIN = VALGRIND_INSTALL_BIN

@@ -417,7 +417,6 @@ class Controller:
                 env[v] = self.extra_env[v]
         else:
             env = None
-
         self.process = subprocess.Popen(
             args, cwd=self.cwd, env=env,
             stdout=self.stdout_file, stderr=self.stderr_file)
