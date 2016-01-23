@@ -20,6 +20,7 @@
 
 import itertools
 
+COLOR_TABLE = [ None, "red", "blue", "green", "orange" ]
 
 class StateSpace:
 
@@ -65,8 +66,12 @@ class StateSpace:
             i = id(node)
             f.write("S{0} [label=\"{1}\"]\n".format(i, node.uid))
             for arc in node.arcs:
-                f.write("S{0} -> S{1} [label=\"{2}\"]\n".format(
-                    i, id(arc.node), arc.label))
+                extra = ""
+                if arc.worker and arc.worker < len(COLOR_TABLE):
+                    # default color for process 0
+                    extra += ",color=" + COLOR_TABLE[arc.worker]
+                f.write("S{0} -> S{1} [label=\"{2}\"{3}]\n".format(
+                    i, id(arc.node), arc.label, extra))
         with open(filename, "w") as f:
             f.write("digraph X {\n")
             for node in self.all_nodes():
