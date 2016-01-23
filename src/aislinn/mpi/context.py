@@ -230,8 +230,8 @@ class Context:
             elif result[0] == "EXIT":
                 exitcode = convert_type(result[1], "int")
                 if exitcode != 0:
-                    self.add_error_message(
-                            errormsg.NonzeroExitCode(self, exitcode=exitcode))
+                    e = errormsg.NonzeroExitCode(self, exitcode=exitcode)
+                    self.add_error_and_throw(e)
                     return True
                 else:
                     e = errormsg.NoMpiCall(self)

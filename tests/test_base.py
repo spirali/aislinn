@@ -27,6 +27,11 @@ class BaseTests(TestCase):
         self.check_error("exitcode", pid="0", exitcode="21")
         self.assertEquals(self.report.number_of_nodes, 3)
 
+    def test_exitcode_nompi(self):
+        self.program("exitcode_nompi")
+        self.execute(1, error="base/exitcode")
+        self.check_error("exitcode", pid="0", exitcode="21")
+
     def test_invalid_args(self):
         self.program("args")
         args = [ ("isend_rank_1", "mpi/invalid-arg/rank"),
