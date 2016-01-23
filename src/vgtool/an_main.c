@@ -1540,28 +1540,38 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
    }
    page_prepare_for_write_data(&ent->page);
    Page *page = ent->page;
+   VA *va = page->va;
    Addr offset = addr - page->base;
    SizeT i;
-   //page_dump(page);
-   for (i = 0; i < size; i++) {
-      if (UNLIKELY(offset + i >= PAGE_SIZE)) {
-           break;
-      }
-      if (UNLIKELY(!(page->va->vabits[offset + i] & MEM_WRITE_MASK))) {
-         report_error_write(addr, size);
-         tl_assert(0); // no return here
-      }
-      page->va->vabits[offset + i] = MEM_DEFINED;
-      /*if (UNLIKELY(page->va->vabits[offset + i] == MEM_LOCKED)) {
-         report_error_write(addr, size, True);
-         tl_assert(0); // no return here
-      }*/
+
+   UChar flag = va->vabits[offset];
+   SizeT sz = size;
+   if (UNLIKELY(offset + sz > PAGE_SIZE)) {
+        sz = PAGE_SIZE - offset;
    }
 
-   // Overlap test
-   Addr end = (addr & PAGE_MASK) + size;
-   if (UNLIKELY(end > PAGE_SIZE)) {
-      trace_write(start_of_this_page(addr) + PAGE_SIZE, end - PAGE_SIZE);
+   for (i = 1; i < sz; i++) {
+      flag &= va->vabits[offset + i];
+   }
+
+   if (UNLIKELY(!(flag & MEM_WRITE_MASK))) {
+      report_error_write(addr, size);
+      tl_assert(0); // no return here
+   }
+
+   if (flag == MEM_UNDEFINED) {
+      if (UNLIKELY(va->ref_count >= 2)) {
+         va->ref_count--;
+         va = va_clone(va);
+         page->va = va;
+      }
+      for (i = 0; i < sz; i++) {
+         va->vabits[offset + i] = MEM_DEFINED;
+      }
+   }
+
+   if (UNLIKELY(sz != size)) {
+      trace_write(start_of_this_page(addr) + PAGE_SIZE, size - sz);
    }
 }
 
