@@ -36,7 +36,7 @@ import datetime
 
 class Generator:
 
-    def __init__(self, args, process_count, valgrind_args, aislinn_args):
+    def __init__(self, args, process_count, aislinn_args):
         self.args = args
         self.statespace = StateSpace()
         self.consts_pool = None
@@ -84,7 +84,6 @@ class Generator:
                                 aislinn_args.workers,
                                 self,
                                 args,
-                                valgrind_args,
                                 aislinn_args)
                          for i in xrange(aislinn_args.workers) ]
 

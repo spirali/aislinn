@@ -324,7 +324,7 @@ class Program:
         controller.profile = profile
         controller.buffer_server_port = bufserver_port
         if verbose:
-           controller.valgrind_args = ("--verbose={0}".format(verbose),)
+            controller.verbose = verbose
         return controller
 
 

@@ -73,7 +73,7 @@ class TransferContext:
 
 class Worker:
 
-    def __init__(self, worker_id, workers_count, generator, args, valgrind_args, aislinn_args):
+    def __init__(self, worker_id, workers_count, generator, args, aislinn_args):
         self.generator = generator
         self.worker_id = worker_id
         self.gcontext = None
@@ -83,17 +83,23 @@ class Worker:
         self.interconnect_sockets = [ None ] * workers_count
 
         for i, controller in enumerate(self.controllers):
-            controller.valgrind_args = valgrind_args
             controller.name = i + worker_id * generator.process_count
             controller.profile = generator.profile
 
-        if aislinn_args.debug_by_valgrind_tool:
-            for controller in self.controllers:
+            if aislinn_args.vgv:
+                controller.verbose = aislinn_args.vgv
+
+            if aislinn_args.heap_size is not None:
+                controller.heap_size = aislinn_args.heap_size
+
+            if aislinn_args.redzone_size is not None:
+                controller.redzone_size = aislinn_args.redzone_size
+
+            if aislinn_args.debug_by_valgrind_tool:
                 controller.debug_by_valgrind_tool = \
                         aislinn_args.debug_by_valgrind_tool
 
-        if aislinn_args.debug_vglogfile is not None:
-            for controller in self.controllers:
+            if aislinn_args.debug_vglogfile is not None:
                 prefix = aislinn_args.debug_vglogfile
                 filename = prefix + ".out." + str(controller.name)
                 logging.debug(

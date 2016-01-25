@@ -53,6 +53,11 @@ def positive_int(value):
                  "{} is not a positive value".format(i))
     return i
 
+def size_type(value):
+    v = utils.sizestr_to_int(value)
+    if v is None or v < 0:
+        raise argparse.ArgumentTypeError("'{}' is not valid size".format(value))
+    return v
 
 def parse_args():
     parser = argparse.ArgumentParser(description=
@@ -80,20 +85,14 @@ def parse_args():
                         default=1,
                         help="Verbosity level (default: 1)")
 
-    parser.add_argument("--vgv",
-                        metavar="N",
-                        type=int,
-                        default=0,
-                        help="Verbosity of valgrind tool")
-
     parser.add_argument("--heap-size",
                         metavar="SIZE",
-                        type=str,
+                        type=size_type,
                         help="Maximal size of heap")
 
     parser.add_argument("--redzone-size",
                         metavar="SIZE",
-                        type=int,
+                        type=size_type,
                         help="Allocation red zones")
 
     parser.add_argument("-S", "--send-protocol",
@@ -185,6 +184,11 @@ def parse_args():
                         type=str,
                         default=None,
                         help="Save output of vgclients into files")
+    parser.add_argument("--vgv",
+                        metavar="N",
+                        type=int,
+                        default=0,
+                        help="Verbosity of valgrind tool")
 
     args = parser.parse_args()
 
@@ -220,25 +224,6 @@ def parse_args():
         logging.error("Invalid argument for --search")
         sys.exit(1)
 
-    valgrind_args = []
-
-    if args.heap_size:
-        size = utils.sizestr_to_int(args.heap_size)
-        if size is None or size < 1:
-            logging.error("Invalid heap size (parameter --heap-size)")
-            sys.exit(1)
-        valgrind_args.append("--heap-size={0}".format(size))
-
-    if args.redzone_size:
-        size = int(args.redzone_size)
-        if size < 0:
-            logging.error("Invalid redzone size")
-            sys.exit(1)
-        valgrind_args.append("--alloc-redzone-size={0}".format(size))
-
-    if args.vgv:
-        valgrind_args.append("--verbose={0}".format(args.vgv))
-
     if args.send_protocol not in ("full", "eager", "rendezvous"):
         threshold = parse_threshold(args.send_protocol)
         if threshold is None:
@@ -261,7 +246,7 @@ def parse_args():
                       "stderr is not captured (--stderr option)")
         sys.exit(1)
 
-    return args, valgrind_args
+    return args
 
 def write_outputs(generator, stream_name, limit, file_prefix):
     if limit == "all":
@@ -291,11 +276,10 @@ def check_program(program):
     return program
 
 def main():
-    args, valgrind_args = parse_args()
+    args = parse_args()
     run_args = [ check_program(args.program) ] + args.args
     generator = Generator(run_args,
                           args.p,
-                          valgrind_args,
                           args)
 
     if platform.architecture()[0] != "64bit" or \
@@ -305,8 +289,6 @@ def main():
            sys.exit(1)
 
     logging.debug("Run args: %s", run_args)
-    logging.debug("Valgrind args: %s", valgrind_args)
-
     logging.debug("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
 
     paths.configure()

@@ -64,6 +64,10 @@ class Controller:
     profile = False
     extra_env = None
 
+    heap_size = None
+    redzone_size = None
+    verbose = None
+
     name = "" # For debug purpose
 
     def __init__(self, args, cwd=None):
@@ -72,7 +76,6 @@ class Controller:
         self.recv_buffer = ""
         self.args = tuple(args)
         self.cwd = cwd
-        self.valgrind_args = ()
         self.server_socket = None
         self.running = False
 
@@ -398,7 +401,16 @@ class Controller:
         if self.profile:
             args += ("--profile=yes",)
 
-        args += tuple(self.valgrind_args) + tuple(self.args)
+        if self.heap_size is not None:
+            args += ("--heap-size={0}".format(self.heap_size),)
+
+        if self.redzone_size is not None:
+            args += ("--alloc-redzone-size={0}".format(self.redzone_size),)
+
+        if self.verbose is not None:
+            args += ("--verbose={0}".format(self.verbose),)
+
+        args += self.args
 
         if self.debug_by_valgrind_tool:
             args = (
