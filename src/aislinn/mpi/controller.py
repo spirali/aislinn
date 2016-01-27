@@ -18,13 +18,13 @@
 #
 
 
-import base.controller
+import vgtool.controller
 
 
-class Controller(base.controller.ControllerWithResources):
+class Controller(vgtool.controller.ControllerWithResources):
 
-    STATUS_SIZE = 4 * base.controller.Controller.INT_SIZE
-    REQUEST_SIZE = base.controller.Controller.INT_SIZE
+    STATUS_SIZE = 4 * vgtool.controller.Controller.INT_SIZE
+    REQUEST_SIZE = vgtool.controller.Controller.INT_SIZE
 
     context = None
 

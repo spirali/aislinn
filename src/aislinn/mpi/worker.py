@@ -22,7 +22,6 @@ from action import (ActionMatching,
                     ActionFlag0,
                     ActionProbePromise,
                     ActionTestAll)
-from base.controller import BufferManager, make_interconnection_pairs
 from mpi.controller import Controller
 from base.node import Node
 from base.utils import power_set
@@ -30,6 +29,8 @@ from gcontext import GlobalContext
 from globalstate import GlobalState
 from collections import deque
 from state import State
+from vgtool.controller import BufferManager, make_interconnection_pairs
+import base.paths
 import consts
 import errormsg
 import logging
@@ -79,7 +80,7 @@ class Worker:
         self.worker_id = worker_id
         self.gcontext = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
-        self.controllers = [Controller(args)
+        self.controllers = [Controller(base.paths.VALGRIND_BIN, args)
                             for i in xrange(generator.process_count)]
         self.interconnect_sockets = [None] * workers_count
 

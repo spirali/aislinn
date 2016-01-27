@@ -1,6 +1,6 @@
 from utils import TestCase
 import unittest
-from base.controller import make_interconnection
+from vgtool.controller import make_interconnection
 
 
 class VgToolTests(TestCase):

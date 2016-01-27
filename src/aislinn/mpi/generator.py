@@ -19,7 +19,6 @@
 
 
 from base.arc import STREAM_STDOUT, STREAM_STDERR
-from base.controller import poll_controllers
 from base.report import Report
 from base.statespace import StateSpace
 from context import Context
@@ -27,9 +26,10 @@ from gcontext import GlobalContext, ErrorFound
 from mpi.ndsync import NdsyncChecker
 from base.node import Node
 from worker import Worker
+from vgtool.controller import poll_controllers
+
 import consts
 import errormsg
-
 import logging
 import datetime
 

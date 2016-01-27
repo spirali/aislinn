@@ -286,9 +286,6 @@ def check_program(program):
 def main():
     args = parse_args()
     run_args = [check_program(args.program)] + args.args
-    generator = Generator(run_args,
-                          args.p,
-                          args)
 
     if platform.architecture()[0] != "64bit" or platform.system() != "Linux":
         logging.error("Aislinn is not supported on this platform. "
@@ -303,6 +300,10 @@ def main():
         logging.error("Valgrind not found")
         sys.exit(2)
     logging.debug("Path to Valgrind: %s", paths.VALGRIND_BIN)
+
+    generator = Generator(run_args,
+                          args.p,
+                          args)
 
     if args.debug_profile:
         import cProfile

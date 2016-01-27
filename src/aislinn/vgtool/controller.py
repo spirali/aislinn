@@ -17,12 +17,11 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from base.resource import ResourceManager, Resource
+from resource import ResourceManager, Resource
 from socketwrapper import SocketWrapper
 
 import socket
 import subprocess
-import paths
 import logging
 import hashlib
 import select
@@ -71,7 +70,7 @@ class Controller:
 
     name = ""  # For debug purpose
 
-    def __init__(self, args, cwd=None):
+    def __init__(self, valgrind_bin, args, cwd=None):
         self.process = None
         self.socket = None
         self.recv_buffer = ""
@@ -79,6 +78,7 @@ class Controller:
         self.cwd = cwd
         self.server_socket = None
         self.running = False
+        self.valgrind_bin = valgrind_bin
 
     def start(self, capture_syscalls=()):
         assert self.process is None  # Nothing is running
@@ -395,7 +395,7 @@ class Controller:
 
     def _start_valgrind(self, port, capture_syscalls):
         args = (
-            paths.VALGRIND_BIN,
+            self.valgrind_bin,
             "-q",
             "--tool=aislinn",
             "--port={0}".format(port),

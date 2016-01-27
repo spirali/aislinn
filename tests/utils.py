@@ -19,8 +19,8 @@ REPORT_GALLERY = False
 
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.paths
-import base.controller
-import base.bufserver
+import vgtool.controller
+import vgtool.bufserver
 
 base.paths.configure()
 
@@ -224,11 +224,11 @@ class TestCase(unittest.TestCase):
         if self.bufserver_process is not None:
             return
         self.bufserver_process, self.bufserver_port = \
-            base.bufserver.start_process(clients_count)
+            vgtool.bufserver.start_process(clients_count)
 
     def connect_to_bufserver(self):
         assert self.bufserver_process
-        return base.bufserver.connect(self.bufserver_port)
+        return vgtool.bufserver.connect(self.bufserver_port)
 
 
 def cleanup_build_dir():
@@ -328,8 +328,8 @@ class Program:
         return stdout, stderr
 
     def controller(self, args, verbose, profile, bufserver_port):
-        controller = base.controller.Controller(
-            ("./a.out",) + args, AISLINN_BUILD)
+        controller = vgtool.controller.Controller(
+            base.paths.VALGRIND_BIN, ("./a.out",) + args, AISLINN_BUILD)
         controller.profile = profile
         controller.buffer_server_port = bufserver_port
         if verbose:
