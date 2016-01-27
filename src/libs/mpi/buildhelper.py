@@ -3,7 +3,8 @@ import re
 
 # This program generates mpi.c from mpi.h
 
-ignored_functions = set([ "MPI_Init" ])
+ignored_functions = set(["MPI_Init"])
+
 
 def get_functions(header):
     results = []
@@ -36,6 +37,7 @@ def get_functions(header):
             results.append((name, args))
     return results
 
+
 def compose_c_source(functions):
     lines = []
     for name, args in functions:
@@ -48,9 +50,10 @@ def compose_c_source(functions):
                        for n, t, ts in args)
             ))
         lines.append("\taislinn_call(\"{0}\", args, {1});".format(
-            name, len(args)));
+            name, len(args)))
         lines.append("\treturn MPI_SUCCESS;\n}\n")
     return "\n".join(lines)
+
 
 def main():
     if len(sys.argv) != 3:

@@ -18,7 +18,6 @@
 #
 
 
-
 class ArcData:
 
     def __init__(self, name, pid, value):
@@ -35,7 +34,7 @@ class Arc:
         self.node = node
         self.action = action
         self.events = events
-        self.data = data # list of ArcData
+        self.data = data  # list of ArcData
 
     @property
     def label(self):

@@ -29,7 +29,7 @@ class Controller(base.controller.ControllerWithResources):
     context = None
 
     def write_status(self, status_ptr, source, tag, size):
-        self.write_ints(status_ptr, [ source, tag, size ])
+        self.write_ints(status_ptr, [source, tag, size])
 
     def on_unexpected_output(self, line):
         self.context.on_unexpected_output(line)

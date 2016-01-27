@@ -22,52 +22,52 @@ class Event:
 
     stacktrace = None
     new_request = None
-    cc = None # Collective communication info (comm_id, cc_id)
+    cc = None  # Collective communication info (comm_id, cc_id)
     ndsync = False
     call_event = False
 
 
 call_types = {
-    "MPI_Recv" : "recv",
-    "MPI_Irecv" : "recv",
+    "MPI_Recv": "recv",
+    "MPI_Irecv": "recv",
 
-    "MPI_Send" : "send",
-    "MPI_Ssend" : "send",
-    "MPI_Rsend" : "send",
-    "MPI_Bsend" : "send",
-    "MPI_Isend" : "send",
-    "MPI_Issend" : "send",
-    "MPI_Irsend" : "send",
-    "MPI_Ibsend" : "send",
+    "MPI_Send": "send",
+    "MPI_Ssend": "send",
+    "MPI_Rsend": "send",
+    "MPI_Bsend": "send",
+    "MPI_Isend": "send",
+    "MPI_Issend": "send",
+    "MPI_Irsend": "send",
+    "MPI_Ibsend": "send",
 
-    "MPI_Wait" : "wait",
-    "MPI_Waitany" : "wait",
-    "MPI_Waitall" : "wait",
-    "MPI_Probe" : "wait",
+    "MPI_Wait": "wait",
+    "MPI_Waitany": "wait",
+    "MPI_Waitall": "wait",
+    "MPI_Probe": "wait",
 
-    "MPI_Test" : "test",
-    "MPI_Testany" : "test",
-    "MPI_Testall" : "test",
-    "MPI_Iprobe" : "test",
+    "MPI_Test": "test",
+    "MPI_Testany": "test",
+    "MPI_Testall": "test",
+    "MPI_Iprobe": "test",
 
-    "MPI_Gather" : "coll",
-    "MPI_Gatherv" : "coll",
-    "MPI_Barrier" : "coll",
-    "MPI_Scatter" : "coll",
-    "MPI_Scatterv" : "coll",
-    "MPI_Reduce" : "coll",
-    "MPI_Allreduce" : "coll",
-    "MPI_Allreduce" : "coll",
-    "MPI_Bcast" : "coll",
+    "MPI_Gather": "coll",
+    "MPI_Gatherv": "coll",
+    "MPI_Barrier": "coll",
+    "MPI_Scatter": "coll",
+    "MPI_Scatterv": "coll",
+    "MPI_Reduce": "coll",
+    "MPI_Allreduce": "coll",
+    "MPI_Allreduce": "coll",
+    "MPI_Bcast": "coll",
 
-    "MPI_Igather" : "coll",
-    "MPI_Igatherv" : "coll",
-    "MPI_Ibarrier" : "coll",
-    "MPI_Iscatter" : "coll",
-    "MPI_Iscatterv" : "coll",
-    "MPI_Ireduce" : "coll",
-    "MPI_Iallreduce" : "coll",
-    "MPI_Ibcast" : "coll",
+    "MPI_Igather": "coll",
+    "MPI_Igatherv": "coll",
+    "MPI_Ibarrier": "coll",
+    "MPI_Iscatter": "coll",
+    "MPI_Iscatterv": "coll",
+    "MPI_Ireduce": "coll",
+    "MPI_Iallreduce": "coll",
+    "MPI_Ibcast": "coll",
 }
 
 collective_operations = [
@@ -91,6 +91,7 @@ collective_operations = [
     "Ibcast",
 ]
 
+
 class CallEvent(Event):
 
     call_event = True
@@ -108,7 +109,8 @@ class CallEvent(Event):
             return call_types.get(self.name)
 
     def __repr__(self):
-        return "<Event {1} {0.name} pid={0.pid} {0.args}>".format(self, id(self))
+        return "<Event {1} {0.name} pid={0.pid} {0.args}>" \
+            .format(self, id(self))
 
 
 class ExitEvent(Event):

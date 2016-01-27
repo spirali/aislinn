@@ -45,10 +45,10 @@ class ErrorMessage(object):
         a = set(self.arg_names)
         if not (a.union(set(self.optional_arg_names)) >= set(k) and a <= k):
             raise Exception(
-                    "Invalid args for {0}: mandatory args {1}, " \
-                    "optional args {2}, got {3}" \
-                         .format(type(self), self.arg_names,
-                                 self.optional_arg_names, k))
+                "Invalid args for {0}: mandatory args {1}, "
+                "optional args {2}, got {3}"
+                .format(type(self), self.arg_names,
+                        self.optional_arg_names, k))
         self.args = kw
         if context is not None:
             if context.state:
@@ -65,7 +65,6 @@ class ErrorMessage(object):
         elif gcontext is not None:
             self.pid = pid
             self.node = gcontext.node
-
 
     @property
     def description(self):
@@ -219,6 +218,7 @@ class UncommitedDatatype(InvalidArg):
     description_format = \
         "An uncommited datatype was used as {0.arg_desc}."
 
+
 class InvalidLength(InvalidArg):
     key = "mpi/invalid-arg/length"
     name = "Invalid length"
@@ -237,14 +237,14 @@ class NoMpiInit(ErrorMessage):
     key = "mpi/init-missing"
     name = "MPI_Init was not called"
     description_format = \
-            "Program calls an MPI routine without calling MPI_Init."
+        "Program calls an MPI routine without calling MPI_Init."
 
 
 class InvalidReceiveBuffer(ErrorMessage):
     key = "mpi/invalid-recv-buffer"
     name = "Invalid receive buffer"
     description_format = "Invalid receive buffer. " \
-                          "Address 0x{address:x} is not accessible."
+        "Address 0x{address:x} is not accessible."
     arg_names = ("address",)
 
 
@@ -252,7 +252,7 @@ class InvalidSendBuffer(ErrorMessage):
     key = "mpi/invalid-send-buffer"
     name = "Invalid send buffer"
     description_format = "Invalid send buffer. " \
-                          "Address 0x{address:x} is not accessible."
+        "Address 0x{address:x} is not accessible."
     arg_names = ("address",)
 
 
@@ -288,7 +288,8 @@ class MemoryLeak(ErrorMessage):
     key = "mem/nondeterministic-leak"
     name = "Nondeterministic memory leak"
     arg_names = ("address", "size")
-    description_format = "Memory at 0x{address:x} of size {size} was not freed."
+    description_format = \
+        "Memory at 0x{address:x} of size {size} was not freed."
 
 
 class NotFreedRequest(ErrorMessage):
@@ -304,7 +305,7 @@ class NotReceivedMessage(ErrorMessage):
     key = "mpi/pending-message"
     name = "Pending message"
     description_format = "A message from rank {source} to rank {target} " \
-               "(tag={tag}) was not received. "
+        "(tag={tag}) was not received. "
     arg_names = ("source", "target", "tag")
 
 
@@ -331,7 +332,7 @@ class InvalidRead(ErrorMessage):
             stacktrace = context.state.get_locked_memory_stacktrace(address)
             if stacktrace:
                 self.other_stacktraces = \
-                        (("MPI call that locked the memory", stacktrace),)
+                    (("MPI call that locked the memory", stacktrace),)
 
 
 class InvalidWrite(ErrorMessage):
@@ -349,7 +350,7 @@ class InvalidWrite(ErrorMessage):
             stacktrace = context.state.get_locked_memory_stacktrace(address)
             if stacktrace:
                 self.other_stacktraces = \
-                        (("MPI call that locked the memory", stacktrace),)
+                    (("MPI call that locked the memory", stacktrace),)
 
 
 class RootMismatch(ErrorMessage):
@@ -393,7 +394,7 @@ class CollectiveMixingBlockingNonBlocking(ErrorMessage):
     key = "mpi/collective-mixing/blocking-nonblocking"
     name = "Mixing blocking and nonblocking collective operation"
     description_format = \
-           "Mixing blocking and nonblocking collective operation"
+        "Mixing blocking and nonblocking collective operation"
 
 
 class DoubleFinalize(ErrorMessage):
@@ -430,10 +431,11 @@ class CommunicationInCallback(ErrorMessage):
 class GroupMismatch(ErrorMessage):
     key = "mpi/invalid-arg/group-mismatch"
     name = "Group mismatch"
-    description_format = "All processes were not called with a same group argument"
+    description_format = \
+        "All processes were not called with a same group argument"
 
 
-## Debugging messages
+#  Debugging messages
 
 class StateCaptured(ErrorMessage):
     key = "internal/state-captured"

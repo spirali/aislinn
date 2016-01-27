@@ -32,7 +32,8 @@ try:
     import matplotlib.pyplot as plt
     import StringIO
 except ImportError:
-    pass # User of plt has to make sure that plt is not None
+    pass  # User of plt has to make sure that plt is not None
+
 
 def serialize_fig(fig):
     stringfile = StringIO.StringIO()
@@ -40,11 +41,13 @@ def serialize_fig(fig):
     stringfile.seek(0)
     return stringfile.buf
 
+
 def make_chart(data, ydata, units):
     fig = plt.figure(figsize=(8, 2))
     plt.plot(ydata, data, "-")
     plt.ylabel(units)
     return serialize_fig(fig)
+
 
 def make_chart_1d(data, yticks, xlabel, ylabel):
     fig = plt.figure(figsize=(8, 0.5 + 0.5 * len(data)))
@@ -57,6 +60,7 @@ def make_chart_1d(data, yticks, xlabel, ylabel):
             plt.plot(d, len(d) * [i], "1")
     plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
     return serialize_fig(fig)
+
 
 def html_embed_img(data):
     return "data:image/png;base64," + base64.b64encode(data)
@@ -91,8 +95,8 @@ class Report:
         self.process_count = generator.process_count
         self.statistics = generator.get_statistics()
         if self.statistics and self.statistics[1]:
-            self.statistics_max = [ max((v[i] for v in self.statistics[1]))
-                                    for i in xrange(len(self.statistics[0])) ]
+            self.statistics_max = [max((v[i] for v in self.statistics[1]))
+                                   for i in xrange(len(self.statistics[0]))]
         else:
             self.statistics_max = None
 
@@ -104,7 +108,7 @@ class Report:
         self.outputs = {}
 
         def count_of_outputs(count):
-            if count == None:
+            if count is None:
                 return ">" + str(OUTPUTS_LIMIT)
             else:
                 return str(count)
@@ -112,18 +116,18 @@ class Report:
         if generator.stdout_mode == "capture" \
                 and generator.statespace.initial_node:
             self.stdout_counts = \
-                    [ count_of_outputs(
-                        generator.statespace.get_outputs_count(
+                [count_of_outputs(
+                    generator.statespace.get_outputs_count(
                         STREAM_STDOUT, pid, OUTPUTS_LIMIT))
-                      for pid in xrange(generator.process_count) ]
+                 for pid in xrange(generator.process_count)]
 
         if generator.stderr_mode == "capture" \
                 and generator.statespace.initial_node:
             self.stderr_counts = \
-                    [ count_of_outputs(
-                        generator.statespace.get_outputs_count(
+                [count_of_outputs(
+                    generator.statespace.get_outputs_count(
                         STREAM_STDERR, pid, OUTPUTS_LIMIT))
-                      for pid in xrange(generator.process_count) ]
+                 for pid in xrange(generator.process_count)]
 
         if args.stderr_write \
                 and generator.stderr_mode == "generator" \
@@ -133,8 +137,8 @@ class Report:
             else:
                 limit = args.stderr_write
             self.outputs[STREAM_STDERR.name] = [
-                    generator.statespace.get_all_outputs(STREAM_STDERR, pid, limit)
-                    for pid in xrange(generator.process_count)]
+                generator.statespace.get_all_outputs(STREAM_STDERR, pid, limit)
+                for pid in xrange(generator.process_count)]
 
         if args.stdout_write \
                 and generator.stdout_mode == "capture" \
@@ -144,8 +148,8 @@ class Report:
             else:
                 limit = args.stderr_write
             self.outputs[STREAM_STDOUT.name] = [
-                    generator.statespace.get_all_outputs(STREAM_STDOUT, pid, limit)
-                    for pid in xrange(generator.process_count)]
+                generator.statespace.get_all_outputs(STREAM_STDOUT, pid, limit)
+                for pid in xrange(generator.process_count)]
 
         if args.profile:
             self.profile = {}
@@ -156,80 +160,75 @@ class Report:
                                   ("mpi_calls", COUNTER_MPICALLS)):
                 self.profile[name] = []
                 for pid in xrange(generator.process_count):
-                    lst = list(generator.statespace \
-                            .get_all_outputs(counter, pid, init=0))
+                    lst = list(generator.statespace
+                               .get_all_outputs(counter, pid, init=0))
                     self.profile[name].append(lst)
                 self.profile[name + "_global"] = \
-                        list(generator.statespace.get_all_outputs(
-                            counter, range(generator.process_count), init=0))
+                    list(generator.statespace.get_all_outputs(
+                         counter, range(generator.process_count), init=0))
         else:
             self.profile = None
 
+        E = Entry
+
         self.program_info = [
-            Entry("program-args", " ".join(generator.args), "Program arguments"),
-            Entry("processes", generator.process_count, "Number of processes"),
+            E("program-args", " ".join(generator.args), "Program arguments"),
+            E("processes", generator.process_count, "Number of processes"),
         ]
 
         self.analysis_configuration = [
-            Entry("stdout-mode", generator.stdout_mode, "Stdout mode"),
-            Entry("stderr-mode", generator.stderr_mode, "Stderr mode"),
-            Entry("send-protocol", generator.send_protocol, "Send protocol"),
-            Entry("search", generator.search, "Search strategy"),
+            E("stdout-mode", generator.stdout_mode, "Stdout mode"),
+            E("stderr-mode", generator.stderr_mode, "Stderr mode"),
+            E("send-protocol", generator.send_protocol, "Send protocol"),
+            E("search", generator.search, "Search strategy"),
         ]
 
         if args.heap_size:
             self.analysis_configuration.append(
-                    Entry("heap-size", args.heap_size, "Heap size"))
+                E("heap-size", args.heap_size, "Heap size"))
 
         if args.redzone_size:
             self.analysis_configuration.append(
-                Entry("redzone-size", args.redzone_size, "Redzone size"))
+                E("redzone-size", args.redzone_size, "Redzone size"))
 
         sizes = list(generator.message_sizes)
         sizes.sort()
 
         self.analysis_output = [
-            Entry("stdout-outputs",
-                  ",".join(self.stdout_counts) if self.stdout_counts else "N/A",
-                 "# of possible outputs on stdout (per rank)"),
-            Entry("stderr-outputs",
-                  ",".join(self.stderr_counts) if self.stderr_counts else "N/A",
-                 "# of possible outputs on stderr (per rank)"),
-            Entry("deterministic-non-freed-memory",
-                  generator.deterministic_unallocated_memory,
-                 "Deterministic unallocated memory (bytes)"),
-            Entry("message-sizes",
-                  sizes,
-                 "Sizes of unicast messages (bytes)")
+            E("stdout-outputs",
+              ",".join(self.stdout_counts) if self.stdout_counts else "N/A",
+              "# of possible outputs on stdout (per rank)"),
+            E("stderr-outputs",
+              ",".join(self.stderr_counts) if self.stderr_counts else "N/A",
+              "# of possible outputs on stderr (per rank)"),
+            E("deterministic-non-freed-memory",
+              generator.deterministic_unallocated_memory,
+              "Deterministic unallocated memory (bytes)"),
+            E("message-sizes", sizes, "Sizes of unicast messages (bytes)")
         ]
 
         execution_time = generator.end_time - generator.init_time
         self.analysis_details = [
-            Entry("init-time",
-                  generator.init_time,
-                  "Start of verification"),
-            Entry("execution-time",
-                  execution_time,
-                  "Execution time"),
-            Entry("nodes",
-                  generator.statespace.nodes_count,
-                  "Number of nodes in statespace"),
-            Entry("mpi_calls",
-                  generator.statespace.mpi_calls_count,
-                  "Number of MPI calls processed during the analysis"),
-            Entry("full-statespace",
-                  generator.is_full_statespace,
-                  "Statespace fully explored"),
-            Entry("speed",
-                  generator.statespace.nodes_count
-                    / execution_time.total_seconds(),
-                  "Nodes per seconds"),
+            E("init-time", generator.init_time, "Start of verification"),
+            E("execution-time", execution_time, "Execution time"),
+            E("nodes",
+              generator.statespace.nodes_count,
+              "Number of nodes in statespace"),
+            E("mpi_calls",
+              generator.statespace.mpi_calls_count,
+              "Number of MPI calls processed during the analysis"),
+            E("full-statespace",
+              generator.is_full_statespace,
+              "Statespace fully explored"),
+            E("speed",
+              generator.statespace.nodes_count/execution_time.total_seconds(),
+              "Nodes per seconds"),
         ]
         self.error_messages = generator.error_messages
 
     @property
     def error_message_keys(self):
-        return [ m.key for m in self.error_messages ]
+        return [m.key for m in self.error_messages]
 
     @property
     def pids(self):
@@ -246,7 +245,7 @@ class Report:
         info = self.entries_to_xml("program", self.program_info)
         root.append(info)
         info = self.entries_to_xml(
-                "analysis", self.analysis_output + self.analysis_details)
+            "analysis", self.analysis_output + self.analysis_details)
         root.append(info)
 
         if self.statistics:
@@ -306,14 +305,14 @@ class Report:
 
     def events_table(self, events):
         process_count = self.process_count
-        pids = [ [] for x in xrange(process_count) ]
+        pids = [[] for x in xrange(process_count)]
         for e in events:
             if hasattr(e, "pid"):
                 pids[e.pid].append(e)
         table = []
         for step in xrange(max(len(p) for p in pids)):
-            row = [ pids[p][step] if step < len(pids[p]) else None
-                    for p in xrange(process_count) ]
+            row = [pids[p][step] if step < len(pids[p]) else None
+                   for p in xrange(process_count)]
             table.append(row)
         return table
 
@@ -361,13 +360,13 @@ class Report:
                             ("# of allocations", "allocations"),
                             ("size of allocations", "size_allocations")):
             img1 = make_chart_1d(self.profile[name],
-                                range(len(self.profile[name])),
-                                label, "Process")
+                                 range(len(self.profile[name])),
+                                 label, "Process")
 
             global_data = self.profile[name + "_global"]
             img2 = make_chart_1d([global_data],
                                  (),
-                                label, "")
+                                 label, "")
             yield (name,
                    html_embed_img(img1),
                    html_embed_img(img2),
@@ -376,6 +375,7 @@ class Report:
 
     def write_xml(self, filename):
         self.create_xml().write(filename)
+
 
 def write_as_html(report, filename):
     with open(os.path.join(paths.AISLINN_TEMPLATE, "report.html"), "r") as f:

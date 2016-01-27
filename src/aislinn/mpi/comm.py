@@ -20,6 +20,7 @@
 import consts
 import base.utils
 
+
 class Communicator:
 
     def __init__(self, comm_id, group):
@@ -59,6 +60,7 @@ class Group(base.utils.EqMixin):
     def pids(self):
         return self.table
 
+
 def comm_compare(comm1, comm2):
     if comm1 is comm2:
         return consts.MPI_IDENT
@@ -68,6 +70,7 @@ def comm_compare(comm1, comm2):
         return consts.MPI_SIMILAR
     return consts.MPI_UNEQUAL
 
+
 def group_compare(group1, group2):
     if group1.table == group2.table:
         return consts.MPI_IDENT
@@ -75,14 +78,17 @@ def group_compare(group1, group2):
         return consts.MPI_SIMILAR
     return consts.MPI_UNEQUAL
 
+
 def make_comm_world(process_count):
     table = range(process_count)
     group = Group(table)
     return Communicator(consts.MPI_COMM_WORLD, group)
 
+
 def make_comm_self(pid):
     group = Group([pid])
     return Communicator(consts.MPI_COMM_SELF, group)
+
 
 def comm_id_name(comm_id):
     if comm_id == consts.MPI_COMM_WORLD:

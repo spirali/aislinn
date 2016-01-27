@@ -20,7 +20,8 @@
 
 import itertools
 
-COLOR_TABLE = [ None, "red", "blue", "green", "orange" ]
+COLOR_TABLE = [None, "red", "blue", "green", "orange"]
+
 
 class StateSpace:
 
@@ -125,8 +126,8 @@ class StateSpace:
                            node, last_arc, name, pid))
 
     def depth_first_search_with_arcs(self):
-        stack = [ self.initial_node ]
-        arcs = [ -1 ]
+        stack = [self.initial_node]
+        arcs = [-1]
         stack_set = set(stack)
         visited = set(stack)
 
@@ -155,9 +156,9 @@ class StateSpace:
 
     def tree_reduce(self, reduce_op, arc_value, is_visible, leaf_value):
         assert self.initial_node
-        stack = [ self.initial_node ]
+        stack = [self.initial_node]
         stack_set = set(stack)
-        stack_arcs = [ 0 ]
+        stack_arcs = [0]
         visited = {}
         while stack:
             node = stack[-1]
@@ -169,7 +170,8 @@ class StateSpace:
                 if not node.arcs:
                     visited[node] = leaf_value
                 else:
-                    visited[node] = reduce_op(arc_value(a, visited[a.node]) for a in node.arcs)
+                    visited[node] = reduce_op(arc_value(a, visited[a.node])
+                                              for a in node.arcs)
             else:
                 stack_arcs[-1] += 1
                 arc = node.arcs[a]
@@ -224,13 +226,14 @@ class StateSpace:
                 return frozenset(r[:limit])
         return self.tree_reduce(reduce_op,
                                 arc_value if not isinstance(pid, list)
-                                          else arc_value_list,
+                                else arc_value_list,
                                 is_visible,
                                 frozenset((init,)))
 
     def get_outputs_count(self, stream_name, pid, upto):
         class TooManyOutputs(Exception):
             pass
+
         def arc_value(arc, node_value):
             chunk = arc.get_data(stream_name, pid)
             if not chunk or not chunk.value:
@@ -282,8 +285,8 @@ class StateSpace:
         return path
 
     def find_path_to_events(self, node, events):
-        queue = [ node ]
-        visited = { node: [] }
+        queue = [node]
+        visited = {node: []}
         found = []
         while queue:
             node = queue.pop()

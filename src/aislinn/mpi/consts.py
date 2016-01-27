@@ -18,25 +18,25 @@
 #
 
 # ---- Basic consts ---------------------------------------
-MPI_UNDEFINED    = -0x0BEFBEEF
-MPI_ANY_SOURCE   = -0x0000AA00
-MPI_ANY_TAG      = -0x0000BB00
-MPI_PROC_NULL    = -0x0000CC00
+MPI_UNDEFINED = -0x0BEFBEEF
+MPI_ANY_SOURCE = -0x0000AA00
+MPI_ANY_TAG = -0x0000BB00
+MPI_PROC_NULL = -0x0000CC00
 MPI_REQUEST_NULL = -0x0000DD00
-MPI_GROUP_NULL   = -0x0000EE00
+MPI_GROUP_NULL = -0x0000EE00
 MPI_KEYVAL_INVALID = -0x0000FF00
 
 MPI_STATUS_IGNORE = 0
 MPI_STATUSES_IGNORE = 0
 
-MPI_NULL_COPY_FN  = 0
+MPI_NULL_COPY_FN = 0
 MPI_NULL_DELETE_FN = 0
 
 # ---- Communicators --------------------------------------
 MPI_COMM_NULL = 0x0000CC00
 MPI_COMM_SELF = 0x0000CC01
 MPI_COMM_WORLD = 0x0000CC02
-MPI_COMM_USERDEF = 0x0000CC03 # First user defined communicator
+MPI_COMM_USERDEF = 0x0000CC03  # First user defined communicator
 
 # ---- Data types -----------------------------------------
 MPI_DATATYPE_NULL = 0xFF00100
@@ -84,20 +84,21 @@ MPI_MAXLOC = 0xDD0010D
 USER_DEFINED_OPS = 0xDD001FF
 
 # ---- Compare results -----------------------------------------
-MPI_UNEQUAL   = 0
-MPI_SIMILAR   = 1
+MPI_UNEQUAL = 0
+MPI_SIMILAR = 1
 MPI_CONGRUENT = 2
-MPI_IDENT     = 3
+MPI_IDENT = 3
 
 # ---- Special attributes -------------------------------------
 
 MPI_TAG_UB = 0x02200101
 
-MPI_IN_PLACE = 0xffffffffffffffff # (void*) -1
+MPI_IN_PLACE = 0xffffffffffffffff  # (void*) -1
 
 # ---- Others  -------------------------------------
 
 MPI_MAX_PROCESSOR_NAME = 128
+
 
 def get_const_name(value):
     for name, v in globals().items():

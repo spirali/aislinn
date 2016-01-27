@@ -12,12 +12,12 @@ else:
     os.makedirs(utils.AISLINN_REPORT_GALLERY)
 
 
-from test_base import *
-from test_sendrecv import *
-from test_mem import *
-from test_collective import *
-from test_comm import *
-from test_misc import *
+from test_base import *  # noqa
+from test_sendrecv import *  # noqa
+from test_mem import *  # noqa
+from test_collective import *  # noqa
+from test_comm import *  # noqa
+from test_misc import *  # noqa
 
 import unittest
 

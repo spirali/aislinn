@@ -38,9 +38,9 @@ class GlobalContext:
         self.action = None
 
         if generator is not None:
-            self.contexts = [ None ] * generator.process_count
+            self.contexts = [None] * generator.process_count
         else:
-            self.contexts = [ None ] * worker.generator.process_count
+            self.contexts = [None] * worker.generator.process_count
         self.events = []
         self.data = []
 
@@ -107,7 +107,8 @@ class GlobalContext:
         if not self.events and not self.data:
             # There is no visible change, so no new node is made
             return
-        node, is_new = self.generator.add_node(self.node, self.worker, self.gstate, do_hash=False)
+        node, is_new = self.generator.add_node(
+            self.node, self.worker, self.gstate, do_hash=False)
         arc = Arc(node, self.action, self.events, self.get_compact_data())
         self.node.add_arc(arc)
         self.node = node
@@ -133,10 +134,12 @@ class GlobalContext:
                 lst = []
                 streams[key] = lst
             lst.append(data)
-        data = [ ArcData(key[0], key[1], key[0].compact_data(data)) for key, data in streams.items() ]
+        data = [ArcData(key[0], key[1], key[0].compact_data(data))
+                for key, data in streams.items()]
         if self.generator.profile:
             for pid in xrange(self.generator.process_count):
-                value = len([ e for e in self.events if e.call_event and e.pid == pid])
+                value = len([e for e in self.events
+                             if e.call_event and e.pid == pid])
                 if value:
                     data.append(ArcData(COUNTER_MPICALLS, pid, value))
         return data
@@ -160,7 +163,7 @@ class GlobalContext:
         self.add_event(MatchEvent(s.id, r.id))
         # Receive has to be handled FIRST, otherwise buffer could be freed
         self.gstate.states[target_pid].finish_receive_request(
-                r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)
+            r, s.comm.group.pid_to_rank(source_pid), s.tag, s.vg_buffer)
         self.gstate.states[source_pid].finish_send_request(s)
 
     def is_pid_running(self, pid):

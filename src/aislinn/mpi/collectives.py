@@ -86,17 +86,17 @@ class CollectiveOperation:
             self.root_pid = comm.group.rank_to_pid(root)
         elif self.root != root:
             context.add_error_and_throw(
-                    errormsg.RootMismatch(
-                        context, value1=self.root, value2=root))
+                errormsg.RootMismatch(context, value1=self.root, value2=root))
 
     def compute_hash(self, hashthread):
-        hashthread.update("{0} {1} {2} {3} {4} {5}".
-                format(self.name,
-                       self.comm_id,
-                       self.blocking,
-                       self.root,
-                       self.remaining_processes_complete,
-                       self.remaining_processes_enter))
+        hashthread.update(
+            "{0} {1} {2} {3} {4} {5}".format(
+                self.name,
+                self.comm_id,
+                self.blocking,
+                self.root,
+                self.remaining_processes_complete,
+                self.remaining_processes_enter))
         self.compute_hash_data(hashthread)
 
     @property
@@ -111,11 +111,11 @@ class CollectiveOperation:
 
     def __repr__(self):
         return "<{0} {1:x} cc_id={2} renter={3} rcomplete={4}>" \
-                    .format(self.name,
-                            id(self),
-                            self.cc_id,
-                            self.remaining_processes_enter,
-                            self.remaining_processes_complete)
+               .format(self.name,
+                       id(self),
+                       self.cc_id,
+                       self.remaining_processes_enter,
+                       self.remaining_processes_complete)
 
     def sanity_check(self):
         pass
@@ -125,7 +125,7 @@ class OperationWithBuffers(CollectiveOperation):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
-        self.buffers = [ None ] * self.process_count
+        self.buffers = [None] * self.process_count
 
     def copy(self):
         op = CollectiveOperation.copy(self)
@@ -137,9 +137,9 @@ class OperationWithBuffers(CollectiveOperation):
 
     def transfer(self, transfer_context):
         op = copy.copy(self)
-        op.buffers = [ transfer_context.transfer_buffer(vg_buffer)
-                       if vg_buffer else None
-                       for vg_buffer in self.buffers ]
+        op.buffers = [transfer_context.transfer_buffer(vg_buffer)
+                      if vg_buffer else None
+                      for vg_buffer in self.buffers]
         return op
 
     def dispose(self):
@@ -158,15 +158,17 @@ class OperationWithBuffers(CollectiveOperation):
             assert vg_buffer is None or vg_buffer.ref_count > 0, \
                 "Zero reference in " + repr(vg_buffer)
 
-    def make_buffer_for_all(self, context, rank, comm, pointer, datatype, count):
+    def make_buffer_for_all(
+            self, context, rank, comm, pointer, datatype, count):
         assert self.buffers[rank] is None
         self.buffers[rank] = context.make_buffer_for_more(
-              comm.group.pids(), pointer, datatype, count)
+            comm.group.pids(), pointer, datatype, count)
 
-    def make_buffer_for_root(self, context, rank, comm, pointer, datatype, count):
+    def make_buffer_for_root(
+            self, context, rank, comm, pointer, datatype, count):
         assert self.buffers[rank] is None
         self.buffers[rank] = context.make_buffer_for_one(
-              self.root_pid, pointer, datatype, count)
+            self.root_pid, pointer, datatype, count)
 
 
 class Barrier(CollectiveOperation):
@@ -206,26 +208,26 @@ class Gatherv(OperationWithBuffers):
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcounts, displs, recvtype, root = args
+            recvbuf, recvcounts, displs, recvtype, root = args
         check.check_rank(context, comm, root, 8)
         rank = context.state.get_rank(comm)
         self.check_root(context, comm, root)
 
         self.make_buffer_for_root(
-                context, rank, comm, sendbuf, sendtype, sendcount)
+            context, rank, comm, sendbuf, sendtype, sendcount)
 
         if root == rank:
             recvtype = check.check_datatype(context, recvtype, 7)
             self.recvtype = recvtype
             self.recvbuf = recvbuf
-            self.recvcounts = context.controller.read_ints(
-                    recvcounts, self.process_count)
-            self.displs = context.controller.read_ints(
-                    displs, self.process_count)
+            self.recvcounts = context.controller.read_ints(recvcounts,
+                                                           self.process_count)
+            self.displs = context.controller.read_ints(displs,
+                                                       self.process_count)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
-               self.remaining_processes_enter == 0
+            self.remaining_processes_enter == 0
 
     def complete_main(self, context, comm):
         if context.state.pid == self.root_pid:
@@ -243,7 +245,8 @@ class Gatherv(OperationWithBuffers):
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.recvbuf))
-        hashthread.update(str(self.recvtype.type_id if self.recvtype else None))
+        hashthread.update(str(self.recvtype.type_id
+                          if self.recvtype else None))
         hashthread.update(str(self.displs))
 
 
@@ -262,7 +265,7 @@ class Gather(OperationWithBuffers):
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcount, recvtype, root = args
+            recvbuf, recvcount, recvtype, root = args
         check.check_rank(context, comm, root, 7, False, False)
         self.check_root(context, comm, root)
 
@@ -283,17 +286,17 @@ class Gather(OperationWithBuffers):
                 context.add_error_and_throw(errormsg.InvalidInPlace(context))
         else:
             self.make_buffer_for_root(
-                    context, rank, comm, sendbuf, sendtype, sendcount)
+                context, rank, comm, sendbuf, sendtype, sendcount)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
-               self.remaining_processes_enter == 0
+            self.remaining_processes_enter == 0
 
     def complete_main(self, context, comm):
         if context.state.pid == self.root_pid:
             controller = context.controller
             for i, vg_buffer in enumerate(self.buffers):
-                if vg_buffer: # if vg_buffer is None, then MPI_IN_PLACE was used
+                if vg_buffer:  # if vg_buffer is None, MPI_IN_PLACE was used
                     self.recvtype.unpack(controller,
                                          vg_buffer,
                                          self.recvcount,
@@ -303,7 +306,8 @@ class Gather(OperationWithBuffers):
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.recvcount))
-        hashthread.update(str(self.recvtype.type_id if self.recvtype else None))
+        hashthread.update(str(self.recvtype.type_id
+                          if self.recvtype else None))
         hashthread.update(str(self.recvbuf))
 
 
@@ -313,16 +317,16 @@ class Allgather(OperationWithBuffers):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
-        self.recvbufs = [ None ] * self.process_count
-        self.recvcounts = [ None ] * self.process_count
-        self.recvtypes = [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
+        self.recvcounts = [None] * self.process_count
+        self.recvtypes = [None] * self.process_count
 
     def enter_main(self,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcount, recvtype = args
+            recvbuf, recvcount, recvtype = args
 
         rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
@@ -330,7 +334,7 @@ class Allgather(OperationWithBuffers):
         check.check_count(context, recvcount, 5)
         self.recvcounts[rank] = recvcount
         self.make_buffer_for_all(
-                context, rank, comm, sendbuf, sendtype, sendcount)
+            context, rank, comm, sendbuf, sendtype, sendcount)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -339,11 +343,12 @@ class Allgather(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         controller = context.controller
         for i, vg_buffer in enumerate(self.buffers):
-            self.recvtypes[rank].unpack(controller,
-                 vg_buffer,
-                 self.recvcounts[rank],
-                 self.recvbufs[rank] + i * self.recvtypes[rank].size
-                                  * self.recvcounts[rank])
+            self.recvtypes[rank].unpack(
+                controller,
+                vg_buffer,
+                self.recvcounts[rank],
+                self.recvbufs[rank] + i * self.recvtypes[rank].size
+                * self.recvcounts[rank])
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
@@ -358,28 +363,28 @@ class Allgatherv(OperationWithBuffers):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
-        self.recvbufs = [ None ] * self.process_count
-        self.recvcounts = [ None ] * self.process_count
-        self.recvtypes = [ None ] * self.process_count
-        self.displs =  [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
+        self.recvcounts = [None] * self.process_count
+        self.recvtypes = [None] * self.process_count
+        self.displs = [None] * self.process_count
 
     def enter_main(self,
                    context,
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcounts, displs, recvtype = args
+            recvbuf, recvcounts, displs, recvtype = args
         rank = context.state.get_rank(comm)
         assert self.buffers[rank] is None
         self.make_buffer_for_all(
-                context, rank, comm, sendbuf, sendtype, sendcount)
+            context, rank, comm, sendbuf, sendtype, sendcount)
         recvtype = check.check_datatype(context, recvtype, 7)
         self.recvtypes[rank] = recvtype
         self.recvbufs[rank] = recvbuf
         self.recvcounts[rank] = context.controller.read_ints(
-                recvcounts, self.process_count)
+            recvcounts, self.process_count)
         self.displs[rank] = context.controller.read_ints(
-                displs, self.process_count)
+            displs, self.process_count)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -410,9 +415,9 @@ class Scatterv(OperationWithBuffers):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
-        self.recvbufs = [ None ] * self.process_count
-        self.recvcounts = [ None ] * self.process_count
-        self.recvtypes = [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
+        self.recvcounts = [None] * self.process_count
+        self.recvtypes = [None] * self.process_count
         self.sendtype = None
         self.sendcounts = None
         self.displs = None
@@ -428,7 +433,7 @@ class Scatterv(OperationWithBuffers):
                    comm,
                    args):
         sendbuf, sendcounts, displs, sendtype, \
-               recvbuf, recvcount, recvtype, root = args
+            recvbuf, recvcount, recvtype, root = args
         check.check_rank(context, comm, root, 8)
         self.check_root(context, comm, root)
         rank = context.state.get_rank(comm)
@@ -439,20 +444,20 @@ class Scatterv(OperationWithBuffers):
             sendtype = check.check_datatype(context, sendtype, 4)
             self.sendtype = sendtype
             self.sendcounts = context.controller.read_ints(
-                    sendcounts, self.process_count)
+                sendcounts, self.process_count)
             self.displs = context.controller.read_ints(
-                    displs, self.process_count)
-            sendcount = max(s + d for s, d in zip(self.sendcounts, self.displs))
+                displs, self.process_count)
+            sendcount = max(s + d
+                            for s, d in zip(self.sendcounts, self.displs))
             self.make_buffer_for_all(
-                    context, rank, comm,
-                    sendbuf, sendtype, sendcount)
+                context, rank, comm, sendbuf, sendtype, sendcount)
 
     def can_be_completed(self, state):
         return self.buffers[self.root] is not None
 
     def complete_main(self, context, comm):
         rank = context.state.get_rank(comm)
-        index =  self.sendtype.size * self.displs[rank]
+        index = self.sendtype.size * self.displs[rank]
         self.recvtypes[rank].unpack(context.controller,
                                     self.buffers[self.root],
                                     self.recvcounts[rank],
@@ -463,11 +468,13 @@ class Scatterv(OperationWithBuffers):
         OperationWithBuffers.compute_hash_data(self, hashthread)
         hashthread.update(str(self.sendcounts))
         hashthread.update(str(self.recvbufs))
-        hashthread.update(str(t.type_id if t else None for t in self.recvtypes))
+        hashthread.update(str(t.type_id if t else None
+                              for t in self.recvtypes))
         hashthread.update(str(self.recvcounts))
         hashthread.update(str(self.displs))
         hashthread.update(str(self.sendcounts))
-        hashthread.update(str(self.sendtype.type_id if self.sendtype else None))
+        hashthread.update(str(self.sendtype.type_id
+                              if self.sendtype else None))
 
 
 class Scatter(OperationWithBuffers):
@@ -478,9 +485,9 @@ class Scatter(OperationWithBuffers):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
         self.sendtype = None
         self.sendcount = None
-        self.recvbufs = [ None ] * self.process_count
-        self.recvcounts = [ None ] * self.process_count
-        self.recvtypes = [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
+        self.recvcounts = [None] * self.process_count
+        self.recvtypes = [None] * self.process_count
 
     def after_copy(self):
         OperationWithBuffers.after_copy(self)
@@ -493,7 +500,7 @@ class Scatter(OperationWithBuffers):
                    comm,
                    args):
         sendbuf, sendcount, sendtype, \
-               recvbuf, recvcount, recvtype, root = args
+            recvbuf, recvcount, recvtype, root = args
         check.check_rank(context, comm, root, 8)
         self.check_root(context, comm, root)
         rank = context.state.get_rank(comm)
@@ -507,7 +514,8 @@ class Scatter(OperationWithBuffers):
             self.sendtype = sendtype
             self.sendcount = sendcount
             self.make_buffer_for_all(
-                    context, rank, comm, sendbuf, sendtype, sendcount * self.process_count)
+                context, rank, comm, sendbuf,
+                sendtype, sendcount * self.process_count)
         elif recvbuf == consts.MPI_IN_PLACE:
             context.add_error_and_throw(errormsg.InvalidInPlace(context))
 
@@ -527,11 +535,14 @@ class Scatter(OperationWithBuffers):
 
     def compute_hash_data(self, hashthread):
         OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.sendtype.type_id if self.sendtype else None))
+        hashthread.update(str(self.sendtype.type_id
+                              if self.sendtype else None))
         hashthread.update(str(self.sendcount))
         hashthread.update(str(self.recvbufs))
-        hashthread.update(str(t.type_id if t else None for t in self.recvtypes))
+        hashthread.update(str(t.type_id if t else None
+                              for t in self.recvtypes))
         hashthread.update(str(self.recvcounts))
+
 
 class Bcast(OperationWithBuffers):
 
@@ -539,9 +550,9 @@ class Bcast(OperationWithBuffers):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
-        self.recvbufs = [ None ] * self.process_count
-        self.counts = [ None ] * self.process_count
-        self.datatypes = [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
+        self.counts = [None] * self.process_count
+        self.datatypes = [None] * self.process_count
         self.root = None
 
     def after_copy(self):
@@ -561,7 +572,7 @@ class Bcast(OperationWithBuffers):
         if self.root == rank:
             self.count = count
             self.make_buffer_for_all(
-                    context, rank, comm, buffer, datatype, count)
+                context, rank, comm, buffer, datatype, count)
         else:
             self.recvbufs[rank] = buffer
             self.datatypes[rank] = datatype
@@ -606,9 +617,9 @@ def execute_reduce_op(context, comm, rank, ccop,
     for r in xrange(1, limit):
         buffer_mem = controller.client_malloc_from_buffer(buffers[r].id)
         context.run_function(
-                ccop.op.fn_ptr,
-                controller.FUNCTION_4_POINTER,
-                buffer_mem, recvbuf, len_ptr, datatype_ptr)
+            ccop.op.fn_ptr,
+            controller.FUNCTION_4_POINTER,
+            buffer_mem, recvbuf, len_ptr, datatype_ptr)
         controller.client_free(buffer_mem)
     controller.client_free(tmp)
 
@@ -647,11 +658,11 @@ class Reduce(OperationWithBuffers):
         self.recvbuf = recvbuf
         assert self.buffers[rank] is None
         self.make_buffer_for_root(
-                context, rank, comm, sendbuf, datatype, count)
+            context, rank, comm, sendbuf, datatype, count)
 
     def can_be_completed(self, state):
         return state.pid != self.root_pid or \
-               self.remaining_processes_enter == 0
+            self.remaining_processes_enter == 0
 
     def complete_main(self, context, comm):
         if context.state.pid == self.root_pid:
@@ -673,7 +684,7 @@ class AllReduce(OperationWithBuffers):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
-        self.recvbufs = [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
         self.datatype = None
         self.count = None
         self.op = None
@@ -703,8 +714,7 @@ class AllReduce(OperationWithBuffers):
         self.recvbufs[rank] = recvbuf
         assert self.buffers[rank] is None
         self.make_buffer_for_all(
-                context, rank, comm, sendbuf, datatype, count)
-
+            context, rank, comm, sendbuf, datatype, count)
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -728,7 +738,7 @@ class ReduceScatter(OperationWithBuffers):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         OperationWithBuffers.__init__(self, gstate, comm, blocking, cc_id)
-        self.recvbufs = [ None ] * self.process_count
+        self.recvbufs = [None] * self.process_count
         self.datatype = None
         self.counts = None
         self.op = None
@@ -753,8 +763,8 @@ class ReduceScatter(OperationWithBuffers):
             self.counts = counts
         elif self.counts != counts:
             context.add_error_and_throw(
-                    errormsg.CountMismatch(
-                        context, value1=self.counts, value2=counts))
+                errormsg.CountMismatch(
+                    context, value1=self.counts, value2=counts))
 
         total_count = sum(counts)
 
@@ -768,10 +778,11 @@ class ReduceScatter(OperationWithBuffers):
         rank = context.state.get_rank(comm)
         self.recvbufs[rank] = recvbuf
         self.make_buffer_for_all(
-                context, rank, comm, sendbuf, datatype, total_count)
+            context, rank, comm, sendbuf, datatype, total_count)
         if self.remaining_processes_enter == 0:
             context.controller.make_buffers()
-            tmp = context.controller.client_malloc(self.datatype.size * total_count)
+            tmp = context.controller.client_malloc(
+                self.datatype.size * total_count)
             execute_reduce_op(context, comm, rank,
                               self, tmp, self.buffers, total_count)
             self.final_buffer = context.make_buffer_for_more(
@@ -780,7 +791,6 @@ class ReduceScatter(OperationWithBuffers):
             for b in self.buffers:
                 b.dec_ref()
             self.buffers = []
-
 
     def can_be_completed(self, state):
         return self.remaining_processes_enter == 0
@@ -825,10 +835,10 @@ class CommSplit(CollectiveOperation):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
-        self.colors = [ None ] * self.process_count
-        self.keys = [ None ] * self.process_count
-        self.newcomm_ptrs = [ None ] * self.process_count
-        self.comm_ids = [ None ] * self.process_count
+        self.colors = [None] * self.process_count
+        self.keys = [None] * self.process_count
+        self.newcomm_ptrs = [None] * self.process_count
+        self.comm_ids = [None] * self.process_count
 
     def after_copy(self):
         self.colors = copy.copy(self.colors)
@@ -859,14 +869,14 @@ class CommSplit(CollectiveOperation):
                     continue
                 g = groups.get(color)
                 if g is None:
-                    groups[color] = [ (key, r) ]
+                    groups[color] = [(key, r)]
                 else:
                     g.append((key, r))
             items = groups.items()
-            items.sort() # Make it more deterministic
+            items.sort()  # Make it more deterministic
             for color, g in items:
-                g.sort() # This sort is needed by MPI specification
-                ranks = [ r for key, r in g ]
+                g.sort()  # This sort is needed by MPI specification
+                ranks = [r for key, r in g]
                 c = context.gstate.create_new_communicator(comm, ranks)
                 for r in ranks:
                     self.comm_ids[r] = c.comm_id
@@ -882,7 +892,7 @@ class CommSplit(CollectiveOperation):
         if comm_id is None:
             comm_id = consts.MPI_COMM_NULL
         context.controller.write_int(self.newcomm_ptrs[rank],
-                                       comm_id)
+                                     comm_id)
 
     def compute_hash_data(self, hashthread):
         hashthread.update(str(self.colors))
@@ -897,7 +907,7 @@ class CommDup(CollectiveOperation):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
-        self.newcomm_ptrs = [ None ] * self.process_count
+        self.newcomm_ptrs = [None] * self.process_count
         self.newcomm_id = None
 
     def after_copy(self):
@@ -918,14 +928,13 @@ class CommDup(CollectiveOperation):
         new_comm = context.state.get_comm(self.newcomm_id)
         context.copy_comm_attrs(comm, new_comm)
 
-
     def can_be_completed(self, state):
         return True
 
     def complete_main(self, context, comm):
         rank = context.state.get_rank(comm)
         context.controller.write_int(self.newcomm_ptrs[rank],
-                                       self.newcomm_id)
+                                     self.newcomm_id)
 
     def compute_hash_data(self, hashthread):
         hashthread.update(str(self.newcomm_ptrs))
@@ -938,7 +947,7 @@ class CommCreate(CollectiveOperation):
 
     def __init__(self, gstate, comm, blocking, cc_id):
         CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
-        self.newcomm_ptrs = [ None ] * self.process_count
+        self.newcomm_ptrs = [None] * self.process_count
         self.group = None
         self.newcomm_id = None
 
@@ -961,8 +970,8 @@ class CommCreate(CollectiveOperation):
         self.newcomm_ptrs[rank] = newcomm_ptr
 
         if self.newcomm_id is None:
-            self.newcomm_id = context.gstate.create_new_communicator \
-                (comm, group=group).comm_id
+            self.newcomm_id = context.gstate.create_new_communicator(
+                comm, group=group).comm_id
 
     def can_be_completed(self, state):
         return True
@@ -970,7 +979,7 @@ class CommCreate(CollectiveOperation):
     def complete_main(self, context, comm):
         rank = context.state.get_rank(comm)
         context.controller.write_int(self.newcomm_ptrs[rank],
-                                       self.newcomm_id)
+                                     self.newcomm_id)
 
     def compute_hash_data(self, hashthread):
         hashthread.update(str(self.newcomm_ptrs))

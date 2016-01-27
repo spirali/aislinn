@@ -23,6 +23,7 @@ import copy
 import logging
 import errormsg
 
+
 class DeadlockFound(Exception):
 
     def __init__(self, marks):
@@ -62,8 +63,8 @@ class NdsyncChecker:
         if not initial_node.arcs[0].events:
             initial_node = initial_node.arcs[0].node
 
-        self.markings[initial_node] = [ Marking(self) ]
-        self.queue = [ initial_node ]
+        self.markings[initial_node] = [Marking(self)]
+        self.queue = [initial_node]
         try:
             while self.queue:
                 node = self.queue.pop()
@@ -90,10 +91,10 @@ class NdsyncChecker:
         return result, marking
 
     def reconstruct_deadlock(self, marks):
-        events = [ m.event for m in marks ]
+        events = [m.event for m in marks]
         path = self.statespace.reconstruct_path(events)
         pruned_events, marking = self.replay_path(path, marks)
-        pids = [ e.pid for e in pruned_events if e.name == "Exit" ]
+        pids = [e.pid for e in pruned_events if e.name == "Exit"]
         active_pids = list(set(range(len(marking.process_marks))) - set(pids))
         active_pids.sort()
         message = errormsg.Deadlock(None, active_pids=active_pids)
@@ -118,8 +119,8 @@ class NdsyncChecker:
         for marking in markings:
             if len(node.arcs) > 1:
                 event_marks = [
-                        marking.get_event_marks(a.events[0])
-                        for a in node.arcs ]
+                    marking.get_event_marks(a.events[0])
+                    for a in node.arcs]
                 if all(event_marks):
                     logging.debug("ndsync: deadlock type2 found")
                     raise DeadlockFound(frozenset().union(*event_marks))
@@ -153,7 +154,7 @@ class CollectiveOperation(utils.EqMixin):
         self.comm_id = comm_id
         self.cc_id = cc_id
         self.size = size
-        self.marks = { mark: marks }
+        self.marks = {mark: marks}
 
     def add_marks(self, mark, marks):
         c = copy.copy(self)
@@ -163,7 +164,7 @@ class CollectiveOperation(utils.EqMixin):
 
     def remove_marks(self, marks):
         c = copy.copy(self)
-        c.marks = { event: m - marks for event, m in c.marks.items() }
+        c.marks = {event: m - marks for event, m in c.marks.items()}
         return c
 
     def update(self, other):
@@ -176,8 +177,8 @@ class CollectiveOperation(utils.EqMixin):
         return self.size == len(self.marks)
 
     def __repr__(self):
-        return "<CC comm_id={0.comm_id} cc_id={0.cc_id} marks={0.marks}>".\
-                    format(self)
+        return "<CC comm_id={0.comm_id} cc_id={0.cc_id} marks={0.marks}>" \
+            .format(self)
 
 
 class Mark:
@@ -209,14 +210,14 @@ class Marking(utils.EqMixin):
 
     def __init__(self, checker):
         process_count = checker.generator.process_count
-        self.process_marks = [ frozenset()
-                               for i in xrange(process_count) ]
+        self.process_marks = [frozenset()
+                              for i in xrange(process_count)]
         self.active_marks = {}
         self.finished_marks = {}
-        self.ssend_marks = {} # Active std sends
+        self.ssend_marks = {}  # Active std sends
         self.terminate_marks = {}
 
-        self.collectives = () # Copy on write
+        self.collectives = ()  # Copy on write
 
     def copy(self):
         c = copy.copy(self)
@@ -268,11 +269,11 @@ class Marking(utils.EqMixin):
             return mark.pid
 
         def pre_check_fn(m, v1, v2):
-             return len(self.terminate_marks[v1]) == \
-                    len(marking.terminate_marks[v2]),
+            return len(self.terminate_marks[v1]) == \
+                len(marking.terminate_marks[v2]),
 
         assert len(self.ssend_marks) == len(marking.ssend_marks)
-        mapping = {} # mapping of markigs between "self" and "marking"
+        mapping = {}  # mapping of markigs between "self" and "marking"
 
         # compose mapping
 
@@ -307,7 +308,8 @@ class Marking(utils.EqMixin):
                 c2 = marking.find_collective(c.comm_id, c.cc_id)
                 if not check_mark_dicts(c.marks, c2.marks):
                     continue
-            if not check_mark_dicts(self.terminate_marks, marking.terminate_marks):
+            if not check_mark_dicts(self.terminate_marks,
+                                    marking.terminate_marks):
                 continue
             return True
         return False
@@ -322,7 +324,7 @@ class Marking(utils.EqMixin):
         next = marks
         while prev != next:
             n = frozenset().union(
-                    *filter(None, (self.terminate_marks.get(m) for m in next)))
+                *filter(None, (self.terminate_marks.get(m) for m in next)))
             prev = next
             next = next.union(n)
         return next
@@ -398,7 +400,7 @@ class Marking(utils.EqMixin):
             elif t == Request.TYPE_SEND_STD:
                 if event.source_id in self.finished_marks:
                     self.finished_marks[event.source_id] = \
-                            self.finished_marks[event.source_id].union(new)
+                        self.finished_marks[event.source_id].union(new)
                     event = self.ssend_marks[event.source_id]
                 else:
                     event = self.ssend_marks.pop(event.source_id, None)
@@ -428,16 +430,16 @@ class Marking(utils.EqMixin):
 
     def remove_marks(self, marks):
         if marks:
-            self.process_marks = [ m - marks for m in self.process_marks ]
-            self.active_marks = { k: m - marks
-                                  for k, m in self.active_marks.items() }
-            self.finished_marks = { k: m - marks
-                                    for k, m in self.finished_marks.items() }
-            self.terminate_marks = { k: m - marks
-                                     for k, m in self.terminate_marks.items() }
+            self.process_marks = [m - marks for m in self.process_marks]
+            self.active_marks = {k: m - marks
+                                 for k, m in self.active_marks.items()}
+            self.finished_marks = {k: m - marks
+                                   for k, m in self.finished_marks.items()}
+            self.terminate_marks = {k: m - marks
+                                    for k, m in self.terminate_marks.items()}
 
             self.collectives = tuple(c.remove_marks(marks)
-                                    for c in self.collectives)
+                                     for c in self.collectives)
             for m in marks:
                 if m in self.terminate_marks:
                     del self.terminate_marks[m]
@@ -461,4 +463,3 @@ class Marking(utils.EqMixin):
         print "cc="
         for cc in self.collectives:
             print cc
-

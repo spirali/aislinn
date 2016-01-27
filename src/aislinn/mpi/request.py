@@ -23,12 +23,13 @@ import consts
 
 import copy
 
+
 class Request(EqMixin):
 
     TYPE_RECEIVE = 0
-    TYPE_SEND_STD = 1 # Standard send
-    TYPE_SEND_EAGER = 2 # BSEND
-    TYPE_SEND_RENDEZVOUS = 3 # SSEND
+    TYPE_SEND_STD = 1  # Standard send
+    TYPE_SEND_EAGER = 2  # BSEND
+    TYPE_SEND_RENDEZVOUS = 3  # SSEND
     TYPE_COLLECTIVE = 4
     TYPES_COUNT = 5
 
@@ -96,7 +97,7 @@ class SendRequest(Request):
         sz = self.count * self.datatype.size
         target_pid = self.comm.group.rank_to_pid(self.target)
         self.vg_buffer = context.make_buffer_for_one(
-                target_pid, self.data_ptr, self.datatype, self.count)
+            target_pid, self.data_ptr, self.datatype, self.count)
         gcontext = context.gcontext
         gcontext.generator.message_sizes.add(sz)
 
@@ -131,15 +132,14 @@ class SendRequest(Request):
         if self.vg_buffer:
             hashthread.update(self.vg_buffer.hash)
 
-
     def is_data_addr(self, addr):
         sz = self.count * self.datatype.size
         return addr >= self.data_ptr and addr < self.data_ptr + sz
 
     def __repr__(self):
         return "<SendRqst {0:x} id={1} type={2} comm_id={3} target={4} tag={5}>" \
-                .format(id(self), self.id, self.send_type,
-                        self.comm.comm_id, self.target, self.tag)
+            .format(id(self), self.id, self.send_type,
+                    self.comm.comm_id, self.target, self.tag)
 
 
 class ReceiveRequest(Request):
@@ -173,8 +173,8 @@ class ReceiveRequest(Request):
 
     def is_suppressed_by(self, r):
         return (self.source == r.source or r.source == consts.MPI_ANY_SOURCE) \
-               and (self.tag == r.tag or r.tag == consts.MPI_ANY_TAG) and \
-               (self.comm.comm_id == r.comm.comm_id)
+            and (self.tag == r.tag or r.tag == consts.MPI_ANY_TAG) and \
+            (self.comm.comm_id == r.comm.comm_id)
 
     def inc_ref(self):
         if self.vg_buffer:
@@ -201,8 +201,8 @@ class ReceiveRequest(Request):
     def compute_hash(self, hashthread):
         Request.compute_hash(self, hashthread)
         hashthread.update(
-                "RR {0.comm.comm_id} {0.source} {0.tag} "
-                "{0.data_ptr} {0.datatype.type_id} {0.count}".format(self))
+            "RR {0.comm.comm_id} {0.source} {0.tag} "
+            "{0.data_ptr} {0.datatype.type_id} {0.count}".format(self))
         if self.vg_buffer:
             hashthread.update(self.vg_buffer.hash)
 
@@ -215,8 +215,8 @@ class ReceiveRequest(Request):
 
     def __repr__(self):
         return "<RecvRqst {1:x} id={0.id} source={0.source}, " \
-               "tag={0.tag}, data_ptr={0.data_ptr:x}>" \
-                .format(self, id(self))
+            "tag={0.tag}, data_ptr={0.data_ptr:x}>" \
+            .format(self, id(self))
 
 
 class CollectiveRequest(Request):

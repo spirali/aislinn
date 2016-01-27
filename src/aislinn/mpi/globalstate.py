@@ -31,7 +31,7 @@ class GlobalState(EqMixin):
 
     def __init__(self,
                  process_count):
-        self.states = [ State(self, i, None) for i in xrange(process_count) ]
+        self.states = [State(self, i, None) for i in xrange(process_count)]
         self.collective_operations = None
         self.comm_world = make_comm_world(process_count)
         self.comm_id_counter = consts.MPI_COMM_USERDEF
@@ -39,20 +39,21 @@ class GlobalState(EqMixin):
     def copy(self):
         logging.debug("Copying gstate %s", self)
         gstate = copy.copy(self)
-        gstate.states = [ state.copy(gstate) for state in self.states ]
+        gstate.states = [state.copy(gstate) for state in self.states]
         if self.collective_operations is not None:
-            gstate.collective_operations = [ op.copy() \
-                                             for op in self.collective_operations ]
+            gstate.collective_operations = \
+                [op.copy() for op in self.collective_operations]
         return gstate
 
     def transfer(self, transfer_context):
         logging.debug("Transfering gstate %s", self)
         gstate = copy.copy(self)
-        gstate.states = [ state.transfer(gstate, transfer_context)
-                          for state in self.states ]
+        gstate.states = [state.transfer(gstate, transfer_context)
+                         for state in self.states]
         if self.collective_operations is not None:
-            gstate.collective_operations = [ op.transfer(transfer_context)
-                                             for op in self.collective_operations ]
+            gstate.collective_operations = \
+                [op.transfer(transfer_context)
+                 for op in self.collective_operations]
         return gstate
 
     @property
@@ -121,7 +122,7 @@ class GlobalState(EqMixin):
     def create_new_communicator(self, comm, ranks=None, group=None):
         assert ranks or group
         if ranks:
-            pids = [ comm.group.rank_to_pid(r) for r in ranks ]
+            pids = [comm.group.rank_to_pid(r) for r in ranks]
             group = Group(pids)
         self.comm_id_counter += 1
         new_comm_id = self.comm_id_counter
@@ -146,5 +147,3 @@ class GlobalState(EqMixin):
     def mpi_leak_check(self, generator, node):
         for state in self.states:
             state.mpi_leak_check(generator, node)
-
-

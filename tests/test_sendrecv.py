@@ -2,6 +2,7 @@
 from utils import TestCase
 import unittest
 
+
 class SendRecvTests(TestCase):
 
     category = "sendrecv"
@@ -53,7 +54,6 @@ class SendRecvTests(TestCase):
         self.output(2, "200\n100\n")
         self.execute(3, "bsend")
         self.execute(3, "waitall")
-
 
     def test_persistent(self):
         self.program("persistent")
@@ -156,7 +156,6 @@ class SendRecvTests(TestCase):
         self.output(1, "103 101 203 201\nSTATUS 0 5\n")
         self.output(1, "103 203 101 201\nSTATUS 0 5\n")
 
-
         self.output(1, "101 201 103 203\nSTATUS 2 5\n")
         self.output(1, "101 103 201 203\nSTATUS 2 5\n")
         self.output(1, "101 103 203 201\nSTATUS 2 5\n")
@@ -209,20 +208,20 @@ class SendRecvTests(TestCase):
 
         self.reset_output()
         self.output(1, "First1 0 111\nFirst2 0 111 1\n"
-                           "First3 0 111\nSecond 2 333\n")
+                       "First3 0 111\nSecond 2 333\n")
         self.output(1, "First1 2 333\nFirst2 2 333 1\n"
-                           "First3 2 333\nSecond 0 111\n")
+                       "First3 2 333\nSecond 0 111\n")
         self.execute(3, "probe", send_protocol="rendezvous")
         self.execute(3, "iprobe", send_protocol="rendezvous")
 
         self.output(1, "First1 0 111\nFirst2 0 111 1\n"
-                           "First3 0 111\nSecond 2 333\n")
+                       "First3 0 111\nSecond 2 333\n")
         self.output(1, "First1 2 333\nFirst2 2 333 1\n"
-                           "First3 2 333\nSecond 0 111\n")
+                       "First3 2 333\nSecond 0 111\n")
         self.output(1, "First1 0 111\nFirst2 0 111 1\n"
-                           "First3 2 333\nSecond 0 111\n")
+                       "First3 2 333\nSecond 0 111\n")
         self.output(1, "First1 2 333\nFirst2 2 333 1\n"
-                           "First3 0 111\nSecond 2 333\n")
+                       "First3 0 111\nSecond 2 333\n")
         self.execute(3, "invalid-probe", send_protocol="rendezvous")
         self.execute(3, "invalid-iprobe", send_protocol="rendezvous")
 

@@ -2,6 +2,7 @@
 from utils import TestCase
 import unittest
 
+
 class DeadlockTests(TestCase):
 
     category = "deadlock"

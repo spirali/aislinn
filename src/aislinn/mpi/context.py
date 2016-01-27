@@ -72,17 +72,17 @@ class Context:
             if fd == "2" and self.gcontext.generator.stderr_mode != "stdout":
                 if gcontext.generator.stderr_mode == "capture":
                     gcontext.add_data(
-                            STREAM_STDERR, self.state.pid,
-                            self.controller.read_mem(data_ptr,
-                                                     size))
+                        STREAM_STDERR, self.state.pid,
+                        self.controller.read_mem(data_ptr,
+                                                 size))
                 return self.gcontext.generator.stderr_mode == "print"
-            if fd == "1" or (fd == "2"
-                             and gcontext.generator.stderr_mode == "stdout"):
+            if fd == "1" or (fd == "2" and
+                             gcontext.generator.stderr_mode == "stdout"):
                 if gcontext.generator.stdout_mode == "capture":
                     gcontext.add_data(
-                            STREAM_STDOUT, self.state.pid,
-                            self.controller.read_mem(data_ptr,
-                                                     size))
+                        STREAM_STDOUT, self.state.pid,
+                        self.controller.read_mem(data_ptr,
+                                                 size))
                 return gcontext.generator.stdout_mode == "print"
             return True
         else:
@@ -105,18 +105,19 @@ class Context:
                                    self.state.pid,
                                    size_allocations)
 
-
     def handle_call(self, name, args, callback=False):
         call = mpicalls.calls_non_communicating.get(name)
         if call is None:
             call = mpicalls.calls_communicating.get(name)
             if callback:
-                self.add_error_and_throw(errormsg.CommunicationInCallback(self))
+                self.add_error_and_throw(
+                    errormsg.CommunicationInCallback(self))
         if call is not None:
             logging.debug("Call %s %s", name, args)
             return call.run(self, args)
         else:
-            raise Exception("Unkown function call: {0} {1}".format(name, repr(args)))
+            raise Exception(
+                "Unkown function call: {0} {1}".format(name, repr(args)))
 
     def restore_state(self):
         # Restore the state and forget about the restored state
@@ -162,12 +163,12 @@ class Context:
             self.state.set_finished()
             if exitcode != 0:
                 self.add_error_and_throw(
-                        errormsg.NonzeroExitCode(self, exitcode=exitcode))
+                    errormsg.NonzeroExitCode(self, exitcode=exitcode))
             self.state.allocations = self.get_allocations()
             return False
         if result[0] == "REPORT":
             self.add_error_and_throw(
-                    self.make_error_message_from_report(result))
+                self.make_error_message_from_report(result))
         raise Exception("Invalid command " + result[0])
 
     def run(self):
@@ -253,20 +254,20 @@ class Context:
         self.gcontext.generator.consts_pool = convert_type(result[4], "ptr")
         controller.write_int(self.gcontext.generator.get_const_ptr(
             consts.MPI_TAG_UB), 0xFFFF)
-        function_ptrs = result[5:] # skip CALL MPI_Init argc argv consts_pool
+        function_ptrs = result[5:]  # skip CALL MPI_Init argc argv consts_pool
 
         # The order of the ops is important,
         # because it has to be synchronous with code in MPI_Init
-        operations = [ consts.MPI_SUM,
-                       consts.MPI_PROD,
-                       consts.MPI_MIN,
-                       consts.MPI_MAX,
-                       consts.MPI_LAND,
-                       consts.MPI_LOR,
-                       consts.MPI_BAND,
-                       consts.MPI_BOR,
-                       consts.MPI_MINLOC,
-                       consts.MPI_MAXLOC ]
+        operations = [consts.MPI_SUM,
+                      consts.MPI_PROD,
+                      consts.MPI_MIN,
+                      consts.MPI_MAX,
+                      consts.MPI_LAND,
+                      consts.MPI_LOR,
+                      consts.MPI_BAND,
+                      consts.MPI_BOR,
+                      consts.MPI_MINLOC,
+                      consts.MPI_MAXLOC]
 
         assert len(function_ptrs) == len(ops.buildin_operations)
         assert len(function_ptrs) == len(operations)
@@ -298,7 +299,7 @@ class Context:
         for keyval, value in self.state.get_comm_attrs(comm):
             if keyval.copy_fn == consts.MPI_NULL_COPY_FN:
                 continue
-            tmp = controller.client_malloc(controller.POINTER_SIZE + \
+            tmp = controller.client_malloc(controller.POINTER_SIZE +
                                            controller.INT_SIZE)
             value_out_ptr = tmp
             flag_ptr = tmp + controller.POINTER_SIZE
@@ -352,9 +353,9 @@ class Context:
             request = self.state.get_finished_request(request_id)
             if not (request_ids is None or
                     (request.is_send() and
-                           request.target == consts.MPI_PROC_NULL) or
+                        request.target == consts.MPI_PROC_NULL) or
                     (request.is_receive() and
-                           request.source == consts.MPI_PROC_NULL)):
+                        request.source == consts.MPI_PROC_NULL)):
                 request_ids.append(request_id)
 
             self._close_request(request, index, i)
@@ -384,13 +385,14 @@ class Context:
         if self.state.tested_requests_pointer is not None and \
                 self.state.get_persistent_request(request.id) is None:
             self.controller.write_int(
-                    self.state.tested_requests_pointer + \
-                    self.controller.REQUEST_SIZE * index_pointer,
-                    consts.MPI_REQUEST_NULL)
+                self.state.tested_requests_pointer +
+                self.controller.REQUEST_SIZE * index_pointer,
+                consts.MPI_REQUEST_NULL)
 
-        if self.state.tested_requests_status_ptr is not None and request.is_receive():
+        if self.state.tested_requests_status_ptr is not None and \
+                request.is_receive():
             status_ptr = self.state.tested_requests_status_ptr + \
-                         self.controller.STATUS_SIZE * index_status
+                self.controller.STATUS_SIZE * index_status
             if request.source == consts.MPI_PROC_NULL:
                 self.controller.write_status(status_ptr,
                                              consts.MPI_PROC_NULL,

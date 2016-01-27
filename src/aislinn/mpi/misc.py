@@ -17,6 +17,7 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+
 def factors(count, dims):
     """ This is naive implementation of algorithm that is needed
         for MPI_Dim_create """
@@ -25,7 +26,7 @@ def factors(count, dims):
 
     p = primes(count)
 
-    factors = [ 1 ] * dims
+    factors = [1] * dims
 
     if not p:
         return factors
@@ -42,14 +43,15 @@ def factors(count, dims):
     factors.sort(reverse=True)
     return factors
 
+
 def primes(n):
     p = []
     d = 2
-    while d*d <= n:
+    while d * d <= n:
         while (n % d) == 0:
             p.append(d)
             n /= d
         d += 1
     if n > 1:
-       p.append(n)
+        p.append(n)
     return p

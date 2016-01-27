@@ -50,20 +50,20 @@ class State:
         self.pid = pid
         self.vg_state = vg_state
         self.status = State.StatusReady
-        self.comms = [] # <-- Copy on write!
-        self.groups = {} # <-- Copy on write!
-        self.active_requests = [] # <-- Copy on write!
-        self.finished_requests = [] # <-- Copy on write!
-        self.persistent_requests = [] # <-- Copy on write!
+        self.comms = []  # <-- Copy on write!
+        self.groups = {}  # <-- Copy on write!
+        self.active_requests = []  # <-- Copy on write!
+        self.finished_requests = []  # <-- Copy on write!
+        self.persistent_requests = []  # <-- Copy on write!
         self.tested_request_ids = []
         self.tested_requests_pointer = None
         self.tested_requests_status_ptr = None
         self.flag_ptr = None
-        self.index_ptr = None # Used for Waitany and WaitSome
-        self.user_defined_types = [] # <-- Copy on write!
-        self.user_defined_ops = [] # <-- Copy on write!
-        self.keyvals = [] # <-- Copy on write!
-        self.attrs = {} # <-- Copy on write!
+        self.index_ptr = None  # Used for Waitany and WaitSome
+        self.user_defined_types = []  # <-- Copy on write!
+        self.user_defined_ops = []  # <-- Copy on write!
+        self.keyvals = []  # <-- Copy on write!
+        self.attrs = {}  # <-- Copy on write!
         self.cc_id_counters = None
         self.probe_data = None
         self.probe_promise = None
@@ -92,11 +92,12 @@ class State:
         state = copy.copy(self)
         state.gstate = gstate
         if self.vg_state:
-            state.vg_state = transfer_context.transfer_state(self.pid, self.vg_state)
-        state.active_requests = [ request.transfer(transfer_context)
-                                  for request in self.active_requests ]
-        state.finished_requests = [ request.transfer(transfer_context)
-                                    for request in self.finished_requests ]
+            state.vg_state = transfer_context.transfer_state(self.pid,
+                                                             self.vg_state)
+        state.active_requests = [request.transfer(transfer_context)
+                                 for request in self.active_requests]
+        state.finished_requests = [request.transfer(transfer_context)
+                                   for request in self.finished_requests]
         state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
 
@@ -215,9 +216,9 @@ class State:
 
     def get_datatype(self, type_id):
         if type_id >= consts.USER_DEFINED_TYPES and \
-           type_id < consts.USER_DEFINED_TYPES + len(self.user_defined_types):
-               return self.user_defined_types[type_id
-                                              - consts.USER_DEFINED_TYPES]
+                type_id < consts.USER_DEFINED_TYPES + \
+                len(self.user_defined_types):
+            return self.user_defined_types[type_id - consts.USER_DEFINED_TYPES]
         return types.buildin_types.get(type_id)
 
     def get_op(self, op_id):
@@ -225,10 +226,9 @@ class State:
         if op is not None:
             return op
         if op_id >= consts.USER_DEFINED_OPS and \
-           op_id < consts.USER_DEFINED_OPS + len(self.user_defined_ops):
-               return self.user_defined_ops[op_id
-                                              - consts.USER_DEFINED_OPS]
-        return None # build-in
+                op_id < consts.USER_DEFINED_OPS + len(self.user_defined_ops):
+            return self.user_defined_ops[op_id - consts.USER_DEFINED_OPS]
+        return None  # build-in
 
     def commit_datatype(self, datatype):
         """ datatype has to be valid type for this state """
@@ -262,7 +262,7 @@ class State:
     def is_hashable(self):
         # If we are finished, we do not care about exact state
         return self.status == State.StatusFinished or \
-               (self.vg_state is not None and self.vg_state.hash is not None)
+            (self.vg_state is not None and self.vg_state.hash is not None)
 
     def compute_hash(self, hashthread):
         assert self.is_hashable()
@@ -343,8 +343,10 @@ class State:
             if request.source == consts.MPI_PROC_NULL:
                 self.add_finished_request(request)
                 return
-            r = request.datatype.check(
-                context.controller, request.data_ptr, request.count, write=True)
+            r = request.datatype.check(context.controller,
+                                       request.data_ptr,
+                                       request.count,
+                                       write=True)
             if r is not None:
                 e = errormsg.InvalidReceiveBuffer(context, address=int(r))
                 context.add_error_and_throw(e)
@@ -356,8 +358,7 @@ class State:
         elif isinstance(context.event.new_request, list):
             context.event.new_request.append(request.id)
         else:
-            context.event.new_request = [ context.event.new_request,
-                                          request.id ]
+            context.event.new_request = [context.event.new_request, request.id]
 
         if not immediate:
             request.stacktrace = context.event.stacktrace
@@ -445,7 +446,7 @@ class State:
         for i, request_id in enumerate(self.tested_request_ids):
             if request_id != consts.MPI_REQUEST_NULL:
                 return i
-        assert False # This should not happen
+        assert False  # This should not happen
 
     def set_ready(self):
         self.reset_state()
@@ -489,7 +490,7 @@ class State:
         self.reset_state()
         self.status = self.StatusTest
         self.flag_ptr = flag_ptr
-        self.tested_request_ids =  request_ids
+        self.tested_request_ids = request_ids
         self.tested_requests_pointer = request_ptr
         self.tested_requests_status_ptr = status_ptr
 
@@ -507,19 +508,19 @@ class State:
                     if not s.is_send() or s.comm.comm_id != r.comm.comm_id:
                         continue
                     if s.comm.group.rank_to_pid(s.target) == self.pid and \
-                       (r.tag == s.tag or
-                        r.tag == consts.MPI_ANY_TAG):
-                            return ((pid, s, self.pid, r))
+                            (r.tag == s.tag or
+                             r.tag == consts.MPI_ANY_TAG):
+                        return ((pid, s, self.pid, r))
 
     def probe_is_possible(self, comm_id, rank, tag):
         for request in self.active_requests:
             if not request.is_receive():
                 continue
-            if (request.source == consts.MPI_ANY_SOURCE \
+            if (request.source == consts.MPI_ANY_SOURCE
                     or request.source == rank) \
-                and (request.tag == tag or
-                     request.tag == consts.MPI_ANY_TAG) \
-                             and (request.comm.comm_id == comm_id):
+                    and (request.tag == tag or
+                         request.tag == consts.MPI_ANY_TAG) \
+                    and (request.comm.comm_id == comm_id):
                 return False
         return True
 
@@ -538,12 +539,11 @@ class State:
                         if not s.is_send() or s.comm.comm_id != r.comm.comm_id:
                             continue
                         if s.comm.group.rank_to_pid(s.target) == self.pid and \
-                           (r.tag == s.tag or
-                            r.tag == consts.MPI_ANY_TAG):
-                               results.append((state.pid, s, self.pid, r))
-                               break
+                                (r.tag == s.tag or
+                                 r.tag == consts.MPI_ANY_TAG):
+                            results.append((state.pid, s, self.pid, r))
+                            break
         return results
-
 
     def probe_nondeterministic(self, comm_id, tag):
         results = []
@@ -552,11 +552,11 @@ class State:
                 if not s.is_send() or s.comm.comm_id != comm_id:
                     continue
                 if s.comm.group.rank_to_pid(s.target) == self.pid and \
-                   (tag == s.tag or
-                    tag == consts.MPI_ANY_TAG) and \
-                   self.probe_is_possible(comm_id, s.target, s.tag):
-                       results.append((state.pid, s))
-                       break
+                        (tag == s.tag or
+                         tag == consts.MPI_ANY_TAG) and \
+                        self.probe_is_possible(comm_id, s.target, s.tag):
+                    results.append((state.pid, s))
+                    break
         return results
 
     def probe_deterministic(self, comm_id, source, tag):
@@ -565,10 +565,10 @@ class State:
             if not s.is_send() or s.comm.comm_id != comm_id:
                 continue
             if s.comm.group.rank_to_pid(s.target) == self.pid and \
-               (tag == s.tag or
-                tag == consts.MPI_ANY_TAG) and \
-                self.probe_is_possible(comm_id, s.target, s.tag):
-                    return (pid, s)
+                    (tag == s.tag or
+                     tag == consts.MPI_ANY_TAG) and \
+                    self.probe_is_possible(comm_id, s.target, s.tag):
+                return (pid, s)
 
     def get_comm(self, comm_id):
         if comm_id == consts.MPI_COMM_WORLD:
@@ -630,7 +630,7 @@ class State:
         self.active_requests = copy.copy(self.active_requests)
         self.active_requests.remove(request)
         self.add_finished_request(
-                request.make_finished_request(rank, tag, vg_buffer))
+            request.make_finished_request(rank, tag, vg_buffer))
 
     def finish_collective_request(self, request):
         self.active_requests = copy.copy(self.active_requests)

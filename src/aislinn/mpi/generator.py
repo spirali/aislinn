@@ -46,9 +46,9 @@ class Generator:
 
         self.send_protocol = aislinn_args.send_protocol
         self.send_protocol_eager_threshold = \
-                aislinn_args.send_protocol_eager_threshold
+            aislinn_args.send_protocol_eager_threshold
         self.send_protocol_rendezvous_threshold = \
-                aislinn_args.send_protocol_rendezvous_threshold
+            aislinn_args.send_protocol_rendezvous_threshold
 
         self.init_time = None
         self.end_time = None
@@ -80,22 +80,22 @@ class Generator:
         self.profile = aislinn_args.profile
         self.debug_seq = aislinn_args.debug_seq
 
-        self.workers = [ Worker(i,
-                                aislinn_args.workers,
-                                self,
-                                args,
-                                aislinn_args)
-                         for i in xrange(aislinn_args.workers) ]
+        self.workers = [Worker(i,
+                               aislinn_args.workers,
+                               self,
+                               args,
+                               aislinn_args)
+                        for i in xrange(aislinn_args.workers)]
 
     def get_statistics(self):
         if self.statistics is None:
             return None
         else:
-            return ([ ("Length of working queue", "states"),
-                      ("All pages", "pages"),
-                      ("VA", "va"),
-                      ("Active pages", "pages"),
-                      ("Sum of buffer sizes", "bytes") ],
+            return ([("Length of working queue", "states"),
+                     ("All pages", "pages"),
+                     ("VA", "va"),
+                     ("Active pages", "pages"),
+                     ("Sum of buffer sizes", "bytes")],
                     self.statistics,
                     self.statistics_tick)
 
@@ -114,7 +114,7 @@ class Generator:
             len(self.working_queue), pages, vas, active_pages, buffers_size))
 
     def add_error_message(self, error_message):
-        if error_message.name in [ e.name for e in self.error_messages ]:
+        if error_message.name in [e.name for e in self.error_messages]:
             return
         self.error_messages.append(error_message)
 
@@ -147,7 +147,7 @@ class Generator:
         for worker in self.workers[1:]:
             worker.init_nonfirst_worker()
 
-        self.workers[0].start_next_in_queue();
+        self.workers[0].start_next_in_queue()
         return True
 
     def main_cycle(self):
@@ -161,7 +161,8 @@ class Generator:
             controllers = poll_controllers(controllers)
             for c in controllers:
                 worker = self.workers[c.name / self.process_count]
-                context = worker.gcontext.get_context(c.name % self.process_count)
+                context = worker.gcontext.get_context(
+                    c.name % self.process_count)
                 logging.debug("Ready controller %s", context)
                 context.process_run_result(c.finish_async())
                 worker.continue_in_execution()
@@ -197,9 +198,9 @@ class Generator:
 
     def memory_leak_check(self):
         final_nodes = list(self.statespace.all_final_nodes())
-        allocations = [ frozenset(node.allocations)
-                        if node.allocations else frozenset()
-                        for node in final_nodes ]
+        allocations = [frozenset(node.allocations)
+                       if node.allocations else frozenset()
+                       for node in final_nodes]
         self.deterministic_unallocated_memory = 0
         if not allocations:
             return
@@ -214,7 +215,7 @@ class Generator:
                                             size=a.size)
                     break
             else:
-                assert 0 # This shoud not happen
+                assert 0  # This shoud not happen
             self.add_error_message(m)
 
         for a in deterministic:
@@ -237,10 +238,12 @@ class Generator:
 
         gstate1, worker1 = self.debug_captured_states[0]
         gstate2, worker2 = self.debug_captured_states[1]
-        logging.info("Hashes %s, %s", gstate1.compute_hash(), gstate2.compute_hash())
+        logging.info("Hashes %s, %s",
+                     gstate1.compute_hash(), gstate2.compute_hash())
         for i, (s1, s2) in enumerate(zip(gstate1.states, gstate2.states)):
             if s1.vg_state and s2.vg_state:
-                logging.info("Pid %s: hash1=%s hash2=%s", i, s1.vg_state.hash, s2.vg_state.hash)
+                logging.info("Pid %s: hash1=%s hash2=%s",
+                             i, s1.vg_state.hash, s2.vg_state.hash)
                 if s1.vg_state.hash != s2.vg_state.hash:
 
                     controller = worker1.controllers[i]
@@ -258,7 +261,6 @@ class Generator:
 
         for gstate, worker in self.debug_captured_states:
             gstate.dispose()
-        #self.cleanup()
 
     def add_node(self, prev, worker, gstate, do_hash=True):
         if do_hash:
@@ -284,7 +286,6 @@ class Generator:
             logging.debug("Capturing %s", node)
             self.debug_captured_states.append((gstate.copy(), worker))
 
-
         if self.statespace.nodes_count > self.max_states:
             logging.info("Maximal number of states reached")
             if self.debug_compare_states is not None:
@@ -294,7 +295,7 @@ class Generator:
         if self.debug_state == uid:
             context = Context(self, node, None)
             context.add_error_and_throw(
-                    errormsg.StateCaptured(context, uid=uid))
+                errormsg.StateCaptured(context, uid=uid))
         return (node, True)
 
     def create_report(self, args, version):
@@ -302,21 +303,22 @@ class Generator:
             if error_message.node:
                 if error_message.events is None:
                     error_message.events = \
-                        self.statespace.events_to_node(error_message.node, None)
+                        self.statespace.events_to_node(error_message.node,
+                                                       None)
                 if self.stdout_mode == "capture":
                     error_message.stdout = \
-                            [ self.statespace.stream_to_node(
-                                error_message.node,
-                                None,
-                                STREAM_STDOUT,
-                                pid)
-                              for pid in xrange(self.process_count) ]
+                        [self.statespace.stream_to_node(
+                            error_message.node,
+                            None,
+                            STREAM_STDOUT,
+                            pid)
+                         for pid in xrange(self.process_count)]
                 if self.stderr_mode == "capture":
                     error_message.stderr = \
-                            [ self.statespace.stream_to_node(
-                                error_message.node,
-                                None,
-                                STREAM_STDERR,
-                                pid)
-                              for pid in xrange(self.process_count) ]
+                        [self.statespace.stream_to_node(
+                            error_message.node,
+                            None,
+                            STREAM_STDERR,
+                            pid)
+                         for pid in xrange(self.process_count)]
         return Report(self, args, version)

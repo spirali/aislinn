@@ -20,6 +20,7 @@
 import errormsg
 import consts
 
+
 def check_rank(context,
                comm,
                rank,
@@ -34,14 +35,12 @@ def check_rank(context,
                                proc_null_allowed)
 
 
-
-def check_rank_in_group(
-               context,
-               group,
-               rank,
-               arg_position,
-               any_source_allowed=False,
-               proc_null_allowed=False):
+def check_rank_in_group(context,
+                        group,
+                        rank,
+                        arg_position,
+                        any_source_allowed=False,
+                        proc_null_allowed=False):
 
     if rank == consts.MPI_PROC_NULL:
         if not proc_null_allowed:
@@ -57,10 +56,11 @@ def check_rank_in_group(
                                      arg_position=arg_position))
     elif rank < 0 or rank >= group.size:
         context.add_error_and_throw(
-                errormsg.InvalidRank(context,
-                                     value=rank,
-                                     arg_position=arg_position))
+            errormsg.InvalidRank(context,
+                                 value=rank,
+                                 arg_position=arg_position))
     return rank
+
 
 def check_tag(context,
               tag,
@@ -72,17 +72,20 @@ def check_tag(context,
     context.add_error_and_throw(
         errormsg.InvalidTag(context, value=tag, arg_position=arg_position))
 
+
 def check_count(context, count, arg_position):
     if count >= 0:
         return count
     context.add_error_and_throw(
         errormsg.InvalidCount(context, value=count, arg_position=arg_position))
 
+
 def check_sizes(context, sizes, arg_position):
     for i, size in enumerate(sizes):
         if size < 0:
             context.add_error_and_throw(errormsg.InvalidLength(
-                        context, value=size, arg_position=arg_position, index=i))
+                context, value=size, arg_position=arg_position, index=i))
+
 
 def check_color(context, color, arg_position):
     if color != consts.MPI_UNDEFINED and color < 0:
@@ -90,19 +93,21 @@ def check_color(context, color, arg_position):
             errormsg.InvalidColor(
                 context, value=color, arg_position=arg_position))
 
+
 def check_op(context, op_id, arg_position):
     if op_id == consts.MPI_OP_NULL:
         context.add_error_and_throw(
-                errormsg.InvalidOperation(context,
-                                          value=op_id,
-                                          arg_position=arg_position))
+            errormsg.InvalidOperation(context,
+                                      value=op_id,
+                                      arg_position=arg_position))
     op = context.state.get_op(op_id)
     if op is None:
         context.add_error_and_throw(
-                errormsg.InvalidOperation(context,
-                                          value=op_id,
-                                          arg_position=arg_position))
+            errormsg.InvalidOperation(context,
+                                      value=op_id,
+                                      arg_position=arg_position))
     return op
+
 
 def check_datatype(context, type_id, arg_position, allow_uncommited=False):
     datatype = context.state.get_datatype(type_id)
@@ -116,23 +121,26 @@ def check_datatype(context, type_id, arg_position, allow_uncommited=False):
                 context, value=type_id, arg_position=arg_position))
     return datatype
 
+
 def check_datatypes(context, type_ids, arg_position, allow_uncommited=False):
-    return [ check_datatype(context, type_id, arg_position, allow_uncommited)
-             for type_id in type_ids ]
+    return [check_datatype(context, type_id, arg_position, allow_uncommited)
+            for type_id in type_ids]
+
 
 def check_comm(context, comm_id, arg_position):
     if comm_id == consts.MPI_COMM_NULL:
         context.add_error_and_throw(
-                errormsg.InvalidCommunicator(context,
-                value=comm_id,
-                arg_position=arg_position))
+            errormsg.InvalidCommunicator(context,
+                                         value=comm_id,
+                                         arg_position=arg_position))
     comm = context.state.get_comm(comm_id)
     if comm is None:
         context.add_error_and_throw(
-                errormsg.InvalidCommunicator(context,
-                value=comm_id,
-                arg_position=arg_position))
+            errormsg.InvalidCommunicator(context,
+                                         value=comm_id,
+                                         arg_position=arg_position))
     return comm
+
 
 def check_and_get_group(context, group_id, arg_position):
     group = context.state.get_group(group_id)
@@ -140,6 +148,7 @@ def check_and_get_group(context, group_id, arg_position):
         context.add_error_and_throw(errormsg.InvalidGroup(
             context, value=group_id, arg_position=arg_position))
     return group
+
 
 def check_request_id(context, request_id, arg_position, index=None):
     if request_id == consts.MPI_REQUEST_NULL:
@@ -149,6 +158,7 @@ def check_request_id(context, request_id, arg_position, index=None):
     if request is None:
         context.add_error_and_throw(errormsg.InvalidRequest(
             context, value=request_id, arg_position=arg_position, index=index))
+
 
 def check_persistent_request(
         context, request_id, inactive, arg_position, index=None):
@@ -166,17 +176,19 @@ def check_persistent_request(
             context, value=request_id, arg_position=arg_position, index=index))
     return request
 
+
 def check_unique_values(context, items, arg_position):
     if len(set(items)) != len(items):
-        e = errormsg.NonUniqueValues(
-                context,
-                value=items,
-                arg_position=arg_position)
+        e = errormsg.NonUniqueValues(context,
+                                     value=items,
+                                     arg_position=arg_position)
         context.add_error_and_throw(e)
+
 
 def check_request_ids(context, request_ids, arg_position):
     for i, request_id in enumerate(request_ids):
         check_request_id(context, request_id, arg_position, i)
+
 
 def check_keyval(context, keyval_id, arg_position):
     keyval = context.state.get_keyval(keyval_id)

@@ -20,6 +20,7 @@
 import base.utils as utils
 import copy
 
+
 class Action(utils.EqMixin):
 
     action_index = 0

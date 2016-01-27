@@ -2,6 +2,7 @@
 from utils import TestCase
 import unittest
 
+
 class MemTests(TestCase):
 
     category = "mem"
@@ -21,7 +22,8 @@ class MemTests(TestCase):
         self.assertEquals(self.report.determinisic_nonfreed_memory, 100)
         self.execute(1, "100", heap_size="1M")
         self.assertEquals(self.report.determinisic_nonfreed_memory, 100)
-        self.execute(1, "10000000", heap_size="1M", error="mem/heap-limit-reached")
+        self.execute(
+            1, "10000000", heap_size="1M", error="mem/heap-limit-reached")
         self.execute(1, ("10000000",), heap_size="100M")
         self.assertEquals(self.report.determinisic_nonfreed_memory, 10000000)
 
@@ -47,13 +49,16 @@ class MemTests(TestCase):
         def check_stdout(data, limit):
             for value in map(int, data.splitlines()):
                 self.assertTrue(
-                        value >= limit,
-                        "The gap between two allocation is no sufficient")
+                    value >= limit,
+                    "The gap between two allocation is no sufficient")
             return True
         self.program("redzones")
-        self.execute(1, stdout=lambda data: check_stdout(data, 16), redzone_size=16)
-        self.execute(1, stdout=lambda data: check_stdout(data, 100), redzone_size=100)
-        self.execute(1, stdout=lambda data: check_stdout(data, 6000), redzone_size=6000)
+        self.execute(
+            1, stdout=lambda data: check_stdout(data, 16), redzone_size=16)
+        self.execute(
+            1, stdout=lambda data: check_stdout(data, 100), redzone_size=100)
+        self.execute(
+            1, stdout=lambda data: check_stdout(data, 6000), redzone_size=6000)
 
     def test_invaliddata(self):
         self.program("invaliddata")

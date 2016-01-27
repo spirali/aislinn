@@ -2,6 +2,7 @@
 from utils import TestCase
 import unittest
 
+
 class CollectiveTests(TestCase):
 
     category = "collective"
@@ -38,8 +39,10 @@ class CollectiveTests(TestCase):
         self.execute(1, "iwait")
 
         self.reset_output()
-        self.output(1, "OUT1: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n"\
-                           "OUT2: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n")
+        self.output(1, "OUT1: 100 101 102 103 104 105 200 201 202 203 204 "
+                       "300 301 302 303\n"
+                       "OUT2: 100 101 102 103 104 105 200 201 202 203 204 "
+                       "300 301 302 303\n")
 
         self.execute(3, "gatherv")
         self.execute(3, "iwaitall")
@@ -54,25 +57,34 @@ class CollectiveTests(TestCase):
         self.execute(1)
 
         self.reset_output()
-        self.output_default("OUT1: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n"\
-                                "OUT2: 100 101 102 103 104 105 200 201 202 203 204 300 301 302 303\n")
+        self.output_default(
+            "OUT1: 100 101 102 103 104 105 "
+            "200 201 202 203 204 300 301 302 303\n"
+            "OUT2: 100 101 102 103 104 105 "
+            "200 201 202 203 204 300 301 302 303\n")
         self.execute(3)
 
     def test_igather(self):
         self.program("igather")
-        self.output(0, "OUT1: 100 101 102 103 200 201 202 203 300 301 302 303\n" \
-                           "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 3000 3001 3002 3003\n")
+        self.output(0, "OUT1: 100 101 102 103 200 201 202 203 "
+                       "300 301 302 303\n"
+                       "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 "
+                       "3000 3001 3002 3003\n")
         self.execute(3, "0")
 
         self.reset_output()
-        self.output(1, "OUT1: 100 101 102 103 200 201 202 203 300 301 302 303\n" \
-                           "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 3000 3001 3002 3003\n")
+        self.output(1, "OUT1: 100 101 102 103 200 201 202 203 "
+                       "300 301 302 303\n"
+                       "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 "
+                       "3000 3001 3002 3003\n")
 
         self.execute(3, "1")
 
         self.reset_output()
-        self.output(2, "OUT1: 100 101 102 103 200 201 202 203 300 301 302 303\n" \
-                           "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 3000 3001 3002 3003\n")
+        self.output(2, "OUT1: 100 101 102 103 200 201 202 203 "
+                       "300 301 302 303\n"
+                       "OUT2: 1000 1001 1002 1003 2000 2001 2002 2003 "
+                       "3000 3001 3002 3003\n")
         self.execute(3, "2")
 
     def test_bcast(self):
@@ -80,7 +92,8 @@ class CollectiveTests(TestCase):
             self.reset_output()
             for pid in xrange(3):
                 self.output(pid, "{1} OUT1: {0}00 {0}01 {0}02 {0}03\n"
-                                     "{1} OUT2: {0}000 {0}001 {0}002 {0}003\n".format(root, pid))
+                                 "{1} OUT2: {0}000 {0}001 {0}002 {0}003\n"
+                                 .format(root, pid))
         self.program("bcast")
 
         set_output(1)
@@ -93,18 +106,18 @@ class CollectiveTests(TestCase):
     def test_iscatterv(self):
         self.program("iscatterv")
 
-        self.output(0, "0/2:OUT1: 100 200\n" \
-                           "0/2:OUT2: 100 200\n")
+        self.output(0, "0/2:OUT1: 100 200\n"
+                       "0/2:OUT2: 100 200\n")
         self.execute(1, "waitall")
         self.execute(1, "wait")
 
         self.reset_output()
-        self.output(0, "0/6:OUT1: 100 200 300 400 500 600\n" \
-                           "0/6:OUT2: 100 200 300 400 500 600\n")
-        self.output(1, "1/5:OUT1: 200 300 400 500 600\n" \
-                           "1/5:OUT2: 200 300 400 500 600\n")
-        self.output(2, "2/4:OUT1: 300 400 500 600\n" \
-                           "2/4:OUT2: 300 400 500 600\n")
+        self.output(0, "0/6:OUT1: 100 200 300 400 500 600\n"
+                       "0/6:OUT2: 100 200 300 400 500 600\n")
+        self.output(1, "1/5:OUT1: 200 300 400 500 600\n"
+                       "1/5:OUT2: 200 300 400 500 600\n")
+        self.output(2, "2/4:OUT1: 300 400 500 600\n"
+                       "2/4:OUT2: 300 400 500 600\n")
         self.execute(3, "waitall")
         self.execute(3, "wait")
 
@@ -112,11 +125,11 @@ class CollectiveTests(TestCase):
         self.program("iscatter")
 
         self.output(0, "0: OUT1: 100 200 300 400\n"
-                           "0 OUT2: 1000 2000 3000 4000\n")
-        self.output(1, "1: OUT1: 500 600 700 800\n" \
-                           "1 OUT2: 5000 6000 7000 8000\n")
-        self.output(2, "2: OUT1: 900 1000 1100 1200\n" \
-                           "2 OUT2: 9000 10000 11000 12000\n")
+                       "0 OUT2: 1000 2000 3000 4000\n")
+        self.output(1, "1: OUT1: 500 600 700 800\n"
+                       "1 OUT2: 5000 6000 7000 8000\n")
+        self.output(2, "2: OUT1: 900 1000 1100 1200\n"
+                       "2 OUT2: 9000 10000 11000 12000\n")
 
         self.execute(3, "0")
         self.execute(3, "1")

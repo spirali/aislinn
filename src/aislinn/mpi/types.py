@@ -21,6 +21,7 @@ import consts
 # TODO: vgtool should inform about real sizes of the architecture,
 # this constants are just for amd64 on my configuration ...
 
+
 class Datatype(object):
 
     def __init__(self):
@@ -61,7 +62,7 @@ class BuildinType(Datatype):
     def unpack(self, controller, vg_buffer, count,
                pointer, index=0, check=True):
         controller.write_buffer(
-               pointer, vg_buffer.id, index, self.size * count, check)
+            pointer, vg_buffer.id, index, self.size * count, check)
 
     def check(self, controller, pointer, count, read=False, write=False):
         if read:
@@ -91,17 +92,17 @@ class ContiguousType(Datatype):
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         self.datatype.pack(
-                controller, pointer, vg_buffer, count * self.count, index)
+            controller, pointer, vg_buffer, count * self.count, index)
 
     def pack2(self, controller, pointer, count, callback):
         self.datatype.pack2(
-                controller, pointer, count * self.count, callback)
+            controller, pointer, count * self.count, callback)
 
     def unpack(self, controller, vg_buffer, count,
                pointer, index=0, check=True):
         self.datatype.unpack(
-                controller, vg_buffer, count * self.count,
-                pointer, index, check)
+            controller, vg_buffer, count * self.count,
+            pointer, index, check)
 
     def check(self, controller, pointer, count, read=False, write=False):
         return self.datatype.check(controller, pointer,
@@ -109,7 +110,7 @@ class ContiguousType(Datatype):
 
     def lock_memory(self, controller, pointer, count, unlock=False):
         self.datatype.lock_memory(
-                controller, pointer, count * self.count, unlock)
+            controller, pointer, count * self.count, unlock)
 
 
 class VectorType(Datatype):
@@ -120,7 +121,7 @@ class VectorType(Datatype):
         self.count = count
         self.blocksize = blocksize
 
-        if is_hvector: # In hvector, stride is already given in bytes
+        if is_hvector:  # In hvector, stride is already given in bytes
             self.stride = stride
         else:
             self.stride = stride * datatype.size
@@ -131,7 +132,7 @@ class VectorType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.pack(
-                        controller, pointer, vg_buffer, self.blocksize, index)
+                    controller, pointer, vg_buffer, self.blocksize, index)
                 pointer += self.stride
                 index += step_index
             pointer -= self.stride
@@ -142,7 +143,7 @@ class VectorType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.pack2(
-                        controller, pointer, self.blocksize, callback)
+                    controller, pointer, self.blocksize, callback)
                 pointer += self.stride
             pointer -= self.stride
             pointer += step_index
@@ -153,8 +154,8 @@ class VectorType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.unpack(
-                        controller, vg_buffer, self.blocksize,
-                        pointer, index, check)
+                    controller, vg_buffer, self.blocksize,
+                    pointer, index, check)
                 pointer += self.stride
                 index += step_index
             pointer -= self.stride
@@ -164,7 +165,7 @@ class VectorType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 r = self.datatype.check(
-                        controller, pointer, self.blocksize, read, write)
+                    controller, pointer, self.blocksize, read, write)
                 if r is not None:
                     return r
                 pointer += self.stride
@@ -187,10 +188,10 @@ class IndexedType(Datatype):
         self.datatype = datatype
         self.count = count
         self.sizes = sizes
-        if is_hindexed: # In hindexed, displs is already given in bytes
+        if is_hindexed:  # In hindexed, displs is already given in bytes
             self.displs = displs
         else:
-            self.displs = [ displ * datatype.size for displ in displs ]
+            self.displs = [displ * datatype.size for displ in displs]
         self.size = datatype.size * sum(sizes)
         self.unpack_size = max(displ + self.datatype.size * size
                                for size, displ in zip(self.sizes, self.displs))
@@ -199,11 +200,11 @@ class IndexedType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.pack(
-                        controller,
-                        pointer + self.displs[j],
-                        vg_buffer,
-                        self.sizes[j],
-                        index)
+                    controller,
+                    pointer + self.displs[j],
+                    vg_buffer,
+                    self.sizes[j],
+                    index)
                 index += self.sizes[j] * self.datatype.size
             pointer += self.unpack_size
 
@@ -211,10 +212,10 @@ class IndexedType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.pack2(
-                        controller,
-                        pointer + self.displs[j],
-                        self.sizes[j],
-                        callback)
+                    controller,
+                    pointer + self.displs[j],
+                    self.sizes[j],
+                    callback)
             pointer += self.unpack_size
 
     def unpack(self, controller, vg_buffer, count,
@@ -222,12 +223,12 @@ class IndexedType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.unpack(
-                        controller,
-                        vg_buffer,
-                        self.sizes[j],
-                        pointer + self.displs[j],
-                        index,
-                        check)
+                    controller,
+                    vg_buffer,
+                    self.sizes[j],
+                    pointer + self.displs[j],
+                    index,
+                    check)
                 index += self.sizes[j] * self.datatype.size
             pointer += self.unpack_size
 
@@ -235,10 +236,10 @@ class IndexedType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 r = self.datatype.check(
-                        controller,
-                        pointer + self.displs[j],
-                        self.sizes[j],
-                        read, write)
+                    controller,
+                    pointer + self.displs[j],
+                    self.sizes[j],
+                    read, write)
                 if r is not None:
                     return r
             pointer += self.unpack_size
@@ -247,10 +248,10 @@ class IndexedType(Datatype):
         for i in xrange(count):
             for j in xrange(self.count):
                 self.datatype.lock_memory(
-                     controller,
-                     pointer + self.displs[j],
-                     self.sizes[j],
-                     unlock)
+                    controller,
+                    pointer + self.displs[j],
+                    self.sizes[j],
+                    unlock)
             pointer += self.unpack_size
 
 
@@ -271,66 +272,62 @@ class StructType(Datatype):
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         for i in xrange(count):
             for datatype, c, displ in \
-                zip(self.datatypes, self.counts, self.displs):
-                    datatype.pack(
-                            controller,
-                            pointer + displ,
-                            vg_buffer,
-                            c,
-                            index)
-                    index += c * datatype.size
+                    zip(self.datatypes, self.counts, self.displs):
+                datatype.pack(controller,
+                              pointer + displ,
+                              vg_buffer,
+                              c,
+                              index)
+                index += c * datatype.size
             pointer += self.unpack_size
 
     def pack2(self, controller, pointer, count, callback):
         for i in xrange(count):
             for datatype, c, displ in \
-                zip(self.datatypes, self.counts, self.displs):
-                    datatype.pack2(
-                            controller,
-                            pointer + displ,
-                            c,
-                            callback)
+                    zip(self.datatypes, self.counts, self.displs):
+                datatype.pack2(controller,
+                               pointer + displ,
+                               c,
+                               callback)
             pointer += self.unpack_size
 
     def unpack(self, controller, vg_buffer, count,
                pointer, index=0, check=True):
         for i in xrange(count):
             for datatype, c, displ in \
-                zip(self.datatypes, self.counts, self.displs):
-                    datatype.unpack(
-                            controller,
-                            vg_buffer,
-                            count,
-                            pointer + displ,
-                            index,
-                            check)
-                    index += c * datatype.size
+                    zip(self.datatypes, self.counts, self.displs):
+                datatype.unpack(controller,
+                                vg_buffer,
+                                count,
+                                pointer + displ,
+                                index,
+                                check)
+                index += c * datatype.size
             pointer += self.unpack_size
 
     def check(self, controller, pointer, count, read=False, write=False):
         for i in xrange(count):
             for datatype, c, displ in \
-                zip(self.datatypes, self.counts, self.displs):
-                    r = datatype.check(
-                            controller,
-                            pointer + displ,
-                            c,
-                            read, write)
-                    if r is not None:
-                        return r
+                    zip(self.datatypes, self.counts, self.displs):
+                r = datatype.check(controller,
+                                   pointer + displ,
+                                   c,
+                                   read,
+                                   write)
+                if r is not None:
+                    return r
             pointer += self.unpack_size
 
     def lock_memory(self, controller, pointer, count, unlock=False):
         for i in xrange(count):
             for datatype, c, displ in \
-                zip(self.datatypes, self.counts, self.displs):
-                    r = datatype.lock_memory(
-                            controller,
-                            pointer + displ,
-                            c,
-                            unlock)
-                    if r is not None:
-                        return r
+                    zip(self.datatypes, self.counts, self.displs):
+                r = datatype.lock_memory(controller,
+                                         pointer + displ,
+                                         c,
+                                         unlock)
+                if r is not None:
+                    return r
             pointer += self.unpack_size
 
 

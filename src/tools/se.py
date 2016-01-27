@@ -2,6 +2,7 @@
 # Statespace explorer
 # (Statespace debugging tool)
 
+
 class Arc:
 
     def __init__(self, node, label):
@@ -18,9 +19,10 @@ class Node:
         self.image = None
 
     def __repr__(self):
-        return "<node [{0}] c={1} p={2}>".format(self.name,
-                ";".join("{}->[{}]".format(a.label, a.node.name) for a in self.arcs),
-                ";".join("[{}]".format(node.name) for node in self.parents))
+        return "<node [{0}] c={1} p={2}>".format(
+            self.name,
+            ";".join("{}->{}".format(a.label, a.node.name) for a in self.arcs),
+            ";".join("[{}]".format(node.name) for node in self.parents))
 
 
 class Statespace:
@@ -49,7 +51,7 @@ class Statespace:
         self.initial_node = nodes[initial]
 
     def bf_search(self):
-        queue = [ self.initial_node ]
+        queue = [self.initial_node]
         visited = set(queue)
         while queue:
             node = queue.pop()
@@ -58,6 +60,7 @@ class Statespace:
                 if arc.node not in visited:
                     visited.add(arc.node)
                     queue.append(arc.node)
+
 
 def find_differences(s1, s2):
     def check_node(node):
@@ -97,11 +100,13 @@ def find_differences(s1, s2):
                 print "n2.image", n2.image
                 return
 
+
 def main():
     import sys
     s1 = Statespace(sys.argv[1])
     s2 = Statespace(sys.argv[2])
     find_differences(s1, s2)
+
 
 if __name__ == "__main__":
     main()

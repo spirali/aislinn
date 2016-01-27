@@ -18,9 +18,6 @@
 #
 
 
-VERSION_STRING = "0.3.0"
-
-
 from mpi.generator import Generator
 from base.arc import STREAM_STDOUT, STREAM_STDERR
 import base.report as report
@@ -32,6 +29,9 @@ import os
 import sys
 import logging
 import platform
+
+VERSION_STRING = "0.3.0"
+
 
 def parse_threshold(value):
     if ":" not in value:
@@ -49,19 +49,23 @@ def parse_threshold(value):
 def positive_int(value):
     i = int(value)
     if i <= 0:
-         raise argparse.ArgumentTypeError(
-                 "{} is not a positive value".format(i))
+        raise argparse.ArgumentTypeError(
+            "{} is not a positive value".format(i))
     return i
+
 
 def size_type(value):
     v = utils.sizestr_to_int(value)
     if v is None or v < 0:
-        raise argparse.ArgumentTypeError("'{}' is not valid size".format(value))
+        raise argparse.ArgumentTypeError(
+            "'{}' is not valid size".format(value))
     return v
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description=
-            "Aislinn -- Statespace analytical tool for MPI applications")
+    parser = argparse.ArgumentParser(
+        description="Aislinn "
+                    "-- Statespace analytical tool for MPI applications")
 
     parser.add_argument("program",
                         metavar="PROGRAM",
@@ -114,9 +118,9 @@ def parse_args():
                         default="html")
 
     parser.add_argument("--max-states",
-                       metavar="N",
-                       type=int,
-                       default=9999999)
+                        metavar="N",
+                        type=int,
+                        default=9999999)
 
     parser.add_argument('--stdout',
                         metavar="MODE",
@@ -150,35 +154,35 @@ def parse_args():
                         help="Statespace search strategy (bfs or dfs)")
 
     parser.add_argument("--stats",
-                       metavar="TICKS",
-                       type=int,
-                       default=None)
+                        metavar="TICKS",
+                        type=int,
+                        default=None)
 
     parser.add_argument("--write-dot",
-                       action="store_true")
+                        action="store_true")
 
     parser.add_argument("--profile",
-                       action="store_true")
+                        action="store_true")
 
     # Internal debug options
     parser.add_argument("--debug-state",
-                       metavar="NAME",
-                       type=str,
-                       default=None)
+                        metavar="NAME",
+                        type=str,
+                        default=None)
     parser.add_argument("--debug-compare-states",
-                       metavar="STATE~STATE",
-                       type=str,
-                       default=None)
+                        metavar="STATE~STATE",
+                        type=str,
+                        default=None)
     parser.add_argument("--debug-statespace",
-                       action="store_true")
+                        action="store_true")
     parser.add_argument("--debug-seq",
-                       action="store_true")
+                        action="store_true")
     parser.add_argument("--debug-by-valgrind-tool",
                         metavar="TOOL",
                         type=str,
                         default=None)
     parser.add_argument("--debug-profile",
-                       action="store_true")
+                        action="store_true")
     parser.add_argument("--debug-vglogfile",
                         metavar="PREFIX",
                         type=str,
@@ -227,7 +231,8 @@ def parse_args():
     if args.send_protocol not in ("full", "eager", "rendezvous"):
         threshold = parse_threshold(args.send_protocol)
         if threshold is None:
-            logging.error("Invalid send protocol (parameter -S or --send-protocol)")
+            logging.error(
+                "Invalid send protocol (parameter -S or --send-protocol)")
             sys.exit(1)
         args.send_protocol = "threshold"
         args.send_protocol_eager_threshold = threshold[0]
@@ -248,6 +253,7 @@ def parse_args():
 
     return args
 
+
 def write_outputs(generator, stream_name, limit, file_prefix):
     if limit == "all":
         limit = None
@@ -261,8 +267,9 @@ def write_outputs(generator, stream_name, limit, file_prefix):
             with open("{0}-{1}-{2}".format(file_prefix, pid, i), "w") as f:
                     f.write(output)
         logging.info("{2} output(s) of pid {1} on {0} was written "
-                     "(files '{3}-{1}-X')" \
-                             .format(stream_name, pid, len(outputs), file_prefix))
+                     "(files '{3}-{1}-X')"
+                     .format(stream_name, pid, len(outputs), file_prefix))
+
 
 def check_program(program):
     if not os.path.isfile(program):
@@ -275,18 +282,18 @@ def check_program(program):
         program = os.path.join(".", program)
     return program
 
+
 def main():
     args = parse_args()
-    run_args = [ check_program(args.program) ] + args.args
+    run_args = [check_program(args.program)] + args.args
     generator = Generator(run_args,
                           args.p,
                           args)
 
-    if platform.architecture()[0] != "64bit" or \
-       platform.system() != "Linux":
-           logging.error("Aislinn is not supported on this platform. "
-                         "The current version supports only 64b Linux")
-           sys.exit(1)
+    if platform.architecture()[0] != "64bit" or platform.system() != "Linux":
+        logging.error("Aislinn is not supported on this platform. "
+                      "The current version supports only 64b Linux")
+        sys.exit(1)
 
     logging.debug("Run args: %s", run_args)
     logging.debug("stdout mode: %s, stderr mode: %s", args.stdout, args.stderr)
@@ -323,8 +330,9 @@ def main():
 
     if args.write_dot:
         generator.statespace.write_dot("statespace.dot")
-        logging.info("Statespace graph (%s nodes) written into 'statespace.dot'",
-                     generator.statespace.nodes_count)
+        logging.info(
+            "Statespace graph (%s nodes) written into 'statespace.dot'",
+            generator.statespace.nodes_count)
 
     if args.debug_statespace:
         generator.statespace.write("statespace.txt")
@@ -336,9 +344,11 @@ def main():
 
     if args.report_type == "html" or args.report_type == "html+xml":
         if args.stdout_write:
-            write_outputs(generator, STREAM_STDOUT, args.stdout_write, "stdout")
+            write_outputs(
+                generator, STREAM_STDOUT, args.stdout_write, "stdout")
         if args.stderr_write:
-            write_outputs(generator, STREAM_STDERR, args.stderr_write, "stderr")
+            write_outputs(
+                generator, STREAM_STDERR, args.stderr_write, "stderr")
         report.write_as_html(generator.create_report(args, VERSION_STRING),
                              "report.html")
         logging.info("Report written into 'report.html'")

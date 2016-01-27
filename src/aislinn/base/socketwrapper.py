@@ -19,6 +19,7 @@
 
 import socket
 
+
 class SocketWrapper:
 
     def __init__(self, socket):
@@ -48,7 +49,7 @@ class SocketWrapper:
             if len(b) >= size:
                 self.recv_buffer = b[size:]
                 return b[:size]
-            data = [ b ]
+            data = [b]
             size -= len(b)
             self.recv_buffer = ""
         else:

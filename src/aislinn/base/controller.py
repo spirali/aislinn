@@ -37,6 +37,7 @@ class UnexpectedOutput(Exception):
     def __str__(self):
         return self.output
 
+
 def check_str(value):
     if value:
         return "check"
@@ -68,7 +69,7 @@ class Controller:
     redzone_size = None
     verbose = None
 
-    name = "" # For debug purpose
+    name = ""  # For debug purpose
 
     def __init__(self, args, cwd=None):
         self.process = None
@@ -80,7 +81,7 @@ class Controller:
         self.running = False
 
     def start(self, capture_syscalls=()):
-        assert self.process is None # Nothing is running
+        assert self.process is None  # Nothing is running
         assert self.socket is None
 
         self.server_socket = self._start_server()
@@ -129,7 +130,7 @@ class Controller:
 
     def run_function(self, fn_pointer, fn_type, *args):
         command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(
-                fn_pointer, fn_type, len(args), " ".join(map(str, args)))
+                  fn_pointer, fn_type, len(args), " ".join(map(str, args)))
         return self.send_and_receive(command)
 
     def client_malloc(self, size):
@@ -140,16 +141,16 @@ class Controller:
 
     def client_malloc_from_buffer(self, buffer_id):
         return self.send_and_receive_int(
-                "CLIENT_MALLOC_FROM_BUFFER {0}\n".format(buffer_id))
+            "CLIENT_MALLOC_FROM_BUFFER {0}\n".format(buffer_id))
 
     def memcpy(self, addr, source, size, check=True):
-        self.send_and_receive_ok("WRITE {0} {1} addr {2} {3}\n" \
-                .format(check_str(check), addr, source, size))
+        self.send_and_receive_ok("WRITE {0} {1} addr {2} {3}\n"
+                                 .format(check_str(check), addr, source, size))
 
     def write_into_buffer(self, buffer_id, index, addr, size):
         # Copy a memory from client addres to the buffer
-        self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n" \
-                    .format(buffer_id, index, addr, size))
+        self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n"
+                                 .format(buffer_id, index, addr, size))
 
     def write_data_into_buffer(self, buffer_addr, index, data):
         # Write a literal data into the buffer
@@ -159,45 +160,50 @@ class Controller:
         # TODO: the following constant should be benchmarked
         if size < 8192:
             self.send_data_and_receive_ok(
-                    "WRITE_BUFFER_DATA {0} {1} {2}\n{3}" \
-                            .format(buffer_addr, index, len(data), data))
+                "WRITE_BUFFER_DATA {0} {1} {2}\n{3}"
+                .format(buffer_addr, index, len(data), data))
         else:
-            self.send_command("WRITE_BUFFER_DATA {0} {1} {2}\n" \
-                        .format(buffer_addr, index, len(data)))
+            self.send_command("WRITE_BUFFER_DATA {0} {1} {2}\n"
+                              .format(buffer_addr, index, len(data)))
             self.send_data_and_receive_ok(data)
 
     def write_buffer(self, addr, buffer_addr,
                      index=None, size=None, check=True):
         if index is None or size is None:
-            self.send_and_receive_ok("WRITE {0} {1} buffer {2}\n" \
-                    .format(check_str(check), addr, buffer_addr))
+            self.send_and_receive_ok(
+                "WRITE {0} {1} buffer {2}\n"
+                .format(check_str(check), addr, buffer_addr))
         else:
             assert size is not None
             if size == 0:
                 return
-            self.send_and_receive_ok("WRITE {0} {1} buffer-part {2} {3} {4}\n" \
-                    .format(check_str(check), addr, buffer_addr, index, size))
+            self.send_and_receive_ok(
+                "WRITE {0} {1} buffer-part {2} {3} {4}\n"
+                .format(check_str(check), addr, buffer_addr, index, size))
 
     def write_int(self, addr, value, check=True):
-        self.send_and_receive_ok("WRITE {0} {1} int {2}\n" \
-                .format(check_str(check), addr, value))
+        self.send_and_receive_ok("WRITE {0} {1} int {2}\n"
+                                 .format(check_str(check), addr, value))
 
     def write_string(self, addr, value, check=True):
-        self.send_and_receive_ok("WRITE {0} {1} string {2}\n" \
-                .format(check_str(check), addr, value))
-
+        self.send_and_receive_ok("WRITE {0} {1} string {2}\n"
+                                 .format(check_str(check), addr, value))
 
     def write_pointer(self, addr, value, check=True):
-        self.send_and_receive_ok("WRITE {0} {1} pointer {2}\n" \
-                .format(check_str(check), addr, value))
+        self.send_and_receive_ok("WRITE {0} {1} pointer {2}\n"
+                                 .format(check_str(check), addr, value))
 
     def write_ints(self, addr, values, check=True):
-        self.send_and_receive_ok("WRITE {0} {1} ints {2} {3}\n" \
-                .format(check_str(check), addr, len(values), " ".join(map(str, values))))
+        self.send_and_receive_ok(
+            "WRITE {0} {1} ints {2} {3}\n"
+            .format(check_str(check),
+                    addr,
+                    len(values),
+                    " ".join(map(str, values))))
 
     def read_mem(self, addr, size):
-        return self.send_and_receive_data("READ {0} mem {1}\n" \
-                .format(addr, size))
+        return self.send_and_receive_data("READ {0} mem {1}\n"
+                                          .format(addr, size))
 
     def read_int(self, addr):
         return self.send_and_receive_int("READ {0} int\n".format(addr))
@@ -212,8 +218,8 @@ class Controller:
         return results
 
     def read_pointers(self, addr, count):
-        line = self.send_and_receive("READ {0} pointers {1}\n" \
-                .format(addr, count))
+        line = self.send_and_receive("READ {0} pointers {1}\n"
+                                     .format(addr, count))
         results = map(int, line.split())
         assert len(results) == count
         return results
@@ -222,13 +228,11 @@ class Controller:
         return self.send_and_receive_data("READ {0} string\n".format(addr))
 
     def read_buffer(self, buffer_id):
-        return self.send_and_receive_data("READ_BUFFER {0}\n".format(buffer_id))
+        return self.send_and_receive_data("READ_BUFFER {0}\n"
+                                          .format(buffer_id))
 
     def hash_state(self):
-        #s = time.time()
         h = self.send_and_receive("HASH\n")
-        #e = time.time()
-        #print e - s
         return h
 
     def hash_buffer(self, buffer_id):
@@ -246,7 +250,8 @@ class Controller:
         return result
 
     def is_writable(self, addr, size):
-        return self.send_and_receive("CHECK write {0} {1}\n".format(addr, size))
+        return self.send_and_receive("CHECK write {0} {1}\n"
+                                     .format(addr, size))
 
     def is_readable(self, addr, size):
         return self.send_and_receive("CHECK read {0} {1}\n".format(addr, size))
@@ -279,14 +284,14 @@ class Controller:
         # This has to immediately preceed by interconn_connect
         return int(self.finish_async())
 
-    ### Semi-internal functions
+    # -- Semi-internal functions
 
     def send_command(self, command):
         assert command[-1] == "\n", "Command does not end with new line"
         self.socket.send_data(command)
 
     def send_data(self, data):
-       self.socket.send_data(data)
+        self.socket.send_data(data)
 
     def receive_line(self):
         line = self.socket.read_line()
@@ -342,15 +347,16 @@ class Controller:
         return int(self.send_and_receive(command))
 
     def debug_compare(self, state_id1, state_id2):
-        self.send_and_receive_ok(
-             "DEBUG_COMPARE {0} {1}\n".format(state_id1, state_id2))
+        self.send_and_receive_ok("DEBUG_COMPARE {0} {1}\n"
+                                 .format(state_id1, state_id2))
 
     def debug_dump_state(self, state_id):
-        self.send_and_receive_ok("DEBUG_DUMP_STATE {0}\n".format(state_id))
+        self.send_and_receive_ok("DEBUG_DUMP_STATE {0}\n"
+                                 .format(state_id))
 
     def set_capture_syscall(self, syscall, value):
         self.send_and_receive_ok(
-             "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
+            "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
 
     def save_state(self):
         return self.send_and_receive_int("SAVE\n")
@@ -362,11 +368,12 @@ class Controller:
         self.send_command("CONN_PUSH_STATE {0} {1}\n".format(socket, state_id))
 
     def pull_state(self, socket):
-        return self.send_and_receive_int("CONN_PULL_STATE {0}\n".format(socket))
+        return self.send_and_receive_int("CONN_PULL_STATE {0}\n"
+                                         .format(socket))
 
     def make_buffer(self, buffer_id, size):
-        self.send_and_receive_ok(
-             "NEW_BUFFER {0} {1}\n".format(buffer_id, size))
+        self.send_and_receive_ok("NEW_BUFFER {0} {1}\n"
+                                 .format(buffer_id, size))
 
     def start_remote_buffer(self, buffer_id):
         self.send_command("START_REMOTE_BUFFER {0}\n".format(buffer_id))
@@ -393,7 +400,7 @@ class Controller:
             "--tool=aislinn",
             "--port={0}".format(port),
             "--identification={0}".format(self.name),
-        ) + tuple([ "--capture-syscall=" + name for name in capture_syscalls ])
+        ) + tuple(["--capture-syscall=" + name for name in capture_syscalls])
 
         if self.buffer_server_port is not None:
             args += ("--bs-port={0}".format(self.buffer_server_port),)
@@ -434,8 +441,8 @@ class Controller:
             stdout=self.stdout_file, stderr=self.stderr_file)
 
     def _start_server(self):
-        HOST = "127.0.0.1" # Connection only from localhost
-        PORT = 0 # Alloc arbirary empty port
+        HOST = "127.0.0.1"  # Connection only from localhost
+        PORT = 0  # Alloc arbirary empty port
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((HOST, PORT))
         s.listen(1)
@@ -459,7 +466,7 @@ class VgState(Resource):
     def __repr__(self):
         return "<VgState {0:x} id={1.id} " \
                "ctrl={1.controller.name} hash={1.hash}>" \
-                    .format(id(self), self)
+               .format(id(self), self)
 
 
 class BufferManager(ResourceManager):
@@ -524,8 +531,8 @@ class VgBuffer(Resource):
             self.dec_ref()
 
     def __repr__(self):
-        return "<VgBuffer id={0.id} size={0.size} " \
-               "ref_count={0.ref_count} rc={0.remaining_controllers}>".format(self)
+        return "<VgBuffer id={0.id} size={0.size} ref_count={0.ref_count} " \
+               "rc={0.remaining_controllers}>".format(self)
 
 
 class ControllerWithResources(Controller):
@@ -601,9 +608,10 @@ class ControllerWithResources(Controller):
 def poll_controllers(controllers):
     for c in controllers:
         if c.socket.recv_buffer:
-            return [ c ]
+            return [c]
     rlist, wlist, xlist = select.select(controllers, (), ())
     return rlist
+
 
 def make_interconnection(controllers):
     sockets = []
@@ -618,6 +626,7 @@ def make_interconnection(controllers):
         s.append(None)
         sockets.append(s)
     return sockets
+
 
 def make_interconnection_pairs(controllers1, controllers2):
     ports = [c.interconn_listen() for c in controllers1]

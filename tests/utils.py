@@ -24,6 +24,7 @@ import base.bufserver
 
 base.paths.configure()
 
+
 def set_to_sorted_list(s):
     lst = list(s)
     lst.sort()
@@ -64,15 +65,18 @@ class TestCase(unittest.TestCase):
                     a = error.element.get(key)
                     if a is None:
                         raise Exception(
-                                "Cannot find attribute '{0}' for error '{1}'" \
-                                        .format(key, error_key))
+                            "Cannot find attribute '{0}' for error '{1}'"
+                            .format(key, error_key))
                     self.assertEquals(a, value)
 
     def program(self, test_name, files=None, **kw):
         if files is None:
-            files = (os.path.join(AISLINN_TESTS, self.category, test_name + ".cpp"),)
+            files = (os.path.join(AISLINN_TESTS,
+                     self.category,
+                     test_name + ".cpp"),)
         else:
-            files = [ os.path.join(AISLINN_TESTS, self.category, test_name, n) for n in files ]
+            files = [os.path.join(AISLINN_TESTS, self.category, test_name, n)
+                     for n in files]
         self.program_instance = Program(files, **kw)
         self.program_instance.build()
         self.reset_output_on_change = True
@@ -95,22 +99,21 @@ class TestCase(unittest.TestCase):
         self.output_instance.add_default(data)
 
     def execute(self,
-            processes,
-            args=(),
-            error=None,
-            vgv=None,
-            verbose=None,
-            stdout=None,
-            check_output=True,
-            send_protocol="full",
-            heap_size=None,
-            redzone_size=None,
-            profile=False,
-            ):
-        aislinn_args = { "report-type" : "xml",
-                         "workers" : 2,
-                         "verbose" : 0,
-                         "stderr-write" : "1000" }
+                processes,
+                args=(),
+                error=None,
+                vgv=None,
+                verbose=None,
+                stdout=None,
+                check_output=True,
+                send_protocol="full",
+                heap_size=None,
+                redzone_size=None,
+                profile=False):
+        aislinn_args = {"report-type": "xml",
+                        "workers": 2,
+                        "verbose": 0,
+                        "stderr-write": "1000"}
 
         if REPORT_GALLERY and error:
             aislinn_args["report-type"] = "html+xml"
@@ -148,21 +151,20 @@ class TestCase(unittest.TestCase):
 
         # Run ---------------------------
         result_stdout, result_stderr = \
-                self.program_instance.run(aislinn_args, processes, args)
-
+            self.program_instance.run(aislinn_args, processes, args)
 
         report = self.read_report()
         self.report = report
 
         # Check errors
-        found_errors = [ e.key for e in report.errors ]
+        found_errors = [e.key for e in report.errors]
         if error is None and found_errors:
             raise Exception("No errors expected, found: " + repr(found_errors))
         if isinstance(error, str):
-            error = [ error ]
+            error = [error]
         if error and set(error) != set(found_errors):
-            raise Exception("Different errors expected. Expected {0}, got {1}" \
-                    .format(error, found_errors))
+            raise Exception("Different errors expected. Expected {0}, got {1}"
+                            .format(error, found_errors))
 
         # Stderr
         self.assertEquals(result_stderr, "")
@@ -181,7 +183,7 @@ class TestCase(unittest.TestCase):
 
         if REPORT_GALLERY and error:
             filename = "{0.category}-{0.test_name}-{0.counter}-{1}.html" \
-                    .format(self, "_".join(error).replace("/", "."))
+                .format(self, "_".join(error).replace("/", "."))
             os.rename(os.path.join(AISLINN_BUILD, "report.html"),
                       os.path.join(AISLINN_REPORT_GALLERY, filename))
 
@@ -192,34 +194,37 @@ class TestCase(unittest.TestCase):
         if self.output_instance is None:
             self.reset_output()
         for pid in xrange(processes):
-            expected_outputs = set(self.output_instance.get_output_for_process(pid))
+            expected_outputs = \
+                set(self.output_instance.get_output_for_process(pid))
             program_outputs = report.get_outputs(pid)
             if expected_outputs != program_outputs:
-                raise Exception("Unexpected or missing outputs for process {0}:\n"
-                                "Expected outputs: {1}\n"
-                                "Program outputs: {2}\n"
-                                "Extra outputs: {3}\n"
-                                "Missing outputs: {4}\n" \
-                                    .format(pid,
-                                            set_to_sorted_list(expected_outputs),
-                                            set_to_sorted_list(program_outputs),
-                                            set_to_sorted_list(program_outputs - expected_outputs),
-                                            set_to_sorted_list(expected_outputs - program_outputs)))
+                raise Exception(
+                    "Unexpected or missing outputs for process {0}:\n"
+                    "Expected outputs: {1}\n"
+                    "Program outputs: {2}\n"
+                    "Extra outputs: {3}\n"
+                    "Missing outputs: {4}\n"
+                    .format(pid,
+                            set_to_sorted_list(expected_outputs),
+                            set_to_sorted_list(program_outputs),
+                            set_to_sorted_list(
+                                program_outputs - expected_outputs),
+                            set_to_sorted_list(
+                                expected_outputs - program_outputs)))
 
     def controller(self, args=(), verbose=False, profile=False):
         self.assertTrue(self.program_instance is not None)
         self.report = None
         c = self.program_instance.controller(
-                args, verbose, profile, self.bufserver_port)
+            args, verbose, profile, self.bufserver_port)
         self.controllers.append(c)
         return c
 
     def start_bufserver(self, clients_count):
         if self.bufserver_process is not None:
             return
-        self.bufserver_process, \
-            self.bufserver_port \
-                = base.bufserver.start_process(clients_count)
+        self.bufserver_process, self.bufserver_port = \
+            base.bufserver.start_process(clients_count)
 
     def connect_to_bufserver(self):
         assert self.bufserver_process
@@ -237,6 +242,7 @@ def cleanup_build_dir():
     else:
         os.makedirs(AISLINN_BUILD)
 
+
 def run(args,
         cwd=None):
     p = subprocess.Popen(args,
@@ -246,18 +252,20 @@ def run(args,
     stdout, stderr = p.communicate()
     return (p.returncode, stdout, stderr)
 
+
 def check_prefix(prefix):
     def fn(value):
         if not value.startswith(prefix):
             return "Expected prefix " + prefix
     return fn
 
+
 def run_and_check(args,
                   cwd=None):
     r_exitcode, r_stdout, r_stderr = run(args, cwd)
     if r_exitcode != 0 or r_stdout or r_stderr:
         raise Exception("\nprogram: {0}\nstdout:\n{1}stderr:\n{2}\n"
-                            .format(args, r_stdout, r_stderr))
+                        .format(args, r_stdout, r_stderr))
 
 
 class Output:
@@ -306,21 +314,22 @@ class Program:
         run_and_check(args, cwd=AISLINN_BUILD)
 
     def run(self, aislinn_args, processes, program_args):
-        run_args = [ AISLINN, "-p={0}".format(processes) ] + \
-                   [ ("--{0}={1}" if value is not None else "--{0}").format(name, value)
-                     for name, value in aislinn_args.items() ]
+        run_args = [AISLINN, "-p={0}".format(processes)] + \
+                   [("--{0}={1}" if value is not None else "--{0}")
+                    .format(name, value)
+                    for name, value in aislinn_args.items()]
         run_args.append("./a.out")
         run_args += list(program_args)
         exitcode, stdout, stderr = run(run_args, cwd=AISLINN_BUILD)
         if exitcode != 0:
             raise Exception("Nonzero exit code\n"
-                            "exitcode={0}\nstdout={1}\nstderr={2}" \
-                                    .format(exitcode, stdout, stderr))
+                            "exitcode={0}\nstdout={1}\nstderr={2}"
+                            .format(exitcode, stdout, stderr))
         return stdout, stderr
 
-
     def controller(self, args, verbose, profile, bufserver_port):
-        controller = base.controller.Controller(("./a.out",) + args, AISLINN_BUILD)
+        controller = base.controller.Controller(
+            ("./a.out",) + args, AISLINN_BUILD)
         controller.profile = profile
         controller.buffer_server_port = bufserver_port
         if verbose:
@@ -364,8 +373,8 @@ class Report:
 
     @property
     def determinisic_nonfreed_memory(self):
-        return int(self.root.find("analysis") \
-                .find("deterministic-non-freed-memory").text)
+        return int(self.root.find("analysis").find(
+            "deterministic-non-freed-memory").text)
 
     def get_icounts(self, name):
         profile = self.root.find("profile")
@@ -381,4 +390,3 @@ class Report:
             if int(process.get("pid")) == pid:
                 return set(o.text if o.text is not None else ""
                            for o in process.findall("output"))
-

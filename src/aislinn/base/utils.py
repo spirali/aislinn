@@ -19,22 +19,25 @@
 
 
 import re
-import ctypes # Used for int type conversions
+import ctypes  # Used for int type conversions
 
 
 class EqMixin(object):
 
     def __eq__(self, other):
-        return (isinstance(other, self.__class__)
-            and self.__dict__ == other.__dict__)
+        return (isinstance(other, self.__class__) and
+                self.__dict__ == other.__dict__)
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
 
 integer_parser = re.compile("^\d+$")
+
+
 def is_integer(value):
     return bool(integer_parser.match(value))
+
 
 def sizestr_to_int(s):
     if s.endswith("K"):
@@ -55,15 +58,18 @@ def sizestr_to_int(s):
         return None
     return int(s) * m
 
+
 def convert_type(value, target_type):
     if target_type == "ptr":
         return int(value)
     if target_type == "int":
         return ctypes.c_int(int(value)).value
 
+
 def convert_types(values, target_types):
     assert len(values) == len(target_types)
-    return [ convert_type(v, t) for v, t in zip(values, target_types) ]
+    return [convert_type(v, t) for v, t in zip(values, target_types)]
+
 
 # Returns powerset of "items"
 def power_set(items):
@@ -74,13 +80,14 @@ def power_set(items):
         else:
             first = items[0]
             for i in power_set_helper(items[1:]):
-                lst = [ first ]
+                lst = [first]
                 lst.extend(i)
                 yield lst
                 yield i
     if not items:
         return []
     return power_set_helper(items)
+
 
 def build_equivalence(items1, items2, check_fn, mapping=None):
     results = []
@@ -91,6 +98,7 @@ def build_equivalence(items1, items2, check_fn, mapping=None):
     if not items1:
         results.append(mapping)
         return results
+
     def helper(items1, items2):
         if not items1:
             results.append(mapping.copy())

@@ -1,7 +1,5 @@
 from utils import TestCase
 import unittest
-import os
-import subprocess
 from base.controller import make_interconnection
 
 
@@ -116,7 +114,7 @@ class VgToolTests(TestCase):
 
     def test_interconnect(self):
         self.program("string")
-        controllers = [ self.controller() for c in xrange(6) ]
+        controllers = [self.controller() for c in xrange(6)]
         for c in controllers:
             c.start_and_connect()
         sockets = make_interconnection(controllers)

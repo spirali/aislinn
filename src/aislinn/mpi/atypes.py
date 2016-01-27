@@ -21,6 +21,7 @@ import check
 import consts
 from base.utils import convert_type
 
+
 class Arg:
 
     c_type = "invalid"
@@ -78,14 +79,16 @@ class Datatype(Int):
         return check.check_datatype(context, value, arg_position)
 
 
-class DatatypeU(Int): # Uncommited
+class DatatypeU(Int):  # Uncommited
 
     @classmethod
     def convert(cls, value, arg_position, context):
         return check.check_datatype(context, value, arg_position, True)
 
+
 class Rank(Int):
     pass
+
 
 class Tag(Int):
     @classmethod
@@ -93,7 +96,7 @@ class Tag(Int):
         return check.check_tag(context, value, arg_position, False)
 
 
-class TagAT(Int): # Allow MPI_ANY_TAG
+class TagAT(Int):  # Allow MPI_ANY_TAG
     @classmethod
     def convert(cls, value, arg_position, context):
         return check.check_tag(context, value, arg_position, True)
@@ -113,6 +116,7 @@ class StatusPtr(Pointer):
             return None
         else:
             return value
+
 
 class StatusesPtr(Pointer):
 

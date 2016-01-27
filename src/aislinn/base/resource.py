@@ -37,14 +37,12 @@ class Resource:
     def dec_ref(self):
         self.ref_count -= 1
         if self.ref_count < 1:
-            #import traceback
-            #traceback.print_stack()
             assert self.ref_count == 0
             self.manager.add_not_used_resource(self)
 
     def __repr__(self):
         return "<{0} {1:x} {2} ref={3}>".format(
-                self.__class__, id(self), self.id, self.ref_count)
+            self.__class__, id(self), self.id, self.ref_count)
 
 
 class ResourceManager:
@@ -73,6 +71,6 @@ class ResourceManager:
         assert self.resource_count >= 0
 
         if self.not_used_resources is None:
-            self.not_used_resources = [ resource ]
+            self.not_used_resources = [resource]
         else:
             self.not_used_resources.append(resource)

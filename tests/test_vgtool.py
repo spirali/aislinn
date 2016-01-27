@@ -3,7 +3,6 @@ from utils import TestCase
 import unittest
 import os
 import subprocess
-from base.controller import make_interconnection
 
 
 class VgToolTests(TestCase):
@@ -13,7 +12,6 @@ class VgToolTests(TestCase):
     def test_simple(self):
         self.program("simple")
         c = self.controller(verbose=0)
-        #c.valgrind_args = ("--verbose=1",)
         self.assertEquals(c.start_and_connect(), "CALL Hello 1")
         h = c.hash_state()
         s = c.save_state()
@@ -57,10 +55,10 @@ class VgToolTests(TestCase):
         c = self.controller(verbose=False)
         call, name, arg = c.start_and_connect().split()
         h1 = c.hash_state()
-        c.write_int(arg, 211);
+        c.write_int(arg, 211)
         h2 = c.hash_state()
         self.assertNotEquals(h1, h2)
-        c.write_int(arg, 210);
+        c.write_int(arg, 210)
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
 
@@ -69,10 +67,10 @@ class VgToolTests(TestCase):
         c = self.controller()
         call, name, arg = c.start_and_connect().split()
         h1 = c.hash_state()
-        c.write_int(arg, 211);
+        c.write_int(arg, 211)
         h2 = c.hash_state()
         self.assertNotEquals(h1, h2)
-        c.write_int(arg, 210);
+        c.write_int(arg, 210)
         h3 = c.hash_state()
         self.assertEquals(h1, h3)
 
@@ -165,9 +163,11 @@ class VgToolTests(TestCase):
         c = self.controller(("10", "9"))
         ptr = self.get_call_1(c.start_and_connect(), "init")
         self.assertEquals("Ok", c.is_writable(ptr, 10 * INT_SIZE))
-        self.assertEquals(ptr + 10 * INT_SIZE, int(c.is_writable(ptr, 11 * INT_SIZE)))
+        self.assertEquals(
+            ptr + 10 * INT_SIZE, int(c.is_writable(ptr, 11 * INT_SIZE)))
         self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
-        self.assertEquals(ptr + 10 * INT_SIZE, int(c.is_readable(ptr, 11 * INT_SIZE)))
+        self.assertEquals(
+            ptr + 10 * INT_SIZE, int(c.is_readable(ptr, 11 * INT_SIZE)))
         self.assertEquals("EXIT 0", c.run_process())
 
         c = self.controller(("9", "10"))
@@ -193,9 +193,9 @@ class VgToolTests(TestCase):
         self.assertEquals(int(ptr), int(c.is_writable(ptr, 11 * INT_SIZE)))
         self.assertEquals("Ok", c.is_readable(ptr, 10 * INT_SIZE))
         self.assertTrue(
-                c.run_process().startswith("REPORT invalidwrite"))
+            c.run_process().startswith("REPORT invalidwrite"))
 
-        s = 1000000 * INT_SIZE # 1M integers
+        s = 1000000 * INT_SIZE  # 1M integers
         c = self.controller((str(s), "9"))
         ptr = self.get_call_1(c.start_and_connect(), "init")
         self.assertEquals("Ok", c.is_writable(ptr, s))
@@ -223,8 +223,8 @@ class VgToolTests(TestCase):
         mem2 = int(c.run_process().split()[2])
         # buffer 500 - small buffer
         # buffer 600 - big buffer
-        c.make_buffer(500, 10);
-        c.make_buffer(600, 100000);
+        c.make_buffer(500, 10)
+        c.make_buffer(600, 100000)
         data1 = "abc123"
         data2 = "abcABCwxyz" * 10000
         c.write_data_into_buffer(500, 2, data1)
@@ -299,7 +299,7 @@ class VgToolTests(TestCase):
     def test_bigalloc(self):
         self.program("bigalloc")
         c = self.controller()
-        size = int(c.start_and_connect().split()[2])
+        c.start_and_connect().split()[2]
         mem = int(c.run_process().split()[2])
         state1 = c.save_state()
         hash1 = c.hash_state()
@@ -395,7 +395,6 @@ class VgToolTests(TestCase):
         hash3 = c.hash_state()
         assert c.run_process() == "EXIT 0"
         hash4 = c.hash_state()
-        #state3 = c.save_state()
 
         c.restore_state(state2)
         assert c.hash_state() == hash2
@@ -451,21 +450,21 @@ class VgToolTests(TestCase):
         c.restore_state(state1)
         c.restore_state(state2)
         v = c.read_mem(addr, size)
-        assert map(ord, v) == [ 0xaa ] * size
+        assert map(ord, v) == [0xaa] * size
         c.restore_state(state3)
         v = c.read_mem(addr, size)
-        assert map(ord, v) == [ 0xbb ] * size
+        assert map(ord, v) == [0xbb] * size
 
     def test_stack_pollution(self):
         self.program("stackpollution")
         c = self.controller()
         c.start_and_connect()
         s1 = c.save_state()
-        c.run_process() # call g
+        c.run_process()  # call g
         hash1 = c.hash_state()
-        c.run_process() # finish
+        c.run_process()  # finish
         c.restore_state(s1)
-        c.run_process() # call g
+        c.run_process()  # call g
 
         hash2 = c.hash_state()
 

@@ -27,9 +27,11 @@ AISLINN_TEMPLATE = os.path.join(SRC_DIR, "template")
 
 VALGRIND_LOCAL = os.path.join(AISLINN_ROOT, "valgrind")
 VALGRIND_LOCAL_BIN = os.path.join(VALGRIND_LOCAL, "vg-in-place")
-VALGRIND_INSTALL_BIN = os.path.join(os.path.dirname(AISLINN_ROOT), "bin", "valgrind")
+VALGRIND_INSTALL_BIN = \
+    os.path.join(os.path.dirname(AISLINN_ROOT), "bin", "valgrind")
 
-VALGRIND_BIN = None # Need to be configured
+VALGRIND_BIN = None  # Need to be configured
+
 
 def configure():
     global VALGRIND_BIN

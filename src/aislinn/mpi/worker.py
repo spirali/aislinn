@@ -60,9 +60,9 @@ class TransferContext:
 
     def transfer_buffer(self, vg_buffer):
         logging.debug("Transferring buffer: %s", vg_buffer)
-        assert vg_buffer.data is None # Data are already pushed in clients
+        assert vg_buffer.data is None  # Data are already pushed in clients
         controllers = self.worker.controllers
-        pids = [ controllers.index(c) for c in vg_buffer.controllers ]
+        pids = [controllers.index(c) for c in vg_buffer.controllers]
         data = vg_buffer.controllers[0].read_buffer(vg_buffer.id)
         buffer = self.target_worker.buffer_manager.new_buffer(data)
         buffer.remaining_controllers = len(pids)
@@ -73,14 +73,15 @@ class TransferContext:
 
 class Worker:
 
-    def __init__(self, worker_id, workers_count, generator, args, aislinn_args):
+    def __init__(
+            self, worker_id, workers_count, generator, args, aislinn_args):
         self.generator = generator
         self.worker_id = worker_id
         self.gcontext = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
-        self.controllers = [ Controller(args)
-                             for i in xrange(generator.process_count) ]
-        self.interconnect_sockets = [ None ] * workers_count
+        self.controllers = [Controller(args)
+                            for i in xrange(generator.process_count)]
+        self.interconnect_sockets = [None] * workers_count
 
         for i, controller in enumerate(self.controllers):
             controller.name = i + worker_id * generator.process_count
@@ -97,18 +98,18 @@ class Worker:
 
             if aislinn_args.debug_by_valgrind_tool:
                 controller.debug_by_valgrind_tool = \
-                        aislinn_args.debug_by_valgrind_tool
+                    aislinn_args.debug_by_valgrind_tool
 
             if aislinn_args.debug_vglogfile is not None:
                 prefix = aislinn_args.debug_vglogfile
                 filename = prefix + ".out." + str(controller.name)
                 logging.debug(
-                        "Openining logfile '%s' for %s", filename, controller)
+                    "Openining logfile '%s' for %s", filename, controller)
                 controller.stdout_file = open(filename, "w")
 
                 filename = prefix + ".err." + str(controller.name)
                 logging.debug(
-                        "Openining logfile '%s' for %s", filename, controller)
+                    "Openining logfile '%s' for %s", filename, controller)
                 controller.stderr_file = open(filename, "w")
 
         if workers_count > 1:
@@ -116,7 +117,7 @@ class Worker:
             # dynamic resolving of symbols, or at least LD_PRELOAD symbols
             # Hence we force resolve all symbols at runtime
             for controller in self.controllers:
-                controller.extra_env = { "LD_BIND_NOW" : "1" }
+                controller.extra_env = {"LD_BIND_NOW": "1"}
 
         self.queue = deque()
 
@@ -198,16 +199,16 @@ class Worker:
         if state.flag_ptr:
             context.controller.write_int(state.flag_ptr, 1)
         context.controller.write_status(
-                status_ptr, rank, request.tag, request.vg_buffer.size)
+            status_ptr, rank, request.tag, request.vg_buffer.size)
         context.run()
 
     def fast_expand_state(self, gcontext, state):
-        if (state.status == State.StatusWaitAll
-            and state.are_tested_requests_finished()):
-               context = gcontext.prepare_context(state.pid)
-               context.close_all_requests()
-               context.run()
-               return True
+        if (state.status == State.StatusWaitAll and
+                state.are_tested_requests_finished()):
+            context = gcontext.prepare_context(state.pid)
+            context.close_all_requests()
+            context.run()
+            return True
 
         if state.status == State.StatusReady:
             logging.debug("Continue ready with flag %s", state)
@@ -219,7 +220,7 @@ class Worker:
            state.are_tested_requests_finished():
                 context = gcontext.prepare_context(state.pid)
                 context.continue_waitsome(
-                    [ state.index_of_first_non_null_request() ])
+                    [state.index_of_first_non_null_request()])
                 context.run()
                 return True
 
@@ -228,7 +229,7 @@ class Worker:
                 state.are_tested_requests_finished():
                 context = gcontext.prepare_context(state.pid)
                 context.continue_waitany(
-                        state.index_of_first_non_null_request())
+                    state.index_of_first_non_null_request())
                 context.run()
                 return True
 
@@ -238,7 +239,8 @@ class Worker:
             if rank is not None:
                 self.continue_probe(gcontext, state, rank)
                 return True
-            elif state.probe_data[1] != consts.MPI_ANY_SOURCE and state.flag_ptr is None:
+            elif state.probe_data[1] != consts.MPI_ANY_SOURCE and \
+                    state.flag_ptr is None:
                 probed = state.probe_deterministic(comm_id, source, tag)
                 if probed:
                     pid, request = probed
@@ -256,10 +258,10 @@ class Worker:
                 continue
 
             if gcontext.gstate.collective_operations \
-               and self.check_collective_requests(gcontext):
-                   continue
+                    and self.check_collective_requests(gcontext):
+                continue
 
-            if self.generator.debug_seq: # DEBUG --debug-seq
+            if self.generator.debug_seq:  # DEBUG --debug-seq
                 if all(not gcontext.is_pid_running(state.pid)
                        for state in gcontext.gstate.states):
                     for state in gcontext.gstate.states:
@@ -286,7 +288,7 @@ class Worker:
         logging.debug("Expanding waitsome %s", state)
         for indices in power_set(indices):
             if not indices:
-                continue # skip empty set
+                continue  # skip empty set
             actions.append(ActionWaitSome(state.pid, indices))
 
     def expand_testall(self, gcontext, state, actions):
@@ -312,25 +314,25 @@ class Worker:
         if state.flag_ptr:
             actions.append(ActionFlag0(state.pid))
             if source != consts.MPI_ANY_SOURCE:
-                 probed = state.probe_deterministic(comm_id, source, tag)
-                 if probed:
-                     pid, request = probed
-                     rank = request.comm.group.pid_to_rank(pid)
-                     actions.append(ActionProbePromise(
+                probed = state.probe_deterministic(comm_id, source, tag)
+                if probed:
+                    pid, request = probed
+                    rank = request.comm.group.pid_to_rank(pid)
+                    actions.append(ActionProbePromise(
                         state.pid, comm_id, source, tag, rank))
         if source != consts.MPI_ANY_SOURCE:
             return
         for pid, request in state.probe_nondeterministic(comm_id, tag):
             rank = request.comm.group.pid_to_rank(pid)
             actions.append(ActionProbePromise(
-               state.pid, comm_id, source, tag, rank))
+                state.pid, comm_id, source, tag, rank))
 
     def get_actions(self, gcontext):
-        actions = [ ActionMatching(matching)
-                    for matching in gcontext.find_nondeterministic_matches() ]
+        actions = [ActionMatching(matching)
+                   for matching in gcontext.find_nondeterministic_matches()]
         for state in gcontext.gstate.states:
             if state.status == State.StatusWaitAny:
-               self.expand_waitany(gcontext, state, actions)
+                self.expand_waitany(gcontext, state, actions)
             elif state.status == State.StatusProbe:
                 self.expand_probe(gcontext, state, actions)
             elif state.status == State.StatusWaitSome:
@@ -359,15 +361,15 @@ class Worker:
         self.gcontext = None
 
         if not gcontext.make_node():
-            gcontext.gstate.dispose() # Node already explored
+            gcontext.gstate.dispose()  # Node already explored
             return False
 
         if not self.slow_expand(gcontext):
             node = gcontext.node
             if any(state.status != State.StatusFinished
                    for state in gstate.states):
-                active_pids = [ state.pid for state in gstate.states
-                                if state.status != State.StatusFinished ]
+                active_pids = [state.pid for state in gstate.states
+                               if state.status != State.StatusFinished]
                 gcontext = GlobalContext(self, node, gstate)
                 message = errormsg.Deadlock(None,
                                             gcontext=gcontext,
@@ -389,7 +391,7 @@ class Worker:
         """
 
     def running_controllers(self):
-        return [ c for c in self.controllers if c.running ]
+        return [c for c in self.controllers if c.running]
 
     def kill_controllers(self):
         for controller in self.controllers:
@@ -419,7 +421,8 @@ class Worker:
             stats = controller.get_stats()
             # All pages are active, i.e. we have freed everyhing else
             assert stats["pages"] == stats["active-pages"]
-            assert stats["vas"] - 4 <= stats["pages"] # There are 4 predefined VAs
+            # There are 4 predefined VAs
+            assert stats["vas"] - 4 <= stats["pages"]
             assert stats["buffers-size"] == 0
 
         assert self.buffer_manager.resource_count == 0
@@ -427,19 +430,19 @@ class Worker:
     def interconnect(self, worker):
         sockets = self.interconnect_sockets[worker.worker_id]
         if sockets is not None:
-            return # Already connected
+            return  # Already connected
         assert self.worker_id != worker.worker_id
         sockets1, sockets2 = make_interconnection_pairs(
-                self.controllers, worker.controllers)
+            self.controllers, worker.controllers)
         self.interconnect_sockets[worker.worker_id] = sockets1
         worker.interconnect_sockets[self.worker_id] = sockets2
 
     def transfer_gstate_and_action(self, worker, gstate, action):
         transfer_context = TransferContext(
-                self,
-                self.interconnect_sockets[worker.worker_id],
-                worker,
-                worker.interconnect_sockets[self.worker_id])
+            self,
+            self.interconnect_sockets[worker.worker_id],
+            worker,
+            worker.interconnect_sockets[self.worker_id])
         gstate = gstate.transfer(transfer_context)
         if action is not None:
             action = action.transfer(transfer_context)
@@ -456,7 +459,7 @@ class Worker:
 
                 if self.generator.search == "dfs":
                     node, gstate, action = self.queue.pop()
-                else: # bfs
+                else:  # bfs
                     node, gstate, action = self.queue.popleft()
 
                 if not self.queue:
@@ -474,7 +477,7 @@ class Worker:
 
                 self.interconnect(worker)
                 new_gstate, new_action = self.transfer_gstate_and_action(
-                        worker, gstate, action)
+                    worker, gstate, action)
                 gstate.dispose()
                 logging.debug("---- End of transfer ----")
                 for controller in worker.controllers:

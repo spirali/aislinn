@@ -48,11 +48,11 @@ class Server():
         for i in xrange(self.clients_count):
             self.handle_accept()
         while True:
-            sockets = [ client.socket.socket for client in self.clients ]
+            sockets = [client.socket.socket for client in self.clients]
             rlist, wlist, xlist = select.select(sockets, (), ())
-            for socket in rlist:
+            for s in rlist:
                 for client in self.clients:
-                    if client.socket.socket == socket:
+                    if client.socket.socket == s:
                         client.handle_read()
                         break
 
@@ -120,11 +120,13 @@ def _process_main(clients_count, queue):
     queue.put(server.port)
     server.main()
 
+
 def start_process(clients_count):
     q = Queue(1)
     p = Process(target=_process_main, args=(clients_count, q))
     p.start()
     return p, q.get()
+
 
 def connect(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

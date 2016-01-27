@@ -2,6 +2,7 @@
 from utils import TestCase
 import unittest
 
+
 class BaseTests(TestCase):
 
     category = "base"
@@ -34,17 +35,16 @@ class BaseTests(TestCase):
 
     def test_invalid_args(self):
         self.program("args")
-        args = [ ("isend_rank_1", "mpi/invalid-arg/rank"),
-                 ("isend_rank_2", "mpi/invalid-arg/rank"),
-                 ("isend_rank_3", "mpi/invalid-arg/rank"),
-                 ("irecv_rank", "mpi/invalid-arg/rank"),
-                 ("irecv_tag", "mpi/invalid-arg/tag"),
-                 ("send_tag", "mpi/invalid-arg/tag"),
-                 ("send_tag_2", "mpi/invalid-arg/tag"),
-                 ("isend_count", "mpi/invalid-arg/count"),
-                 ("irecv_count", "mpi/invalid-arg/count"),
-                 ("irecv_datatype", "mpi/invalid-arg/datatype")
-                ]
+        args = [("isend_rank_1", "mpi/invalid-arg/rank"),
+                ("isend_rank_2", "mpi/invalid-arg/rank"),
+                ("isend_rank_3", "mpi/invalid-arg/rank"),
+                ("irecv_rank", "mpi/invalid-arg/rank"),
+                ("irecv_tag", "mpi/invalid-arg/tag"),
+                ("send_tag", "mpi/invalid-arg/tag"),
+                ("send_tag_2", "mpi/invalid-arg/tag"),
+                ("isend_count", "mpi/invalid-arg/count"),
+                ("irecv_count", "mpi/invalid-arg/count"),
+                ("irecv_datatype", "mpi/invalid-arg/datatype")]
 
         for arg, error in args:
             self.execute(2, arg, error=error)
@@ -113,12 +113,14 @@ class BaseTests(TestCase):
         self.execute(2, "old", stdout=output)
 
     def test_indexed_bottom(self):
-        output = "0 1 2 3 4 0 0 0 0 0 0 0 0 0 14 15 16 17 18 19 20 21 0 0 0 0 0 0 0 0 \n"
+        output = "0 1 2 3 4 0 0 0 0 0 0 0 0 0 " \
+                 "14 15 16 17 18 19 20 21 0 0 0 0 0 0 0 0 \n"
         self.program("indexed_bottom")
         self.execute(2, stdout=output)
 
     def test_indexed_intersect(self):
-        output = "0 1 2 3 4 5 6 7 8 0 0 0 12 13 0 0 16 17 0 0 0 0 0 0 0 0 0 0 0 0 \n"
+        output = "0 1 2 3 4 5 6 7 8 0 0 0 12 13 0 0 16 17 " \
+                 "0 0 0 0 0 0 0 0 0 0 0 0 \n"
         self.program("indexed_intersect")
         self.execute(2, "4", stdout=output)
         self.execute(2, "0", error="mpi/invalid-recv-buffer")
@@ -165,7 +167,7 @@ class BaseTests(TestCase):
         self.execute(1)
 
     def test_keyval(self):
-        output="DELETE 2\nCOPY 4\nDELETE 1\nDELETE 3\nDELETE 4\n"
+        output = "DELETE 2\nCOPY 4\nDELETE 1\nDELETE 3\nDELETE 4\n"
         self.program("keyval")
         self.execute(1, stdout=output)
 
@@ -178,8 +180,8 @@ class BaseTests(TestCase):
         self.execute(1, stdout="DELETE 1\n")
         self.execute(1, "error", error="mpi/invalid-arg/communicator")
         self.execute(1, "free_error", error="mpi/invalid-arg/keyval")
-        self.execute(1, "delete_attr_error",
-                error="mpi/invalid-arg/attribute")
+        self.execute(
+            1, "delete_attr_error", error="mpi/invalid-arg/attribute")
         self.execute(1, "exit_error", error="base/exit-in-callback")
         self.execute(1, "comm_error", error="mpi/communication-in-callback")
 
@@ -224,11 +226,12 @@ class BaseTests(TestCase):
         self.execute(1, "wait", error="mpi/invalid-arg/request")
         self.execute(1, "waitall", error="mpi/invalid-arg/request")
         self.check_error(
-                "mpi/invalid-arg/request", pid="0", index="1", value="123")
-        self.execute(1, "start",
-             error="mpi/invalid-arg/not-persistent-request")
-        self.execute(1, "start-active",
-             error="mpi/invalid-arg/already-active-persistent-request")
+            "mpi/invalid-arg/request", pid="0", index="1", value="123")
+        self.execute(
+            1, "start", error="mpi/invalid-arg/not-persistent-request")
+        self.execute(
+            1, "start-active",
+            error="mpi/invalid-arg/already-active-persistent-request")
 
     def test_message_leak(self):
         self.program("message_leak")

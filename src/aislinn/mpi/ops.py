@@ -20,13 +20,13 @@
 
 import consts
 
+
 class Operation(object):
 
     def compute_hash(self, hashthread):
         hashthread.update("Op {0} {1} {2} ".
-                format(self.op_id,
-                       self.commute,
-                       self.fn_ptr))
+                          format(self.op_id, self.commute, self.fn_ptr))
+
 
 class UserDefinedOperation(Operation):
     buildin = False
@@ -35,6 +35,7 @@ class UserDefinedOperation(Operation):
         self.op_id = None
         self.commute = commute
         self.fn_ptr = fn_ptr
+
 
 class BuildinOperation(Operation):
     buildin = True
