@@ -90,7 +90,8 @@ class Controller:
 
     def start_and_connect(self, *args, **kw):
         self.start(*args, **kw)
-        self.connect()
+        if not self.connect():
+            return None
         return self.receive_line()
 
     def connect(self):
