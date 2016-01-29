@@ -3,7 +3,7 @@ import unittest
 from vgtool.controller import make_interconnection
 
 
-class VgToolTests(TestCase):
+class VgTransferTests(TestCase):
 
     category = "vgtool"
 

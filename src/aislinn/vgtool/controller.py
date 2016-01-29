@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014, 2015 Stanislav Bohm
+#    Copyright (C) 2014, 2015, 2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -117,16 +117,17 @@ class Controller:
     def run_process(self):
         return self.send_and_receive("RUN\n")
 
-    def run_drop_syscall(self):
-        return self.send_and_receive("RUN_DROP_SYSCALL\n")
+    def run_drop_syscall(self, return_value):
+        return self.send_and_receive(
+            "RUN_DROP_SYSCALL {0}\n".format(return_value))
 
     def run_process_async(self):
         self.running = True
         self.send_command("RUN\n")
 
-    def run_drop_syscall_async(self):
+    def run_drop_syscall_async(self, return_value):
         self.running = True
-        self.send_command("RUN_DROP_SYSCALL\n")
+        self.send_command("RUN_DROP_SYSCALL {0}\n".format(return_value))
 
     def run_function(self, fn_pointer, fn_type, *args):
         command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(

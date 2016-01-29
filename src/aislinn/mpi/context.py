@@ -75,7 +75,10 @@ class Context:
                         STREAM_STDERR, self.state.pid,
                         self.controller.read_mem(data_ptr,
                                                  size))
-                return self.gcontext.generator.stderr_mode == "print"
+                if self.gcontext.generator.stderr_mode == "print":
+                    return None
+                else:
+                    return size
             if fd == "1" or (fd == "2" and
                              gcontext.generator.stderr_mode == "stdout"):
                 if gcontext.generator.stdout_mode == "capture":
@@ -83,8 +86,11 @@ class Context:
                         STREAM_STDOUT, self.state.pid,
                         self.controller.read_mem(data_ptr,
                                                  size))
-                return gcontext.generator.stdout_mode == "print"
-            return True
+                if self.gcontext.generator.stdout_mode == "print":
+                    return None
+                else:
+                    return size
+            return None
         else:
             raise Exception("Invalid syscall" + commands[1])
 
@@ -151,10 +157,11 @@ class Context:
             result = self.controller.receive_line()
             return self.process_run_result(result)
         if result[0] == "SYSCALL":
-            if self.process_syscall(result):
+            return_value = self.process_syscall(result)
+            if return_value is None:
                 self.controller.run_process_async()
             else:
-                self.controller.run_drop_syscall_async()
+                self.controller.run_drop_syscall_async(return_value)
             return True
         if result[0] == "EXIT":
             exitcode = convert_type(result[1], "int")
@@ -203,7 +210,7 @@ class Context:
         self.run()
         self.gcontext.make_node()
 
-    def initial_run(self):
+    def initial_run(self, first_worker=True):
         controller = self.gcontext.worker.get_controller(self.state.pid)
         controller.context = self
         self.controller = controller
@@ -214,6 +221,8 @@ class Context:
         while True:
             result = result.split()
             if result[0] == "CALL":
+                if not first_worker:
+                    return True
                 if result[1] == "MPI_Initialized":
                     assert len(result) == 3
                     ptr = convert_type(result[2], "ptr")
@@ -225,10 +234,13 @@ class Context:
                     self.add_error_and_throw(e)
                 break
             elif result[0] == "PROFILE":
-                self.process_profile(result)
+                if first_worker:
+                    self.process_profile(result)
                 result = controller.receive_line()
                 continue
             elif result[0] == "EXIT":
+                if not first_worker:
+                    return True
                 exitcode = convert_type(result[1], "int")
                 if exitcode != 0:
                     e = errormsg.NonzeroExitCode(self, exitcode=exitcode)
@@ -239,14 +251,17 @@ class Context:
                     self.add_error_and_throw(e)
                 return True
             elif result[0] == "REPORT":
+                if not first_worker:
+                    return False
                 e = self.make_error_message_from_report(result)
                 self.add_error_and_throw(e)
                 return True
             elif result[0] == "SYSCALL":
-                if self.process_syscall(result):
+                return_value = self.process_syscall(result)
+                if return_value is None:
                     result = controller.run_process()
                 else:
-                    result = controller.run_drop_syscall()
+                    result = controller.run_drop_syscall(return_value)
             else:
                 assert 0, "Invalid reposponse " + repr(result)
 

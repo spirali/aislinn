@@ -145,7 +145,8 @@ class Generator:
             return False
 
         for worker in self.workers[1:]:
-            worker.init_nonfirst_worker()
+            if not worker.init_nonfirst_worker():
+                return False
 
         self.workers[0].start_next_in_queue()
         return True

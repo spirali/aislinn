@@ -119,43 +119,6 @@ class VgToolTests(TestCase):
         self.assertEquals(c.run_function(fn_b, 0, 40), "CALL B 40")
         self.assertEquals(c.run_process(), "FUNCTION_FINISH")
 
-    def test_syscall(self):
-        self.program("syscall")
-        c = self.controller()
-        c.stdout_file = open(os.devnull, "rb")
-        c.start_and_connect()
-        s = c.save_state()
-
-        self.assertEquals(c.run_process(), "CALL Second")
-        c.restore_state(s)
-        c.set_capture_syscall("write", True)
-        action, syscall, fd, data_ptr, size = c.run_process().split()
-        self.assertEquals(action, "SYSCALL")
-        self.assertEquals(syscall, "write")
-        self.assertEquals(fd, "1")
-        self.assertEquals(c.read_mem(data_ptr, size), "Hello 1!\n")
-        action, syscall, fd, data_ptr, size = c.run_process().split()
-        self.assertEquals(action, "SYSCALL")
-        self.assertEquals(syscall, "write")
-        self.assertEquals(fd, "1")
-        self.assertEquals(c.read_mem(data_ptr, size), "Hello 2!\n")
-        self.assertEquals(c.run_process(), "CALL Second")
-
-        c.restore_state(s)
-        c.set_capture_syscall("write", False)
-        self.assertEquals(c.run_process(), "CALL Second")
-
-    def test_syscall2(self):
-        self.program("syscall")
-        c = self.controller()
-        c.stdout_file = subprocess.PIPE
-        c.start_and_connect()
-        c.set_capture_syscall("write", True)
-        c.run_process()
-        c.run_drop_syscall()
-        self.assertEquals(c.run_process(), "CALL Second")
-        self.assertEquals(c.process.stdout.readline(), "Hello 2!\n")
-
     def test_access(self):
         INT_SIZE = 4
         self.program("access")
@@ -280,23 +243,6 @@ class VgToolTests(TestCase):
         c.restore_state(state2)
         c.run_process()
         assert hash3 == c.hash_state()
-        c.run_process()
-
-    def test_printf(self):
-        self.program("printf")
-        c = self.controller(verbose=0)
-        c.start_and_connect()
-        c.set_capture_syscall("write", True)
-        state1 = c.save_state()
-        assert c.run_process().startswith("SYSCALL")
-        c.run_drop_syscall()
-        hash2 = c.hash_state()
-        state2 = c.save_state()
-        c.run_process()
-        c.restore_state(state2)
-        assert hash2 == c.hash_state()
-        c.run_process()
-        c.restore_state(state1)
         c.run_process()
 
     def test_mmap(self):

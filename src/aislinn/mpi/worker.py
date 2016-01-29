@@ -153,27 +153,19 @@ class Worker:
         return True
 
     def init_nonfirst_worker(self):
-        for controller in self.controllers:
-            # Read the first line, it is probably "CALL MPI_Init"
-            # or something line this
-            # but since we just need an initied process, we don't care
-            while True:
-                line = controller.receive_line()
-                if line.startswith("CALL"):
-                    break
-                if line.startswith("PROFILE") or line.startswith("EXIT"):
-                    continue
-                if line.startswith("SYSCALL"):
-                    controller.run_drop_syscall_async()
-                    continue
-                assert 0
+        initial_node = Node("init", None)
+        gstate = GlobalState(self.generator.process_count)
+        gcontext = GlobalContext(self, initial_node, gstate)
+        for i in xrange(self.generator.process_count):
+            context = gcontext.get_context(i)
+            if not context.initial_run(False):
+                return False
+        return True
 
     def add_to_queue(self, node, gstate, action):
         self.queue.append((node, gstate, action))
 
     def start_gcontext(self, node, gstate, action):
-        """
-        """
         logging.debug("Starting gcontext %s %s %s", self, node, gstate)
         gcontext = GlobalContext(self, node, gstate)
         self.gcontext = gcontext

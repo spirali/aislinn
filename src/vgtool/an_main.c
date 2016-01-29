@@ -230,8 +230,14 @@ static Int identification = 0; // For debugging purpose when verbose > 0
 static VA *uniform_va[4];
 
 static struct {
-    Bool syscall_write;
-    Bool drop_this_syscall;
+   // What syscall is monitored
+   Bool syscall_write;
+   Bool syscall_open;
+   Bool syscall_close;
+
+   // Result from callback
+   Bool drop_current_syscall;
+   UWord return_value; // Valid if drop_current_syscall is True
 } capture_syscalls;
 
 static struct {
@@ -270,10 +276,6 @@ static INLINE Addr start_of_this_page ( Addr a ) {
 static INLINE Bool is_start_of_page ( Addr a ) {
    return (start_of_this_page(a) == a);
 }
-
-/*static INLINE Bool is_distinguished_sm (SecMap* sm) {
-   return sm >= &sm_distinguished[0] && sm <= &sm_distinguished[1];
-}*/
 
 /* --------------------------------------------------------
  *  Reports
@@ -1846,7 +1848,7 @@ static void hash_to_string(MD5_Digest *digest, char *out)
 static char* next_token(void) {
    char *str = VG_(strtok)(NULL, " ");
    if (str == NULL) {
-      write_message("Error: Invalid command\n");
+      VG_(printf)("Error: Invalid command\n");
       VG_(exit)(1);
    }
    return str;
@@ -2038,6 +2040,10 @@ static Bool set_capture_syscalls_by_name(const char *name, Bool value)
 {
     if (!VG_(strcmp)(name, "write")) {
         capture_syscalls.syscall_write = value;
+    } else if (!VG_(strcmp)(name, "open")) {
+        capture_syscalls.syscall_open = value;
+    } else if (!VG_(strcmp)(name, "close")) {
+        capture_syscalls.syscall_close = value;
     } else {
         return False;
     }
@@ -2555,8 +2561,9 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 
       if (!VG_(strcmp(cmd, "RUN_DROP_SYSCALL"))) {
          tl_assert(cet == CET_SYSCALL);
-         tl_assert(!capture_syscalls.drop_this_syscall);
-         capture_syscalls.drop_this_syscall = True;
+         tl_assert(!capture_syscalls.drop_current_syscall);
+         capture_syscalls.drop_current_syscall = True;
+         capture_syscalls.return_value = next_token_uword();
          return;
       }
 
@@ -3344,20 +3351,71 @@ static
 Bool syscall_control(ThreadId tid, UInt syscallno,
                       UWord* args, UInt nArgs, SysRes *sysres)
 {
-    if (syscallno == __NR_write && capture_syscalls.syscall_write) {
-        char message[MAX_MESSAGE_BUFFER_LENGTH];
-        VG_(snprintf)(message,
-                      MAX_MESSAGE_BUFFER_LENGTH,
-                      "SYSCALL write %lu %lu %lu\n",
-                      args[0], args[1], args[2]);
-        write_message(message);
-        capture_syscalls.drop_this_syscall = False;
-        process_commands(CET_SYSCALL, NULL);
-        if (capture_syscalls.drop_this_syscall) {
-            // Simulate that everything was written, arg[2] = len of buffer
-            *sysres = VG_(mk_SysRes_Success)(args[2]);
-            return False;
-        }
+    const char *name = NULL;
+    UInt count = 0;
+
+    switch (syscallno) {
+      case __NR_write:
+          if (!capture_syscalls.syscall_write) {
+              return True;
+          }
+          name = "write";
+          count = 3;
+          break;
+       case __NR_open:
+           if (!capture_syscalls.syscall_open) {
+               return True;
+           }
+           name = "open";
+           count = 3;
+           break;
+       case __NR_close:
+           if (!capture_syscalls.syscall_open) {
+               return True;
+           }
+           name = "close";
+           count = 1;
+           break;
+       default:
+          return True;
+    }
+
+    char message[MAX_MESSAGE_BUFFER_LENGTH];
+
+    tl_assert(count <= nArgs);
+
+    switch (count) {
+       case 0:
+          VG_(snprintf)(message,
+                        MAX_MESSAGE_BUFFER_LENGTH,
+                        "SYSCALL %s\n",
+                        name);
+          break;
+       case 1:
+          VG_(snprintf)(message,
+                        MAX_MESSAGE_BUFFER_LENGTH,
+                        "SYSCALL %s %lu\n",
+                        name, args[0]);
+          break;
+       case 2:
+          VG_(snprintf)(message,
+                        MAX_MESSAGE_BUFFER_LENGTH,
+                        "SYSCALL %s %lu %lu\n",
+                        name, args[0], args[1]);
+          break;
+       default:
+         VG_(snprintf)(message,
+                       MAX_MESSAGE_BUFFER_LENGTH,
+                       "SYSCALL %s %lu %lu %lu\n",
+                       name, args[0], args[1], args[2]);
+         break;
+    }
+    write_message(message);
+    capture_syscalls.drop_current_syscall = False;
+    process_commands(CET_SYSCALL, NULL);
+    if (capture_syscalls.drop_current_syscall) {
+        *sysres = VG_(mk_SysRes_Success)(capture_syscalls.return_value);
+       return False;
     }
     return True;
 }
