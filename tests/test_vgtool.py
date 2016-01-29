@@ -237,44 +237,6 @@ class VgToolTests(TestCase):
         c.free_buffer(500)
         c.free_buffer(600)
 
-    def test_download_buffer(self):
-        self.program("two_allocations")
-        self.start_bufserver(3)
-        c1 = self.controller()
-        c2 = self.controller()
-        mem1 = int(c1.start_and_connect().split()[2])
-        mem2 = int(c1.run_process().split()[2])
-        c2.start_and_connect()
-        c2.run_process()
-        s = self.connect_to_bufserver()
-
-        # Make remote buffer
-        c1.start_remote_buffer(100)
-        c1.finish_remote_buffer()
-
-        # Make remote buffer
-        c1.start_remote_buffer(101)
-        c1.remote_buffer_upload(mem2, 60000)
-        c1.remote_buffer_upload(mem1, 3)
-        c1.finish_remote_buffer()
-
-        s.send_data("STATS\n")
-        self.assertEquals(s.read_line().split()[0], "2")
-
-        # Download buffers
-        c2.remote_buffer_download(100)
-        c2.remote_buffer_download(101)
-
-        # Write downloaded buffer
-        out = c2.client_malloc(70000)
-        c2.write_buffer(out, 101)
-        self.assertEquals(c2.read_mem(out, 60003), "Y" * 60000 + "XXX")
-
-        s.send_data("STATS\n")
-        self.assertEquals(s.read_line().split()[0], "2")
-
-        self.assertEquals("EXIT 0", c2.run_process())
-
     def test_lock_and_restore(self):
         self.program("two_allocations")
         c = self.controller()
@@ -319,51 +281,6 @@ class VgToolTests(TestCase):
         c.run_process()
         assert hash3 == c.hash_state()
         c.run_process()
-
-    def test_bufserver(self):
-        self.start_bufserver(1)
-        s = self.connect_to_bufserver()
-
-        # Check stats
-        s.send_data("STATS\n")
-        self.assertEquals(s.read_line(), "0 0")
-
-        # Create new buffer
-        s.send_data("NEW 123\n10\n")
-        s.send_data("1234567890")
-        s.send_data("10\nA23456789B")
-        s.send_data("2\nXYDONE\n")
-
-        # Create new buffer
-        s.send_data("NEW 124\n35000\n")
-        s.send_data("J" * 35000)
-        s.send_data("DONE\n")
-
-        # Get buffer
-        s.send_data("GET 123\n")
-        size = int(s.read_line())
-        self.assertEquals(size, 22)
-        data = s.read_data(size)
-        self.assertEquals(data, "1234567890A23456789BXY")
-
-        # Get buffer
-        s.send_data("GET 124\n")
-        size = int(s.read_line())
-        self.assertEquals(size, 35000)
-        data = s.read_data(size)
-        self.assertEquals(data, "J" * 35000)
-
-        # Check stats
-        s.send_data("STATS\n")
-        self.assertEquals(s.read_line().split()[0], "2")
-
-        # Destroy buffers
-        s.send_data("FREE 123\n")
-        s.send_data("FREE 124\n")
-
-        # Check stats
-        s.send_data("STATS\n")
-        self.assertEquals(s.read_line(), "0 0")
 
     def test_printf(self):
         self.program("printf")

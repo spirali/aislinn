@@ -60,7 +60,6 @@ class Controller:
 
     stdout_file = None
     stderr_file = None
-    buffer_server_port = None
     profile = False
     extra_env = None
 
@@ -376,18 +375,6 @@ class Controller:
         self.send_and_receive_ok("NEW_BUFFER {0} {1}\n"
                                  .format(buffer_id, size))
 
-    def start_remote_buffer(self, buffer_id):
-        self.send_command("START_REMOTE_BUFFER {0}\n".format(buffer_id))
-
-    def finish_remote_buffer(self):
-        self.send_and_receive_ok("FINISH_REMOTE_BUFFER\n")
-
-    def remote_buffer_upload(self, addr, size):
-        self.send_command("UPLOAD {0} {1}\n".format(addr, size))
-
-    def remote_buffer_download(self, buffer_id):
-        self.send_command("DOWNLOAD {0}\n".format(buffer_id))
-
     def free_state(self, state_id):
         self.send_command("FREE {0}\n".format(state_id))
 
@@ -402,9 +389,6 @@ class Controller:
             "--port={0}".format(port),
             "--identification={0}".format(self.name),
         ) + tuple(["--capture-syscall=" + name for name in capture_syscalls])
-
-        if self.buffer_server_port is not None:
-            args += ("--bs-port={0}".format(self.buffer_server_port),)
 
         if self.profile:
             args += ("--profile=yes",)

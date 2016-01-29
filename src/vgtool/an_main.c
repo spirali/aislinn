@@ -212,7 +212,6 @@ static VgHashTable *state_table;
 static VgHashTable *buffer_table;
 
 static Int control_socket = -1;
-static Int buffer_socket = -1;
 
 static struct {
     Bool enable;
@@ -226,7 +225,6 @@ static char message_buffer[MAX_MESSAGE_BUFFER_LENGTH];
 static Int message_buffer_size = 0;
 
 static Int server_port = -1;
-static Int buffer_server_port = -1;
 static Int identification = 0; // For debugging purpose when verbose > 0
 
 static VA *uniform_va[4];
@@ -1727,69 +1725,6 @@ Bool read_command(char *command)
     return True;
 }
 
-static void write_bs_message(const char *str)
-{
-   if (UNLIKELY(buffer_socket == -1)) {
-       VG_(printf)("Not connected to buffer server\n");
-       VG_(exit)(1);
-   }
-   Int len = VG_(strlen)(str);
-   Int r = VG_(write_socket)(buffer_socket, str, len);
-   if (r == -1) {
-      VG_(printf)("Connection closed (buffer server)\n");
-      VG_(exit)(1);
-   }
-   tl_assert(r == len);
-}
-
-static void receive_data(Int socket, Addr addr, SizeT size)
-{
-    while (size > 0) {
-        SizeT len = VG_(read_socket)(socket, (void *) addr, size);
-        if (len == 0) {
-            VG_(printf)("Connection closed while receiving data");
-            VG_(exit)(-1);
-        }
-        size -= len;
-        addr += len;
-    }
-}
-
-static void download_buffer(int buffer_id)
-{
-    char tmp[MAX_MESSAGE_BUFFER_LENGTH+1];
-    SizeT r = MAX_MESSAGE_BUFFER_LENGTH;
-    SizeT s = 0;
-    SizeT i;
-    while(1) {
-        SizeT len = VG_(read_socket)(buffer_socket, tmp, r);
-        for (i = s; i < len + s; i++) {
-            if (tmp[i] == '\n') {
-                s += len;
-                goto ret;
-            }
-        }
-        r -= len;
-        s += len;
-    }
-    ret:
-    tmp[i] = 0;
-    char *end;
-    UWord size = VG_(strtoull10)(tmp, &end);
-    if (*end != '\0') {
-       write_message("Download: invalid size\n");
-       VG_(exit)(1);
-    }
-    Buffer *buffer = buffer_new(buffer_id, size);
-    SizeT already_received = s - (i + 1);
-    tl_assert(already_received <= size);
-    Addr a = buffer_data(buffer);
-    VG_(memcpy)((void*)a, &tmp[i+1], already_received);
-    size -= already_received;
-    a += already_received;
-    receive_data(buffer_socket, a, size);
-}
-
 static void put_profile_info(HChar **buffer, SizeT *size)
 {
     SizeT s = VG_(snprintf)(*buffer,
@@ -1844,35 +1779,6 @@ static void write_data(void *ptr, SizeT size)
    if (size - sz > 0) {
        char *p = (char*)ptr;
        r = VG_(write_socket)(control_socket, &p[sz], size - sz);
-       if (r == -1) {
-          VG_(printf)("Connection closed\n");
-          VG_(exit)(1);
-       }
-       tl_assert(r == size - sz);
-   }
-}
-
-static void write_bs_data(void *ptr, SizeT size)
-{
-   char tmp[MAX_MESSAGE_BUFFER_LENGTH];
-   SizeT sz;
-   int i = VG_(snprintf)(tmp, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", size);
-   if (size > MAX_MESSAGE_BUFFER_LENGTH - i) {
-       sz = MAX_MESSAGE_BUFFER_LENGTH - i;
-   } else {
-       sz = size;
-   }
-   VG_(memcpy)(&tmp[i], ptr, sz);
-   Int r = VG_(write_socket)(buffer_socket, tmp, i + sz);
-   if (r == -1) {
-      VG_(printf)("Connection closed\n");
-      VG_(exit)(1);
-   }
-   tl_assert(r == sz + i);
-
-   if (size - sz > 0) {
-       char *p = (char*)ptr;
-       r = VG_(write_socket)(buffer_socket, &p[sz], size - sz);
        if (r == -1) {
           VG_(printf)("Connection closed\n");
           VG_(exit)(1);
@@ -2715,34 +2621,6 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          continue;
       }
 
-      if (!VG_(strcmp(cmd, "UPLOAD"))) {
-         Addr addr = (Addr) next_token_uword();
-         SizeT size = (SizeT) next_token_uword();
-         write_bs_data((void*)addr, size);
-         continue;
-      }
-
-      if (!VG_(strcmp(cmd, "DOWNLOAD"))) {
-         UWord id = next_token_uword();
-         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "GET %lu\n", id));
-         write_bs_message(command);
-         download_buffer(id);
-         continue;
-      }
-
-      if (!VG_(strcmp(cmd, "START_REMOTE_BUFFER"))) {
-         UWord id = next_token_uword();
-         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "NEW %lu\n", id));
-         write_bs_message(command);
-         continue;
-      }
-
-      if (!VG_(strcmp(cmd, "FINISH_REMOTE_BUFFER"))) {
-         write_bs_message("DONE\n");
-         write_message("Ok\n");
-         continue;
-      }
-
       if (!VG_(strcmp(cmd, "HASH_BUFFER"))) {
          UWord buffer_id = (UWord) next_token_uword();
          Buffer *buffer = buffer_lookup(buffer_id);
@@ -3152,11 +3030,6 @@ static void an_post_clo_init(void)
       VG_(exit)(1);
    }
 
-   if (buffer_server_port < -1 || buffer_server_port > 65535) {
-      VG_(printf)("Invalid buffer server port\n");
-      VG_(exit)(1);
-   }
-
    state_table = VG_(HT_construct)("an.states");
    buffer_table = VG_(HT_construct)("an.buffers");
    uniform_va[MEM_NOACCESS] = va_new();
@@ -3173,12 +3046,6 @@ static void an_post_clo_init(void)
    VG_(snprintf)(target, 300, "127.0.0.1:%u", server_port);
    control_socket = connect_to_server(target);
    tl_assert(control_socket > 0);
-
-   if (buffer_server_port > 0) {
-       VG_(snprintf)(target, 300, "127.0.0.1:%u", buffer_server_port);
-       buffer_socket = connect_to_server(target);
-       tl_assert(buffer_socket > 0);
-   }
 }
 
 static
@@ -3329,10 +3196,6 @@ static Bool process_cmd_line_option(const HChar* arg)
    const char *syscall_name;
 
    if (VG_INT_CLO(arg, "--port", server_port)) {
-      return True;
-   }
-
-   if (VG_INT_CLO(arg, "--bs-port", buffer_server_port)) {
       return True;
    }
 

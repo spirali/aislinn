@@ -20,7 +20,6 @@ REPORT_GALLERY = False
 sys.path.append(os.path.join(AISLINN_ROOT, "src", "aislinn"))
 import base.paths
 import vgtool.controller
-import vgtool.bufserver
 
 base.paths.configure()
 
@@ -42,15 +41,9 @@ class TestCase(unittest.TestCase):
         self.output_instance = None
         self.reset_output_on_change = True
         self.counter = None
-        self.bufserver_port = None
-        self.bufserver_process = None
         self.controllers = []
 
     def tearDown(self):
-        if self.bufserver_process:
-            self.bufserver_process.terminate()
-            self.bufserver_process.join()
-
         for c in self.controllers:
             c.kill()
 
@@ -216,19 +209,9 @@ class TestCase(unittest.TestCase):
         self.assertTrue(self.program_instance is not None)
         self.report = None
         c = self.program_instance.controller(
-            args, verbose, profile, self.bufserver_port)
+            args, verbose, profile)
         self.controllers.append(c)
         return c
-
-    def start_bufserver(self, clients_count):
-        if self.bufserver_process is not None:
-            return
-        self.bufserver_process, self.bufserver_port = \
-            vgtool.bufserver.start_process(clients_count)
-
-    def connect_to_bufserver(self):
-        assert self.bufserver_process
-        return vgtool.bufserver.connect(self.bufserver_port)
 
 
 def cleanup_build_dir():
@@ -327,11 +310,10 @@ class Program:
                             .format(exitcode, stdout, stderr))
         return stdout, stderr
 
-    def controller(self, args, verbose, profile, bufserver_port):
+    def controller(self, args, verbose, profile):
         controller = vgtool.controller.Controller(
             base.paths.VALGRIND_BIN, ("./a.out",) + args, AISLINN_BUILD)
         controller.profile = profile
-        controller.buffer_server_port = bufserver_port
         if verbose:
             controller.verbose = verbose
         return controller
