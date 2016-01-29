@@ -293,13 +293,13 @@ td .t-coll {
         {% if error.stdout %}
             {% for stream in error.stdout %}
             <tr><td class="name">Output (stdout) for pid {{ loop.index }}
-                <td class="value"><pre>{{ stream }}</pre>
+                <td class="value"><pre>{{ stream.replace("\n", "<br/>").encode('string-escape') }}</pre>
             {% endfor %}
         {% endif %}
         {% if error.stderr %}
             {% for stream in error.stderr %}
             <tr><td class="name">Error output (stderr) for pid {{ loop.index }}
-                <td class="value"><pre>{{ stream }}</pre>
+                <td class="value"><pre>{{ stream.replace("\n", "<br/>").encode('string-escape') }}</pre>
             {% endfor %}
         {% endif %}
 
