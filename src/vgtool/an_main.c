@@ -232,6 +232,7 @@ static VA *uniform_va[4];
 static struct {
    // What syscall is monitored
    Bool syscall_write;
+   Bool syscall_read;
    Bool syscall_open;
    Bool syscall_close;
 
@@ -2040,6 +2041,8 @@ static Bool set_capture_syscalls_by_name(const char *name, Bool value)
 {
     if (!VG_(strcmp)(name, "write")) {
         capture_syscalls.syscall_write = value;
+    } else if (!VG_(strcmp)(name, "read")) {
+        capture_syscalls.syscall_read = value;
     } else if (!VG_(strcmp)(name, "open")) {
         capture_syscalls.syscall_open = value;
     } else if (!VG_(strcmp)(name, "close")) {
@@ -2477,6 +2480,10 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
             UWord size = (UWord) next_token_uword();
             extern_write((Addr)addr, size, check);
             VG_(memcpy((void*) addr, (void*) source, size));
+         } else if (!VG_(strcmp)(param, "mem")) {
+             SizeT size = next_token_uword();
+             extern_write(addr, size, check);
+             read_data(size, addr);
          } else if (!VG_(strcmp)(param, "string")) {
              char *s = next_token();
              extern_write(addr, VG_(strlen)(s) + 1, check);
@@ -2488,6 +2495,8 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          write_message("Ok\n");
          continue;
       }
+
+
 
       if (!VG_(strcmp)(cmd, "READ")) {
          void *addr = (void*) next_token_uword();
@@ -3362,6 +3371,13 @@ Bool syscall_control(ThreadId tid, UInt syscallno,
           name = "write";
           count = 3;
           break;
+       case __NR_read:
+           if (!capture_syscalls.syscall_read) {
+               return True;
+           }
+           name = "read";
+           count = 3;
+           break;
        case __NR_open:
            if (!capture_syscalls.syscall_open) {
                return True;

@@ -92,5 +92,30 @@ class VgIoTests(TestCase):
         syscall = c.run_drop_syscall(0).split()
         assert syscall == ["EXIT", "0"]
 
+    def test_open_read(self):
+        self.program("openread")
+        c = self.controller()
+        syscalls = ("read", "open", "close")
+        syscall = c.start_and_connect(capture_syscalls=syscalls).split()
+
+        while True:
+            assert syscall[0] == "SYSCALL"
+            assert syscall[1] in ("open", "close", "read")
+            if syscall[1] == "open":
+                filename = c.read_string(syscall[2])
+                if filename == "data":
+                    break
+            syscall = c.run_process().split()
+        syscall = c.run_drop_syscall(101).split()
+        assert syscall[:3] == ["SYSCALL", "read", "101"]
+        file_content = "10 12\nxxabc\nfff"
+        c.write_data(syscall[3], file_content)
+        syscall = c.run_drop_syscall(len(file_content)).split()
+        assert syscall[:3] == ["SYSCALL", "close", "101"]
+        syscall = c.run_drop_syscall(0).split()
+        assert syscall[:4] == ["CALL", "first", "10", "12"]
+        assert c.read_string(syscall[4]) == "xxabc"
+
+
 if __name__ == "__main__":
     unittest.main()

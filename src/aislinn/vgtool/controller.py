@@ -153,6 +153,21 @@ class Controller:
         self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n"
                                  .format(buffer_id, index, addr, size))
 
+    def write_data(self, addr, data, check=True):
+        size = len(data)
+        if size == 0:
+            return
+        # TODO: the following constant should be benchmarked
+        if size < 8192:
+            command = "WRITE {0} {1} mem {2}\n{3}" \
+                .format(check_str(check), addr, len(data), data)
+            self.send_data_and_receive_ok(command)
+        else:
+            command = "WRITE {0} {1} mem {2}" \
+                .format(check_str(check), addr, len(data))
+            self.send_command(command)
+            self.send_data_and_receive_ok(data)
+
     def write_data_into_buffer(self, buffer_addr, index, data):
         # Write a literal data into the buffer
         size = len(data)
