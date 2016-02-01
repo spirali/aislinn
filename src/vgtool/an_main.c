@@ -65,7 +65,6 @@ extern SysRes ML_(am_do_munmap_NO_NOTIFY)(Addr start, SizeT length);
 #define INLINE    inline __attribute__((always_inline))
 #define NOINLINE __attribute__ ((noinline))
 
-
 #define VPRINT(level, ...) if (verbosity_level >= (level)) { VG_(printf)(__VA_ARGS__); }
 
 #define PAGE_SIZE 65536
@@ -152,9 +151,13 @@ typedef
       SizeT requested_size;
    } AllocationBlock;
 
+#define MEMSPACE_PAGE_CACHE_SIZE 12
+
 typedef
    struct {
-      OSet* auxmap;
+      Int page_cache_size;
+      Page *page_cache[MEMSPACE_PAGE_CACHE_SIZE];
+      OSet *auxmap;
       Addr heap_space;
       Addr heap_space_end;
       XArray *allocation_blocks;
@@ -331,7 +334,7 @@ static void memspace_init(void)
    VPRINT(2, "memspace_init: heap %lx-%lx\n", heap_space, heap_space + heap_max_size);
 
    MemorySpace *ms = VG_(malloc)("an.memspace", sizeof(MemorySpace));
-   ms->answer = NULL;
+   VG_(memset)(ms, 0, sizeof(MemorySpace));
    ms->auxmap = VG_(OSetGen_Create)(/*keyOff*/  offsetof(AuxMapEnt,base),
                                     /*fastCmp*/ NULL,
                                     VG_(malloc), "an.auxmap", VG_(free));
@@ -651,62 +654,33 @@ SizeT memspace_free(Addr address)
     return size;
 }
 
-static INLINE AuxMapEnt* maybe_find_in_auxmap ( Addr a )
+static void memspace_add_to_page_cache(Page *page)
+{
+   MemorySpace *ms = current_memspace;
+   if (ms->page_cache_size < MEMSPACE_PAGE_CACHE_SIZE) {
+      ms->page_cache[ms->page_cache_size] = page;
+      ms->page_cache_size++;
+      return;
+   }
+   for (Int i = MEMSPACE_PAGE_CACHE_SIZE - 1; i > 0; i--) {
+      ms->page_cache[i] = ms->page_cache[i - 1];
+   }
+   ms->page_cache[0] = page;
+}
+
+static INLINE AuxMapEnt* find_page_in_auxmap (Addr base)
 {
    AuxMapEnt  key;
    AuxMapEnt* res;
-
-   //tl_assert(a > MAX_PRIMARY_ADDRESS);
-   a &= ~(Addr) PAGE_MASK;
-
-   /* First search the front-cache, which is a self-organising
-      list containing the most popular entries. */
-
-  /* if (LIKELY(auxmap_L1[0].base == a))
-      return auxmap_L1[0].ent;
-   if (LIKELY(auxmap_L1[1].base == a)) {
-      Addr       t_base = auxmap_L1[0].base;
-      AuxMapEnt* t_ent  = auxmap_L1[0].ent;
-      auxmap_L1[0].base = auxmap_L1[1].base;
-      auxmap_L1[0].ent  = auxmap_L1[1].ent;
-      auxmap_L1[1].base = t_base;
-      auxmap_L1[1].ent  = t_ent;
-      return auxmap_L1[0].ent;
-   }
-
-   n_auxmap_L1_searches++;
-
-   for (i = 0; i < N_AUXMAP_L1; i++) {
-      if (auxmap_L1[i].base == a) {
-         break;
-      }
-   }
-   tl_assert(i >= 0 && i <= N_AUXMAP_L1);
-
-   n_auxmap_L1_cmps += (ULong)(i+1);
-
-   if (i < N_AUXMAP_L1) {
-      if (i > 0) {
-         Addr       t_base = auxmap_L1[i-1].base;
-         AuxMapEnt* t_ent  = auxmap_L1[i-1].ent;
-         auxmap_L1[i-1].base = auxmap_L1[i-0].base;
-         auxmap_L1[i-1].ent  = auxmap_L1[i-0].ent;
-         auxmap_L1[i-0].base = t_base;
-         auxmap_L1[i-0].ent  = t_ent;
-         i--;
-      }
-      return auxmap_L1[i].ent;
-   }
-
-   n_auxmap_L2_searches++; */
-
-   /* First see if we already have it. */
-   key.base = a;
-
+   key.base = base;
    res = VG_(OSetGen_Lookup)(current_memspace->auxmap, &key);
-   /*if (res)
-      insert_into_auxmap_L1_at( AUXMAP_L1_INSERT_IX, res );*/
    return res;
+}
+
+static INLINE AuxMapEnt *find_addr_in_auxmap(Addr a)
+{
+   a &= ~(Addr) PAGE_MASK;
+   return find_page_in_auxmap(a);
 }
 
 static VA *va_new(void)
@@ -801,105 +775,156 @@ static void page_dispose(Page *page)
    }
 }
 
-static AuxMapEnt* find_or_alloc_in_auxmap (Addr a)
+static AuxMapEnt* find_or_alloc_ent_in_auxmap(Addr a)
 {
    AuxMapEnt *nyu, *res;
-   Page *page;
 
-   /* First see if we already have it. */
-   res = maybe_find_in_auxmap( a );
+   a &= ~(Addr) PAGE_MASK;
+   res = find_page_in_auxmap(a);
    if (LIKELY(res))
       return res;
 
-   /* Ok, there's no entry in the secondary map, so we'll have
-      to allocate one. */
-   a &= ~(Addr) PAGE_MASK;
-
    nyu = (AuxMapEnt*) VG_(OSetGen_AllocNode)(
       current_memspace->auxmap, sizeof(AuxMapEnt));
-   tl_assert(nyu);
    nyu->base = a;
-   page = page_new_empty(a);
-   nyu->page = page;
-   //nyu->sm = &sm_distinguished[SM_DIST_NOACCESS];
-   /*nyu->sm = VG_(malloc)("an.secmap", sizeof(SecMap));
-   VG_(memset(nyu->sm, 0, sizeof(SecMap)));*/
+   nyu->page = NULL;
    VG_(OSetGen_Insert)(current_memspace->auxmap, nyu);
-   /*insert_into_auxmap_L1_at( AUXMAP_L1_INSERT_IX, nyu );
-   n_auxmap_L2_nodes++;*/
    return nyu;
 }
 
-static void INLINE page_prepare_for_write_data(Page **page) {
-   Page *p = *page;
-   VPRINT(3, "page_prepare_for_write_data base=%lx refcount=%d page=%p\n", p->base, p->ref_count, p);
-   if (UNLIKELY(p->ref_count >= 2)) {
-      p->ref_count--;
-      Page *new_page = page_clone(p);
-      new_page->status = INVALID_HASH;
-      *page = new_page;
-      return;
+static void INLINE page_update(Page *page)
+{
+   Addr base = page->base;
+   MemorySpace *ms = current_memspace;
+   for (UInt i = 0; i < ms->page_cache_size; i++) {
+      if (ms->page_cache[i]->base == base) {
+         ms->page_cache[i] = page;
+         break;
+      }
    }
-
-   p->status = INVALID_HASH;
+   AuxMapEnt *res = find_or_alloc_ent_in_auxmap(base);
+   res->page = page;
 }
 
-static void INLINE page_set_va(Page **page, VA *va) {
-   page_prepare_for_write_data(page);
-   Page *p = *page;
-   va_dispose(p->va);
-   p->va = va;
+static INLINE Page* page_prepare_for_write_data(Page *page) {
+   VPRINT(3, "page_prepare_for_write_data base=%lx refcount=%d page=%p\n",
+          page->base, page->ref_count, page);
+   if (UNLIKELY(page->ref_count >= 2)) {
+      page->ref_count--;
+      Page *new_page = page_clone(page);
+      new_page->status = INVALID_HASH;
+      page_update(new_page);
+      return new_page;
+   }
+
+   page->status = INVALID_HASH;
+   return page;
+}
+
+static INLINE void page_set_va(Page *page, VA *va) {
+   page = page_prepare_for_write_data(page);
+   va_dispose(page->va);
+   page->va = va;
    va->ref_count++;
 }
 
-static void INLINE page_set_va_no_ref_inc(Page **page, VA *va) {
-   page_prepare_for_write_data(page);
-   Page *p = *page;
-   va_dispose(p->va);
-   p->va = va;
+static INLINE void page_set_va_no_ref_inc(Page *page, VA *va) {
+   page = page_prepare_for_write_data(page);
+   va_dispose(page->va);
+   page->va = va;
 }
 
-
-static void INLINE page_prepare_for_write_va(Page **page) {
-   Page *p = *page;
-   VPRINT(3, "page_prepare_for_write_va base=%lx refcount=%d page=%p\n", p->base, p->ref_count, p);
-   if (UNLIKELY(p->ref_count >= 2)) {
-      p->ref_count--;
-      Page *new_page = page_clone(p);
-      p->va->ref_count--;
-      new_page->va = va_clone(p->va);
+static INLINE Page* page_prepare_for_write_va(Page *page) {
+   VPRINT(3, "page_prepare_for_write_va base=%lx refcount=%d page=%p\n",
+          page->base, page->ref_count, page);
+   if (UNLIKELY(page->ref_count >= 2)) {
+      page->ref_count--;
+      Page *new_page = page_clone(page);
+      page->va->ref_count--;
+      new_page->va = va_clone(page->va);
       new_page->status = INVALID_HASH;
-      *page = new_page;
-      return;
+      page_update(new_page);
+      return new_page;
    }
 
-   if (UNLIKELY(p->va->ref_count >= 2)) {
-      p->va->ref_count--;
-      p->va = va_clone(p->va);
-      p->status = INVALID_HASH;
-      return;
+   if (UNLIKELY(page->va->ref_count >= 2)) {
+      page->va->ref_count--;
+      page->va = va_clone(page->va);
+      page->status = INVALID_HASH;
+      return page;
    }
-   p->status = INVALID_HASH;
+   page->status = INVALID_HASH;
+   return page;
 }
 
-static INLINE Page** get_page_ptr (Addr a)
-{
-   /*return ( a <= MAX_PRIMARY_ADDRESS
-          ? get_secmap_low_ptr(a)
-          : get_secmap_high_ptr(a));*/
-   //return get_secmap_high_ptr(a);
-   return &find_or_alloc_in_auxmap(a)->page;
-}
 
 // same as get_page_ptr, but do not create one if it cannot be found
-static INLINE Page** get_page_ptr_or_null(Addr a)
+static INLINE Page* get_page_or_null(Addr a)
 {
-    AuxMapEnt *res = maybe_find_in_auxmap(a);
+    a &= ~(Addr) PAGE_MASK;
+
+    MemorySpace *ms = current_memspace;
+    if (ms->page_cache_size && ms->page_cache[0]->base == a) {
+       return ms->page_cache[0];
+    }
+    for (Int i = 1; i < ms->page_cache_size; i++) {
+       if (ms->page_cache[i]->base == a) {
+          Page *page = ms->page_cache[i];
+          while(i > 0) {
+             ms->page_cache[i] = ms->page_cache[i-1];
+             i--;
+          }
+          ms->page_cache[0] = page;
+          return page;
+       }
+    }
+
+    //VG_(printf)("CACHE MISS %lx %d\n", a, ms->page_cache_size);
+
+    AuxMapEnt *res = find_page_in_auxmap(a);
     if (UNLIKELY(!res)) {
         return NULL;
     }
-    return &res->page;
+    Page *page = res->page;
+    memspace_add_to_page_cache(page);
+    return page;
 }
+
+static INLINE Page* get_page(Addr a)
+{
+   a &= ~(Addr) PAGE_MASK;
+   MemorySpace *ms = current_memspace;
+   if (ms->page_cache_size && ms->page_cache[0]->base == a) {
+      return ms->page_cache[0];
+   }
+   for (Int i = 1; i < ms->page_cache_size; i++) {
+      if (ms->page_cache[i]->base == a) {
+         Page *page = ms->page_cache[i];
+         while(i > 0) {
+            ms->page_cache[i] = ms->page_cache[i-1];
+            i--;
+         }
+         ms->page_cache[0] = page;
+         return page;
+      }
+   }
+
+   //VG_(printf)("CACHE MISS %lx %d\n", a, ms->page_cache_size);
+
+   AuxMapEnt *res = find_page_in_auxmap(a);
+   if (UNLIKELY(!res)) {
+      res = (AuxMapEnt*) VG_(OSetGen_AllocNode)(
+         current_memspace->auxmap, sizeof(AuxMapEnt));
+      res->base = a;
+      res->page = page_new_empty(a);
+      VG_(OSetGen_Insert)(current_memspace->auxmap, res);
+      return res->page;
+   }
+   Page *page = res->page;
+   memspace_add_to_page_cache(page);
+   return page;
+}
+
 
 
 static
@@ -907,7 +932,7 @@ Bool check_address_range_perms (
                 Addr a, SizeT lenT, UChar perm_mask, Addr *first_invalid_mem)
 {
    VA* va;
-   Page **page_ptr;
+   Page *page;
    UWord pg_off;
 
    UWord aNext = start_of_this_page(a) + PAGE_SIZE;
@@ -927,14 +952,14 @@ Bool check_address_range_perms (
       lenB = lenT - lenA;
    }
 
-   page_ptr = get_page_ptr_or_null(a);
-   if (!page_ptr) {
+   page = get_page_or_null(a);
+   if (!page) {
        if (first_invalid_mem) {
             *first_invalid_mem = a;
        }
        return False;
    }
-   va = (*page_ptr)->va;
+   va = page->va;
    pg_off = PAGE_OFF(a);
    while (lenA > 0) {
       if (UNLIKELY(!(va->vabits[pg_off] & perm_mask))) {
@@ -951,14 +976,14 @@ Bool check_address_range_perms (
 
 part2:
    while (lenB >= PAGE_SIZE) {
-      page_ptr = get_page_ptr_or_null(a);
-      if (!page_ptr) {
+      page = get_page_or_null(a);
+      if (!page) {
           if (first_invalid_mem) {
                *first_invalid_mem = a;
           }
           return False;
       }
-      va = (*page_ptr)->va;
+      va = page->va;
 
       for (pg_off = 0; pg_off < PAGE_SIZE; pg_off++) {
          if (UNLIKELY(!(va->vabits[pg_off] & perm_mask))) {
@@ -978,14 +1003,14 @@ part2:
 
    tl_assert(lenB < PAGE_SIZE);
 
-   page_ptr = get_page_ptr_or_null(a);
-   if (!page_ptr) {
+   page = get_page_or_null(a);
+   if (!page) {
        if (first_invalid_mem) {
             *first_invalid_mem = a;
        }
        return False;
    }
-   va = (*page_ptr)->va;
+   va = page->va;
    pg_off = 0;
    while (lenB > 0) {
       if (UNLIKELY((!(va->vabits[pg_off] & perm_mask)))) {
@@ -1021,8 +1046,7 @@ void set_address_range_page_flags(Addr a, SizeT lenT, UChar value)
    }
 
    for(;;) {
-      Page **page_ptr = get_page_ptr(a);
-      Page *page = *page_ptr;
+      Page *page = get_page(a);
       tl_assert(page->ref_count == 1);
       UWord pg_off = PAGE_OFF(a);
 
@@ -1052,7 +1076,7 @@ void set_address_range_perms (
                 Addr a, SizeT lenT, UChar perm)
 {
    VA* va;
-   Page **page_ptr;
+   Page *page;
    UWord pg_off;
 
    UWord aNext = start_of_this_page(a) + PAGE_SIZE;
@@ -1071,10 +1095,9 @@ void set_address_range_perms (
       lenA = len_to_next_secmap;
       lenB = lenT - lenA;
    }
-
-   page_ptr = get_page_ptr(a);
-   page_prepare_for_write_va(page_ptr);
-   va = (*page_ptr)->va;
+   page = get_page(a);
+   page = page_prepare_for_write_va(page);
+   va = page->va;
    pg_off = PAGE_OFF(a);
 
    while (lenA > 0) {
@@ -1092,8 +1115,8 @@ void set_address_range_perms (
 
 part2:
    while (lenB >= PAGE_SIZE) {
-      page_ptr = get_page_ptr(a);
-      page_set_va(page_ptr, uniform_va[perm]);
+      page = get_page(a);
+      page_set_va(page, uniform_va[perm]);
       lenB -= PAGE_SIZE;
       a += PAGE_SIZE;
    }
@@ -1103,10 +1126,9 @@ part2:
    }
 
    tl_assert(lenB < PAGE_SIZE);
-
-   page_ptr = get_page_ptr(a);
-   page_prepare_for_write_va(page_ptr);
-   va = (*page_ptr)->va;
+   page = get_page(a);
+   page = page_prepare_for_write_va(page);
+   va = page->va;
    pg_off = 0;
    while (lenB > 0) {
       va->vabits[pg_off] = perm;
@@ -1396,6 +1418,9 @@ static void memimage_restore(MemoryImage *memimage)
     current_memspace->allocation_blocks = VG_(cloneXA)("an.allocations",
                                                        memimage->allocation_blocks);
     current_memspace->answer = memimage->answer;
+
+    // Reset cache
+    current_memspace->page_cache_size = 0;
 }
 
 static void memspace_hash(AN_(MD5_CTX) *ctx)
@@ -1521,9 +1546,8 @@ static void prepare_for_write(Addr addr, SizeT size)
     Addr last_page = start_of_this_page(addr + size - 1);
     addr = start_of_this_page(addr);
     while (addr <= last_page) {
-        AuxMapEnt *ent = maybe_find_in_auxmap(addr);
-        tl_assert(ent != NULL);
-        page_prepare_for_write_data(&ent->page);
+        Page *page = get_page(addr);
+        page = page_prepare_for_write_data(page);
         addr += PAGE_SIZE;
     }
 }
@@ -1534,13 +1558,12 @@ static void prepare_for_write(Addr addr, SizeT size)
 
 static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 {
-   AuxMapEnt *ent = maybe_find_in_auxmap(addr);
-   if (UNLIKELY(ent == NULL)) {
+   Page *page = get_page_or_null(addr);
+   if (UNLIKELY(page == NULL)) {
         report_error_write(addr, size);
         tl_assert(0); // no return here
    }
-   page_prepare_for_write_data(&ent->page);
-   Page *page = ent->page;
+   page = page_prepare_for_write_data(page);
    VA *va = page->va;
    Addr offset = addr - page->base;
    SizeT i;
@@ -1578,12 +1601,11 @@ static VG_REGPARM(2) void trace_write(Addr addr, SizeT size)
 
 static VG_REGPARM(2) void trace_read(Addr addr, SizeT size)
 {
-   AuxMapEnt *ent = maybe_find_in_auxmap(addr);
-   if (UNLIKELY(ent == NULL)) {
+   Page *page = get_page(addr);
+   if (UNLIKELY(page == NULL)) {
         report_error_read(addr, size);
         tl_assert(0); // no return here
    }
-   Page *page = ent->page;
    Addr offset = addr - page->base;
    //page_dump(page);
 
@@ -2256,7 +2278,7 @@ static Page *pull_page(SocketReadBuffer *srb)
     Int j;
 
     // This forces to create a page in current_memspace if not present
-    get_page_ptr(page->base);
+    get_page(page->base);
 
 
     Int flags[REAL_PAGES_IN_PAGE];
