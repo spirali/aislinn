@@ -66,6 +66,10 @@ def init():
     b.command = "{aislinn} -p 1 /bin/bzip2 -f -k testfile"
     benchmarks.append(b)
 
+    b = Benchmark("graphviz")
+    b.command = "{aislinn} -p 1 /usr/bin/dot -Tpng test.dot -o /dev/null"
+    benchmarks.append(b)
+
     return benchmarks
 
 
@@ -77,6 +81,9 @@ def main():
     elif len(argv) == 2:
         name = argv[1]
         benchmarks = [b for b in benchmarks if name in b.name]
+
+    if not benchmarks:
+        print "No tests selected"
 
     for b in benchmarks:
         print b.name, "...",
