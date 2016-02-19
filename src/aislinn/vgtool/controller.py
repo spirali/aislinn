@@ -45,6 +45,14 @@ def check_str(value):
 
 
 class Controller:
+    """ The main class for controlling AVT - Aislinn Valgrind Tool
+
+        Terminology:
+        client - a verified process
+        client's memory - a memory visible to a verified process
+        buffer - a memory allocated in AVT by controller; invisible to client
+    """
+
 
     # TODO: Universal architecture detection
     POINTER_SIZE = 8
@@ -80,6 +88,8 @@ class Controller:
         self.valgrind_bin = valgrind_bin
 
     def start(self, capture_syscalls=()):
+        """ Start Valgrind with Aislinn plugin (AVT)
+        and initilizes connection """
         assert self.process is None  # Nothing is running
         assert self.socket is None
 
@@ -87,13 +97,8 @@ class Controller:
         port = self.server_socket.getsockname()[1]
         self._start_valgrind(port, capture_syscalls)
 
-    def start_and_connect(self, *args, **kw):
-        self.start(*args, **kw)
-        if not self.connect():
-            return None
-        return self.receive_line()
-
     def connect(self):
+        """ Connect to AVT """
         self.server_socket.settimeout(5.0)
         try:
             sock, addr = self.server_socket.accept()
@@ -109,51 +114,100 @@ class Controller:
         # But it may take some time to initialize vgclient, hence
         # it is not build in in connect to allow polling
 
+    def start_and_connect(self, *args, **kw):
+        """ Calls 'start' and 'connect' and receives the first line,
+        returns None if connection failed"""
+        self.start(*args, **kw)
+        if not self.connect():
+            return None
+        return self.receive_line()
+
     def kill(self):
+        """ Kills running AVT """
         if self.process and self.process.poll() is None:
             self.process.kill()
             self.process = None
 
+    def set_capture_syscall(self, syscall, value):
+        """ Switches on/off a capturing a syscall """
+        self.send_and_receive_ok(
+            "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
+
+    def save_state(self):
+        """ Save a current process state """
+        return self.send_and_receive_int("SAVE\n")
+
+    def restore_state(self, state_id):
+        """ Restores a saved process state """
+        self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
+
+    def free_state(self, state_id):
+        """ Frees a saved state """
+        self.send_command("FREE {0}\n".format(state_id))
+
     def run_process(self):
+        """ Resumes the paused process and wait until new event,
+        then returns the event """
         return self.send_and_receive("RUN\n")
 
     def run_drop_syscall(self, return_value):
+        """ When process is paused in syscall,
+        it skips the syscall and then behaves as 'run' """
         return self.send_and_receive(
             "RUN_DROP_SYSCALL {0}\n".format(return_value))
 
     def run_process_async(self):
+        """ Asynchronous version of 'run'. It does not wait for the
+           next event and returns immediately """
         self.running = True
         self.send_command("RUN\n")
 
     def run_drop_syscall_async(self, return_value):
+        """ Asynchornous version of 'run_drop_syscall'. It does not wait
+           for the next event and retusn immediately. """
         self.running = True
         self.send_command("RUN_DROP_SYSCALL {0}\n".format(return_value))
 
+    def finish_async(self):
+        """ Finishes an asynchronous call """
+        assert self.running
+        self.running = False
+        return self.receive_line()
+
     def run_function(self, fn_pointer, fn_type, *args):
+        """ Executes a function in client """
         command = "RUN_FUNCTION {0} {1} {2} {3} \n".format(
                   fn_pointer, fn_type, len(args), " ".join(map(str, args)))
         return self.send_and_receive(command)
 
     def client_malloc(self, size):
+        """ Calls "malloc" in client, i.e. allocate a memory
+            that is visible for the verified process """
         return self.send_and_receive_int("CLIENT_MALLOC {0}\n".format(size))
 
     def client_free(self, mem):
+        """ Calls "free" in client (an opposite function to client_malloc) """
         self.send_and_receive_ok("CLIENT_FREE {0}\n".format(mem))
 
     def client_malloc_from_buffer(self, buffer_id):
+        """ Allocate a client's memory with the same size as buffer and
+            copy buffer into this memory. """
         return self.send_and_receive_int(
             "CLIENT_MALLOC_FROM_BUFFER {0}\n".format(buffer_id))
 
     def memcpy(self, addr, source, size, check=True):
+        """ Copies a non-overlapping block memory """
         self.send_and_receive_ok("WRITE {0} {1} addr {2} {3}\n"
                                  .format(check_str(check), addr, source, size))
 
     def write_into_buffer(self, buffer_id, index, addr, size):
+        """ Writes a client memory into a buffer """
         # Copy a memory from client addres to the buffer
         self.send_and_receive_ok("WRITE_BUFFER {0} {1} {2} {3}\n"
                                  .format(buffer_id, index, addr, size))
 
     def write_data(self, addr, data, check=True):
+        """ Writes data (str) into client's memory """
         size = len(data)
         if size == 0:
             return
@@ -169,7 +223,7 @@ class Controller:
             self.send_data_and_receive_ok(data)
 
     def write_data_into_buffer(self, buffer_addr, index, data):
-        # Write a literal data into the buffer
+        """ Writes data (str) into buffer """
         size = len(data)
         if size == 0:
             return
@@ -185,6 +239,7 @@ class Controller:
 
     def write_buffer(self, addr, buffer_addr,
                      index=None, size=None, check=True):
+        """ Copies a buffer into client's memory """
         if index is None or size is None:
             self.send_and_receive_ok(
                 "WRITE {0} {1} buffer {2}\n"
@@ -198,18 +253,22 @@ class Controller:
                 .format(check_str(check), addr, buffer_addr, index, size))
 
     def write_int(self, addr, value, check=True):
+        """ Writes int into client's memory """
         self.send_and_receive_ok("WRITE {0} {1} int {2}\n"
                                  .format(check_str(check), addr, value))
 
     def write_string(self, addr, value, check=True):
+        """ Writes string into client's memory """
         self.send_and_receive_ok("WRITE {0} {1} string {2}\n"
                                  .format(check_str(check), addr, value))
 
     def write_pointer(self, addr, value, check=True):
+        """ Writes pointer into client's memory """
         self.send_and_receive_ok("WRITE {0} {1} pointer {2}\n"
                                  .format(check_str(check), addr, value))
 
     def write_ints(self, addr, values, check=True):
+        """ Writes an array of ints into client's memory """
         self.send_and_receive_ok(
             "WRITE {0} {1} ints {2} {3}\n"
             .format(check_str(check),
@@ -218,22 +277,27 @@ class Controller:
                     " ".join(map(str, values))))
 
     def read_mem(self, addr, size):
+        """ Reads client's memory """
         return self.send_and_receive_data("READ {0} mem {1}\n"
                                           .format(addr, size))
 
     def read_int(self, addr):
+        """ Reads int from client's memory """
         return self.send_and_receive_int("READ {0} int\n".format(addr))
 
     def read_pointer(self, addr):
+        """ Reads pointer from client's memory """
         return self.send_and_receive_int("READ {0} pointer\n".format(addr))
 
     def read_ints(self, addr, count):
+        """ Reads an array of ints from client's memory """
         line = self.send_and_receive("READ {0} ints {1}\n".format(addr, count))
         results = map(int, line.split())
         assert len(results) == count
         return results
 
     def read_pointers(self, addr, count):
+        """ Reads an array of pointers from client's memory """
         line = self.send_and_receive("READ {0} pointers {1}\n"
                                      .format(addr, count))
         results = map(int, line.split())
@@ -241,23 +305,30 @@ class Controller:
         return results
 
     def read_string(self, addr):
+        """ Reads a string from client's memory """
         return self.send_and_receive_data("READ {0} string\n".format(addr))
 
     def read_buffer(self, buffer_id):
+        """ Reads a buffer """
         return self.send_and_receive_data("READ_BUFFER {0}\n"
                                           .format(buffer_id))
 
     def hash_state(self):
+        """ Hashes current process state """
         h = self.send_and_receive("HASH\n")
         return h
 
     def hash_buffer(self, buffer_id):
+        """ Hashes a buffer """
         return self.send_and_receive("HASH_BUFFER {0}\n".format(buffer_id))
 
     def get_stacktrace(self):
+        """ Returns stack trace (each item separeted by ';') """
         return self.send_and_receive("STACKTRACE\n")
 
     def get_stats(self):
+        """ Gets internal statistic from client
+           (number of states, buffers, etc ...) """
         self.send_command("STATS\n")
         result = {}
         for entry in self.receive_line().split("|"):
@@ -266,75 +337,99 @@ class Controller:
         return result
 
     def is_writable(self, addr, size):
+        """ Returns True if an client's address is writable """
         return self.send_and_receive("CHECK write {0} {1}\n"
                                      .format(addr, size))
 
     def is_readable(self, addr, size):
+        """ Returns True if an client's address is readable """
         return self.send_and_receive("CHECK read {0} {1}\n".format(addr, size))
 
     def lock_memory(self, addr, size):
+        """ Marks a client's memory as read only """
         self.send_and_receive_ok("LOCK {0} {1}\n".format(addr, size))
 
     def unlock_memory(self, addr, size):
+        """ Marks a client's memory as defined """
         self.send_and_receive_ok("UNLOCK {0} {1}\n".format(addr, size))
 
     def get_allocations(self):
+        """ Get list of client's allocations on heap """
         return self.send_and_receive("ALLOCATIONS\n")
 
     def interconn_listen(self):
-        # This has to immediately follows by interconn_accept
+        """ Clients start to listen for a connection on a free port,
+            that is returned from the method.
+            This blocks AVT but not controller.
+            Method 'interconn_listen_finish' has to be called
+            after this method """
         port = self.send_and_receive_int("CONN_LISTEN\n")
         self.running = True
         return port
 
     def interconn_listen_finish(self):
-        # This has to immediately preceed by interconn_listen
+        """ This has to be called after interconn_listen.
+            It blocks until the client is not connected and then
+            returns socket id """
         return int(self.finish_async())
 
     def interconn_connect(self, host):
+        """ Initializes a connection to another AVT that is listening by
+            'interconn_listen'. This has be followed by
+            'interconn_connect_finish'. """
         self.running = True
-        # This has to immediately follows by interconn_connect_finish
         return self.send_command("CONN_CONNECT {0}\n".format(host))
 
     def interconn_connect_finish(self):
-        # This has to immediately preceed by interconn_connect
+        """ This method has to follow 'interconn_connect'.
+            Blocks until connection is not finished.
+            Returns socket id."""
         return int(self.finish_async())
 
-    # -- Semi-internal functions
+    def push_state(self, socket, state_id):
+        """ Send a state through an AVT interconnection """
+        self.send_command("CONN_PUSH_STATE {0} {1}\n".format(socket, state_id))
+
+    def pull_state(self, socket):
+        """ Receives a state through an AVT interconnection """
+        return self.send_and_receive_int("CONN_PULL_STATE {0}\n"
+                                         .format(socket))
 
     def send_command(self, command):
+        """ Send a command to AVT """
         assert command[-1] == "\n", "Command does not end with new line"
         self.socket.send_data(command)
 
     def send_data(self, data):
+        """ Send data to AVT """
         self.socket.send_data(data)
 
     def receive_line(self):
+        """ Receives a line (string) from AVT """
         line = self.socket.read_line()
         if line.startswith("Error:"):
             raise Exception("Received line: " + line)
         return line
 
-    def finish_async(self):
-        assert self.running
-        self.running = False
-        return self.receive_line()
-
     def receive_data(self):
+        """ Receives a data from AVT """
         args = self.socket.read_line().split()
         return self.socket.read_data(int(args[1]))
 
     def send_and_receive(self, command):
+        """ Sends a command and waits for the answer."""
         self.send_command(command)
         assert not self.running
         return self.receive_line()
 
     def send_and_receive_data(self, command):
+        """ Sends a command and waits for the answer as data."""
         self.send_command(command)
         assert not self.running
         return self.receive_data()
 
     def send_and_receive_ok(self, command):
+        """ Sends a command and waits for its confirmation (string "Ok\n") """
         self.send_command(command)
         assert not self.running
         r = self.receive_line()
@@ -342,6 +437,7 @@ class Controller:
             raise self.on_unexpected_output(r)
 
     def send_data_and_receive_ok(self, data):
+        """ Sends data and waits for its confirmation (string "Ok\n") """
         self.send_data(data)
         assert not self.running
         r = self.receive_line()
@@ -349,9 +445,12 @@ class Controller:
             raise self.on_unexpected_output(r)
 
     def on_unexpected_output(self, line):
+        """ This method is called when unexpected output is received,
+            by default it throws UnexpectedOutput exception"""
         raise UnexpectedOutput(line)
 
     def receive_until_ok(self):
+        """ Receives lines until "Ok" is not received """
         result = []
         line = self.receive_line()
         while line != "Ok":
@@ -360,41 +459,26 @@ class Controller:
         return result
 
     def send_and_receive_int(self, command):
+        """ Sends a command and waits for int """
         return int(self.send_and_receive(command))
 
     def debug_compare(self, state_id1, state_id2):
+        """ Compares two saved states in AVT """
         self.send_and_receive_ok("DEBUG_COMPARE {0} {1}\n"
                                  .format(state_id1, state_id2))
 
     def debug_dump_state(self, state_id):
+        """ Dumps a saved state on stderr """
         self.send_and_receive_ok("DEBUG_DUMP_STATE {0}\n"
                                  .format(state_id))
 
-    def set_capture_syscall(self, syscall, value):
-        self.send_and_receive_ok(
-            "SET syscall {0} {1}\n".format(syscall, "on" if value else "off"))
-
-    def save_state(self):
-        return self.send_and_receive_int("SAVE\n")
-
-    def restore_state(self, state_id):
-        self.send_and_receive_ok("RESTORE {0}\n".format(state_id))
-
-    def push_state(self, socket, state_id):
-        self.send_command("CONN_PUSH_STATE {0} {1}\n".format(socket, state_id))
-
-    def pull_state(self, socket):
-        return self.send_and_receive_int("CONN_PULL_STATE {0}\n"
-                                         .format(socket))
-
     def make_buffer(self, buffer_id, size):
+        """ Creates a new buffer """
         self.send_and_receive_ok("NEW_BUFFER {0} {1}\n"
                                  .format(buffer_id, size))
 
-    def free_state(self, state_id):
-        self.send_command("FREE {0}\n".format(state_id))
-
     def free_buffer(self, buffer_id):
+        """ Frees a buffer """
         self.send_command("FREE_BUFFER {0}\n".format(buffer_id))
 
     def _start_valgrind(self, port, capture_syscalls):
