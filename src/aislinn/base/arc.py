@@ -53,6 +53,9 @@ class Arc:
             l += "+d"
         return l
 
+    def get_pids(self):
+        return list(set(e.pid for e in self.events if hasattr(e, "pid")))
+
     def get_data(self, name, pid):
         if self.data:
             for d in self.data:

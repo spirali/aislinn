@@ -81,13 +81,20 @@ class StateSpace:
 
     def write(self, filename):
         def _write_node(node):
-            f.write("{0}\n".format(node.uid))
+            f.write("<node id='{}' size='1'>\n".format(node.uid))
             for arc in node.arcs:
-                f.write("\t{0} {1}\n".format(arc.node.uid, arc.label))
+                f.write("\t<arc node-id='{}' "
+                        "label='{}' events-count='{}' time='1' pids='{}' />\n"
+                        .format(arc.node.uid,
+                                arc.label,
+                                len(arc.events),
+                                ",".join(map(str, arc.get_pids()))))
+            f.write("</node>\n")
         with open(filename, "w") as f:
-            f.write("{0}\n".format(self.initial_node.uid))
+            f.write("<statespace init-node-id='init'>\n")
             for node in self.all_nodes():
                 _write_node(node)
+            f.write("</statespace>")
 
     def arcs_to_node(self, node):
         assert node is not None

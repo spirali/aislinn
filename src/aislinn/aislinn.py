@@ -174,7 +174,9 @@ def parse_args():
                         type=str,
                         default=None)
     parser.add_argument("--debug-statespace",
-                        action="store_true")
+                        metavar="FILENAME",
+                        type=str,
+                        default=None)
     parser.add_argument("--debug-seq",
                         action="store_true")
     parser.add_argument("--debug-by-valgrind-tool",
@@ -336,8 +338,8 @@ def main():
             generator.statespace.nodes_count)
 
     if args.debug_statespace:
-        generator.statespace.write("statespace.txt")
-        logging.info("Statespace written into 'statespace.txt'")
+        generator.statespace.write(args.debug_statespace)
+        logging.info("Statespace written into '%s'", args.debug_statespace)
 
     if args.report_type == "xml" or args.report_type == "html+xml":
         generator.create_report(args, VERSION_STRING).write_xml("report.xml")
