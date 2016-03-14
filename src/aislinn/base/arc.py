@@ -29,6 +29,7 @@ class ArcData:
 class Arc:
 
     worker = None
+    time = None
 
     def __init__(self, node, action, events=(), data=()):
         self.node = node

@@ -23,6 +23,7 @@ from event import MatchEvent
 from state import State
 
 import logging
+import datetime
 
 
 class ErrorFound(Exception):
@@ -31,18 +32,24 @@ class ErrorFound(Exception):
 
 class GlobalContext:
 
+    init_time = None
+
     def __init__(self, worker, node, gstate, generator=None):
         self.worker = worker
         self.node = node
         self.gstate = gstate
         self.action = None
 
-        if generator is not None:
-            self.contexts = [None] * generator.process_count
-        else:
-            self.contexts = [None] * worker.generator.process_count
+        if generator is None:
+            generator = worker.generator
+
+        self.contexts = [None] * generator.process_count
         self.events = []
         self.data = []
+
+        if generator.debug_arc_times:
+            self.init_time = datetime.datetime.now()
+
 
     @property
     def generator(self):
@@ -83,6 +90,11 @@ class GlobalContext:
         node, is_new = self.generator.add_node(
             self.node, self.worker, self.gstate)
         arc = Arc(node, self.action, self.events, self.get_compact_data())
+
+        if self.init_time:
+            now = datetime.datetime.now()
+            arc.time = (now - self.init_time).total_seconds()
+
         self.node.add_arc(arc)
         self.node = node
         self.events = None

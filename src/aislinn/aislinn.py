@@ -177,6 +177,8 @@ def parse_args():
                         metavar="FILENAME",
                         type=str,
                         default=None)
+    parser.add_argument("--debug-arc-times",
+                        action="store_true")
     parser.add_argument("--debug-seq",
                         action="store_true")
     parser.add_argument("--debug-by-valgrind-tool",

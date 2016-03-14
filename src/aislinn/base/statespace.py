@@ -84,10 +84,11 @@ class StateSpace:
             f.write("<node id='{}' size='1'>\n".format(node.uid))
             for arc in node.arcs:
                 f.write("\t<arc node-id='{}' "
-                        "label='{}' events-count='{}' time='1' pids='{}' />\n"
+                        "label='{}' events-count='{}' time='{}' pids='{}' />\n"
                         .format(arc.node.uid,
                                 arc.label,
                                 len(arc.events),
+                                arc.time,
                                 ",".join(map(str, arc.get_pids()))))
             f.write("</node>\n")
         with open(filename, "w") as f:

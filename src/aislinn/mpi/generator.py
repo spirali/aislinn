@@ -79,6 +79,7 @@ class Generator:
 
         self.profile = aislinn_args.profile
         self.debug_seq = aislinn_args.debug_seq
+        self.debug_arc_times = aislinn_args.debug_arc_times
 
         self.workers = [Worker(i,
                                aislinn_args.workers,
