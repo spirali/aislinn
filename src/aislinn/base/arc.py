@@ -38,6 +38,13 @@ class Arc:
         self.data = data  # list of ArcData
 
     @property
+    def action_index(self):
+        if self.action:
+            return self.action.action_index
+        else:
+            return -1
+
+    @property
     def label(self):
         return "{}/{}/{}".format(
             self.action.action_index if self.action else "",

@@ -2,6 +2,7 @@
 # Statespace explorer
 # (Statespace debugging tool)
 
+import xml.etree.ElementTree as xml
 
 class Arc:
 
@@ -19,9 +20,9 @@ class Node:
         self.image = None
 
     def __repr__(self):
-        return "<node [{0}] c={1} p={2}>".format(
+        return "<node [{0}] c={1}>".format(
             self.name,
-            ";".join("{}->{}".format(a.label, a.node.name) for a in self.arcs),
+            ";".join("{}".format(a.node.name) for a in self.arcs),
             ";".join("[{}]".format(node.name) for node in self.parents))
 
 
@@ -29,26 +30,24 @@ class Statespace:
 
     def __init__(self, filename):
         nodes = {}
-        current = None
-        with open(filename, "r") as f:
-            initial = f.readline().rstrip()
-            for line in f:
-                line = line.rstrip()
-                if line.startswith("\t"):
-                    name, label = line[1:].split()
-                    node = nodes.get(name)
-                    if node is None:
-                        node = Node(name)
-                        nodes[name] = node
-                    current.arcs.append(Arc(node, label))
-                    node.parents.append(current)
-                else:
-                    current = nodes.get(line)
-                    if current is None:
-                        current = Node(line)
-                        nodes[line] = current
+        root = xml.parse(filename).getroot()
+        for n in root.findall("node"):
+            id = n.get("id")
+            node = nodes.get(id)
+            if node is None:
+                node = Node(id)
+                nodes[id] = node
+            self.nodes = node
+            for arc in n.findall("arc"):
+                id = arc.get("node-id")
+                node2 = nodes.get(id)
+                if node2 is None:
+                    node2 = Node(id)
+                    nodes[id] = node2
+                node.arcs.append(Arc(node2, arc.get("label")))
+                node2.parents.append(node)
         self.nodes = nodes
-        self.initial_node = nodes[initial]
+        self.initial_node = nodes[root.get("init-node-id")]
 
     def bf_search(self):
         queue = [self.initial_node]
@@ -63,6 +62,51 @@ class Statespace:
 
 
 def find_differences(s1, s2):
+    queue = [(s1.initial_node, s2.initial_node)]
+    found = set(queue)
+
+    while queue:
+        node1, node2 = queue.pop()
+        if len(node1.arcs) != len(node2.arcs):
+            print found
+            print "Different child count ", node1, node2
+            break
+        for i, (a1, a2) in enumerate(zip(node1.arcs, node2.arcs)):
+            pair = (a1.node, a2.node)
+            print pair, ":",  node1, node2, i
+            if pair not in found:
+                #queue.append(pair)
+                queue.insert(0, pair)
+                found.add(pair)
+
+    images1 = {}
+    images2 = {}
+    for n1, n2 in found:
+        a = images1.get(n1)
+        if a is None:
+            a = []
+            images1[n1] = a
+        if n1 not in a:
+            a.append(n2)
+
+        a = images2.get(n2)
+        if a is None:
+            a = []
+            images2[n2] = a
+        if n2 not in a:
+            a.append(n2)
+
+    print "1 -> 2 ----------------"
+    for key, value in images1.items():
+        if len(value) >= 2:
+            print key, value
+    print "2 -> 1 ----------------"
+    for key, value in images2.items():
+        if len(value) >= 2:
+            print key, value
+
+
+    """
     def check_node(node):
         pass
 
@@ -99,6 +143,7 @@ def find_differences(s1, s2):
                 print "n1.image", n1.image,
                 print "n2.image", n2.image
                 return
+    """
 
 
 def main():

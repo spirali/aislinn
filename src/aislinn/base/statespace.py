@@ -82,7 +82,7 @@ class StateSpace:
     def write(self, filename):
         def _write_node(node):
             f.write("<node id='{}' size='1'>\n".format(node.uid))
-            for arc in node.arcs:
+            for arc in sorted(node.arcs, key=lambda a: a.action_index):
                 f.write("\t<arc node-id='{}' "
                         "label='{}' events-count='{}' time='{}' pids='{}' />\n"
                         .format(arc.node.uid,
