@@ -1025,6 +1025,32 @@ part2:
    return True;
 }
 
+static void fill_undefined_memory(Addr addr, SizeT size)
+{
+    if (size == 0) {
+        return;
+    }
+
+    Page *page = get_page(addr);
+    for(;;) {
+        Addr offset = PAGE_OFF(addr);
+        if (page->va->vabits[offset] == MEM_UNDEFINED) {
+            HChar *a = (HChar*) addr;
+            *a = 0;
+        }
+
+        size--;
+        if (size == 0) {
+            return;
+        }
+
+        addr++;
+        if (is_start_of_page(addr)) {
+            page = get_page(addr);
+        }
+    }
+}
+
 
 static INLINE Bool check_is_writable(Addr addr, SizeT size, Addr *first_invalid_addr)
 {
@@ -2745,6 +2771,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!VG_(strcmp)(cmd, "LOCK")) {
           Addr addr = next_token_uword();
           SizeT size = next_token_uword();
+          fill_undefined_memory(addr, size);
           make_mem_readonly(addr, size);
           write_message("Ok\n");
           continue;
