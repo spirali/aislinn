@@ -263,6 +263,10 @@ class SendRecvTests(TestCase):
         self.execute(2, "4", stdout="4 0\n12\n13\n15\n21\n-1\n")
         self.execute(2, "6", error="mpi/message-truncated")
 
+    def test_doublelock(self):
+        self.program("doublelock")
+        self.execute(2)
+        self.execute(2, "write", error="mem/invalid-write")
 
 if __name__ == "__main__":
     unittest.main()
