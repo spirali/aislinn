@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -21,6 +21,7 @@
 from request import \
     Request, \
     CollectiveRequest
+from base.utils import Intervals
 import errormsg
 
 import consts
@@ -69,6 +70,7 @@ class State:
         self.probe_promise = None
         self.finalized = False
         self.immediate_wait = False
+        self.locked_memory = Intervals()  # <-- Copy on write!
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
@@ -324,6 +326,18 @@ class State:
         self.persistent_requests = copy.copy(self.persistent_requests)
         self.persistent_requests.append(request)
 
+    def lock_memory(self, context, regions):
+        self.locked_memory = self.locked_memory.copy()
+        for start, size in regions:
+            for begin, end in self.locked_memory.add(start, start + size):
+                context.controller.lock_memory(begin, end - begin)
+
+    def unlock_memory(self, context, regions):
+        self.locked_memory = self.locked_memory.copy()
+        for start, size in regions:
+            for begin, end in self.locked_memory.remove(start, start + size):
+                context.controller.unlock_memory(begin, end - begin)
+
     def activate_request(self, context, request, immediate):
         if request.is_send():
             if request.target == consts.MPI_PROC_NULL:
@@ -362,8 +376,10 @@ class State:
 
         if not immediate:
             request.stacktrace = context.event.stacktrace
-            request.datatype.lock_memory(
-                context.controller, request.data_ptr, request.count)
+            regions = []
+            request.datatype.memory_regions(
+                request.data_ptr, request.count, regions)
+            self.lock_memory(context, regions)
 
     def get_finished_request(self, request_id):
         for request in self.finished_requests:

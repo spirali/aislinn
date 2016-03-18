@@ -75,11 +75,8 @@ class BuildinType(Datatype):
                 return r
         return None
 
-    def lock_memory(self, controller, pointer, count, unlock=False):
-        if unlock:
-            controller.unlock_memory(pointer, self.size * count)
-        else:
-            controller.lock_memory(pointer, self.size * count)
+    def memory_regions(self, pointer, count, regions):
+        regions.append((pointer, self.size * count))
 
 
 class ContiguousType(Datatype):
@@ -108,9 +105,8 @@ class ContiguousType(Datatype):
         return self.datatype.check(controller, pointer,
                                    count * self.count, read, write)
 
-    def lock_memory(self, controller, pointer, count, unlock=False):
-        self.datatype.lock_memory(
-            controller, pointer, count * self.count, unlock)
+    def memory_regions(self, pointer, count, regions):
+        self.datatype.memory_regions(pointer, count * self.count, regions)
 
 
 class VectorType(Datatype):
@@ -171,11 +167,10 @@ class VectorType(Datatype):
                 pointer += self.stride
             pointer -= self.stride
 
-    def lock_memory(self, controller, pointer, count, unlock=False):
+    def memory_regions(self, pointer, count, regions):
         for i in xrange(count):
             for j in xrange(self.count):
-                self.datatype.lock_memory(
-                    controller, pointer, self.blocksize, unlock)
+                self.datatype.memory_regions(pointer, self.blocksize, regions)
                 pointer += self.stride
             pointer -= self.stride
 
@@ -244,14 +239,13 @@ class IndexedType(Datatype):
                     return r
             pointer += self.unpack_size
 
-    def lock_memory(self, controller, pointer, count, unlock=False):
+    def memory_regions(self, pointer, count, regions):
         for i in xrange(count):
             for j in xrange(self.count):
-                self.datatype.lock_memory(
-                    controller,
+                self.datatype.memory_regions(
                     pointer + self.displs[j],
                     self.sizes[j],
-                    unlock)
+                    regions)
             pointer += self.unpack_size
 
 
@@ -318,14 +312,11 @@ class StructType(Datatype):
                     return r
             pointer += self.unpack_size
 
-    def lock_memory(self, controller, pointer, count, unlock=False):
+    def memory_regions(self, pointer, count, regions):
         for i in xrange(count):
             for datatype, c, displ in \
                     zip(self.datatypes, self.counts, self.displs):
-                r = datatype.lock_memory(controller,
-                                         pointer + displ,
-                                         c,
-                                         unlock)
+                r = datatype.memory_regions(pointer + displ, c, regions)
                 if r is not None:
                     return r
             pointer += self.unpack_size

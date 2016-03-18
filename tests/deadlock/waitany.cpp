@@ -17,7 +17,8 @@ int main(int argc, char **argv)
 		int i;
 		MPI_Waitany(2, r, &i, MPI_STATUS_IGNORE);
 		//MPI_Waitall(2, r, MPI_STATUSES_IGNORE);
-		MPI_Recv(&d, 1, MPI_INT, 1, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		int d3;
+		MPI_Recv(&d3, 1, MPI_INT, 1, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		MPI_Recv(&d2, 1, MPI_INT, 2, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		MPI_Waitany(2, r, &i, MPI_STATUS_IGNORE);
 	}

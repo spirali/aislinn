@@ -19,7 +19,8 @@
 
 
 from statespace import StateSpace
-from node import Node, Arc
+from node import Node
+from arc import Arc
 from stream import STREAM_STDOUT, StreamChunk
 
 import pytest

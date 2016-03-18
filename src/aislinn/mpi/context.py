@@ -384,18 +384,12 @@ class Context:
     def _close_request(self, request, index_pointer, index_status):
         logging.debug("Closing request %s", request)
 
-        if self.state.immediate_wait:
-            if request.is_receive() and request.source != consts.MPI_PROC_NULL:
-                # Hack - To mark receive buffer as defined
-                request.datatype.lock_memory(self.controller,
-                                             request.data_ptr,
-                                             request.count, unlock=True)
-        else:
+        if not self.state.immediate_wait:
             if request.is_send_recv_not_proc_null():
-                # Not hack - memory is really locked
-                request.datatype.lock_memory(self.controller,
-                                             request.data_ptr,
-                                             request.count, unlock=True)
+                regions = []
+                request.datatype.memory_regions(
+                    request.data_ptr, request.count, regions)
+                self.state.unlock_memory(self, regions)
 
         if self.state.tested_requests_pointer is not None and \
                 self.state.get_persistent_request(request.id) is None:

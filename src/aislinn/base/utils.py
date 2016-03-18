@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014 Stanislav Bohm
+#    Copyright (C) 2014, 2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -117,3 +117,52 @@ def build_equivalence(items1, items2, check_fn, mapping=None):
         items1.append(v)
     helper(items1, items2)
     return results
+
+
+class Intervals:
+
+    def __init__(self, intervals=None):
+        if intervals is None:
+            self.intervals = []
+        else:
+            self.intervals = intervals
+
+    def copy(self):
+        return Intervals(self.intervals[:])
+
+    def add(self, start, end):
+        area = self.find_free_area(start, end)
+        self.intervals.append((start, end))
+        return area
+
+    def remove(self, start, end):
+        self.intervals.remove((start, end))
+        return self.find_free_area(start, end)
+
+    def find_free_area(self, start, end):
+        assert end > start
+        intervals = []
+        for i in self.intervals:
+            if i[1] <= start or end <= i[0]:
+                continue
+            if i[0] <= start and i[1] >= end:
+                return []
+            intervals.append(i)
+
+        results = []
+        if not intervals:
+            results.append((start, end))
+            return results
+        intervals.sort()
+
+        for s, e in intervals:
+            if e <= start:
+                continue
+            if s > start:
+                results.append((start, s))
+            start = e
+
+        if start < end:
+           results.append((start, end))
+
+        return results
