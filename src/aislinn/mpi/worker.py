@@ -34,6 +34,8 @@ import base.paths
 import consts
 import errormsg
 import logging
+from datetime import datetime
+
 
 
 class TransferContext:
@@ -121,6 +123,14 @@ class Worker:
                 controller.extra_env = {"LD_BIND_NOW": "1"}
 
         self.queue = deque()
+
+        if aislinn_args.debug_stats:
+            self.stats_time = []
+            self.stats_queue_len = []
+            self.stats_controller_start = [[] for c in self.controllers]
+            self.stats_controller_stop = [[] for c in self.controllers]
+        else:
+            self.stats_time = None
 
     def get_controller(self, pid):
         return self.controllers[pid]
@@ -441,8 +451,19 @@ class Worker:
             action = action.transfer(transfer_context)
         return gstate, action
 
+    def record_process_start(self, controller_id):
+        time = datetime.now() - self.generator.init_time
+        self.stats_controller_start[controller_id].append(time.total_seconds())
+
+    def record_process_stop(self, controller_id):
+        time = datetime.now() - self.generator.init_time
+        self.stats_controller_stop[controller_id].append(time.total_seconds())
+
     def start_next_in_queue(self):
         logging.debug("Start_next_in_queue %s", self)
+
+        if self.stats_time is not None:
+            self.record_stats()
 
         if not self.queue:
             return
@@ -479,6 +500,11 @@ class Worker:
                     worker.start_next_in_queue()
             if self.start_gcontext(node, gstate, action):
                 break
+
+    def record_stats(self):
+        time = datetime.now() - self.generator.init_time
+        self.stats_time.append(time.total_seconds())
+        self.stats_queue_len.append(len(self.queue))
 
     def __repr__(self):
         return "<Worker {0} queue={1}>".format(self.worker_id, len(self.queue))

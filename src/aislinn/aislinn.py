@@ -153,11 +153,6 @@ def parse_args():
                         default="bfs",
                         help="Statespace search strategy (bfs or dfs)")
 
-    parser.add_argument("--stats",
-                        metavar="TICKS",
-                        type=int,
-                        default=None)
-
     parser.add_argument("--write-dot",
                         action="store_true")
 
@@ -197,6 +192,9 @@ def parse_args():
                         type=int,
                         default=0,
                         help="Verbosity of valgrind tool")
+    parser.add_argument("--debug-stats",
+                        action="store_true")
+
 
     args = parser.parse_args()
 

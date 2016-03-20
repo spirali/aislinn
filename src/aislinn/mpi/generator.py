@@ -54,13 +54,6 @@ class Generator:
         self.end_time = None
         self.deterministic_unallocated_memory = None
 
-        if aislinn_args.stats:
-            self.statistics_tick = aislinn_args.stats
-            self.statistics = []
-        else:
-            self.statistics_tick = None
-            self.statistics = None
-
         self.search = aislinn_args.search
         self.max_states = aislinn_args.max_states
 
@@ -89,30 +82,50 @@ class Generator:
                         for i in xrange(aislinn_args.workers)]
 
     def get_statistics(self):
-        if self.statistics is None:
-            return None
-        else:
-            return ([("Length of working queue", "states"),
-                     ("All pages", "pages"),
-                     ("VA", "va"),
-                     ("Active pages", "pages"),
-                     ("Sum of buffer sizes", "bytes")],
-                    self.statistics,
-                    self.statistics_tick)
 
-    def record_statistics(self):
-        pages = 0
-        active_pages = 0
-        buffers_size = 0
-        vas = 0
-        for controller in self.controllers:
-            stats = controller.get_stats()
-            pages += stats["pages"]
-            vas += stats["vas"]
-            active_pages += stats["active-pages"]
-            buffers_size += stats["buffers-size"]
-        self.statistics.append((
-            len(self.working_queue), pages, vas, active_pages, buffers_size))
+        if self.workers[0].stats_time is None:
+            return None
+        charts = []
+
+        chart = {"type" : "plot",
+                 "name" : "Queue lengthts",
+                 "data" : []}
+        for i, worker in enumerate(self.workers):
+            data = (worker.stats_time,
+                    worker.stats_queue_len,
+                    "Worker {}".format(i))
+            chart["data"].append(data)
+        charts.append(chart)
+
+        chart = {"type" : "timeline",
+                 "name" : "Controllers utilization",
+                 "data" : []}
+        for i, worker in enumerate(self.workers):
+            for j in xrange(self.process_count):
+                data = (worker.stats_controller_start[j],
+                        worker.stats_controller_stop[j],
+                        "Controller {}".format(j))
+                assert len(data[0]) == len(data[1])
+                chart["data"].append(data)
+        charts.append(chart)
+
+        chart = {"type" : "boxplot",
+                 "name" : "Controllers utilization",
+                 "data" : []}
+        for i, worker in enumerate(self.workers):
+            for j in xrange(self.process_count):
+                starts = worker.stats_controller_start[j]
+                stops = worker.stats_controller_stop[j]
+                times = []
+                for start, stop in zip(starts, stops):
+                    times.append(stop - start)
+                chart["data"].append(times)
+        charts.append(chart)
+        chart = {"type" : "bars",
+                 "name" : "Controllers utilization",
+                 "data" : [sum(d) for d in chart["data"]]}
+        charts.append(chart)
+        return charts
 
     def add_error_message(self, error_message):
         if error_message.name in [e.name for e in self.error_messages]:
@@ -163,6 +176,8 @@ class Generator:
             controllers = poll_controllers(controllers)
             for c in controllers:
                 worker = self.workers[c.name / self.process_count]
+                #if worker.stats_time is not None:
+                #    worker.record_process_stop(c.name % self.process_count)
                 context = worker.gcontext.get_context(
                     c.name % self.process_count)
                 logging.debug("Ready controller %s", context)

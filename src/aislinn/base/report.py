@@ -37,7 +37,7 @@ except ImportError:
 
 def serialize_fig(fig):
     stringfile = StringIO.StringIO()
-    fig.savefig(stringfile, format="png", transparent=True)
+    fig.savefig(stringfile, format="png", transparent=True, bbox_inches='tight')
     stringfile.seek(0)
     return stringfile.buf
 
@@ -93,13 +93,8 @@ class Report:
 
     def __init__(self, generator, args, version):
         self.process_count = generator.process_count
-        self.statistics = generator.get_statistics()
-        if self.statistics and self.statistics[1]:
-            self.statistics_max = [max((v[i] for v in self.statistics[1]))
-                                   for i in xrange(len(self.statistics[0]))]
-        else:
-            self.statistics_max = None
-
+        self.stats_charts = generator.get_statistics()
+        self.statistics = self.stats_charts is not None
         self.stdout_counts = None
         self.stderr_counts = None
 
@@ -248,18 +243,6 @@ class Report:
             "analysis", self.analysis_output + self.analysis_details)
         root.append(info)
 
-        if self.statistics:
-            stats = xml.Element("statistics")
-            root.append(stats)
-            mx = xml.Element("max")
-            stats.append(mx)
-            for name, value in zip(self.statistics[0], self.statistics_max):
-                e = xml.Element("value")
-                e.set("name", name[0])
-                e.set("units", name[1])
-                e.text = str(value)
-                mx.append(e)
-
         for error in self.error_messages:
             e = xml.Element("error")
             e.set("key", error.key)
@@ -338,12 +321,29 @@ class Report:
     def statistics_charts(self):
         if plt is None:
             return
-        metadata, data, tick = self.statistics
-        ydata = range(0, len(data) * tick, tick)
 
-        for i, (name, units) in enumerate(metadata):
-            img = make_chart([s[i] for s in data], ydata, units)
-            yield name, html_embed_img(img)
+        for chart in self.stats_charts:
+            if chart["type"] == "plot":
+                fig = plt.figure(figsize=(8, 2))
+                for xdata, ydata, label in chart["data"]:
+                    plt.plot(xdata, ydata, "-", label=label)
+                plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+            elif chart["type"] == "timeline":
+                fig = plt.figure(figsize=(16, 2))
+                for i, (starts, stops, label) in enumerate(chart["data"]):
+                    plt.hlines([i] * len(starts), starts, stops, label=label)
+                plt.ylim(-1, len(chart["data"]))
+            elif chart["type"] == "bars":
+                fig = plt.figure(figsize=(16, 4))
+                plt.bar(range(len(chart["data"])), chart["data"])
+            elif chart["type"] == "boxplot":
+                fig = plt.figure(figsize=(16, 4))
+                plt.boxplot(chart["data"])
+            else:
+                raise Exception("Unknown chart")
+            png = serialize_fig(fig)
+            yield chart["name"], html_embed_img(png)
+
 
     @property
     def profile_text(self):

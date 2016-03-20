@@ -150,7 +150,7 @@ class Context:
             if self.handle_call(result[1], result[2:]):
                 return False
             else:
-                self.controller.run_process_async()
+                self.run()
                 return True
         if result[0] == "PROFILE":
             self.process_profile(result)
@@ -159,8 +159,10 @@ class Context:
         if result[0] == "SYSCALL":
             return_value = self.process_syscall(result)
             if return_value is None:
-                self.controller.run_process_async()
+                self.run()
             else:
+                #if self.gcontext.worker.stats_time is not None:
+                #    self.gcontext.worker.record_process_start(self.state.pid)
                 self.controller.run_drop_syscall_async(return_value)
             return True
         if result[0] == "EXIT":
@@ -179,7 +181,17 @@ class Context:
         raise Exception("Invalid command " + result[0])
 
     def run(self):
+        #if self.gcontext.worker.stats_time is not None:
+        #    self.gcontext.worker.record_process_start(self.state.pid)
         self.controller.run_process_async()
+
+    def run_sync(self):
+        #if self.gcontext.worker.stats_time is not None:
+        #    self.gcontext.worker.record_process_start(self.state.pid)
+        #    result = self.controller.run_process()
+        #    self.gcontext.worker.record_process_stop(self.state.pid)
+        #    return result
+        return self.controller.run_process()
 
     def make_error_message_from_report(self, parts):
         assert parts[0] == "REPORT"
@@ -227,7 +239,7 @@ class Context:
                     assert len(result) == 3
                     ptr = convert_type(result[2], "ptr")
                     controller.write_int(ptr, 0)
-                    result = controller.run_process()
+                    result = self.run_sync()
                     continue
                 elif result[1] != "MPI_Init":
                     e = errormsg.NoMpiInit(self)
@@ -259,9 +271,13 @@ class Context:
             elif result[0] == "SYSCALL":
                 return_value = self.process_syscall(result)
                 if return_value is None:
-                    result = controller.run_process()
+                    result = self.run_sync()
                 else:
+                    #if self.gcontext.worker.stats_time is not None:
+                    #    self.gcontext.worker.record_process_start(self.state.pid)
                     result = controller.run_drop_syscall(return_value)
+                    #if self.gcontext.worker.stats_time is not None:
+                    #    self.gcontext.worker.record_process_stop(self.state.pid)
             else:
                 assert 0, "Invalid reposponse " + repr(result)
 
@@ -303,7 +319,7 @@ class Context:
                 result = self.controller.receive_line().split()
             assert result[0] == "CALL"
             assert not self.handle_call(result[1], result[2:], True)
-            result = self.controller.run_process()
+            result = self.run_sync()
 
     def on_unexpected_output(self, line):
         e = self.make_error_message_from_report(line.split())
