@@ -27,11 +27,15 @@ from mpi.ndsync import NdsyncChecker
 from base.node import Node
 from worker import Worker
 from vgtool.controller import poll_controllers
+from vgtool.socketwrapper import SocketWrapper
 
 import consts
 import errormsg
 import logging
 import datetime
+import socket
+import os
+import sys
 
 
 class Generator:
@@ -70,16 +74,11 @@ class Generator:
         self.debug_captured_states = None
         self.is_full_statespace = False
 
-        self.profile = aislinn_args.profile
         self.debug_seq = aislinn_args.debug_seq
         self.debug_arc_times = aislinn_args.debug_arc_times
 
-        self.workers = [Worker(i,
-                               aislinn_args.workers,
-                               self,
-                               args,
-                               aislinn_args)
-                        for i in xrange(aislinn_args.workers)]
+        self.workers = None
+        self.aislinn_args = aislinn_args
 
     def get_statistics(self):
 
@@ -148,7 +147,51 @@ class Generator:
                 return worker
         return None
 
+    def start_listen(self):
+        host = "127.0.0.1"
+        port = 0 # Autoassign
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #if reuse:
+        #    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((host, port))
+        s.listen(self.aislinn_args.workers)
+        port = s.getsockname()[1]
+        return s, port
+
     def start_workers(self):
+        s, port = self.start_listen()
+
+        """
+        self.workers = [Worker(i,
+                               aislinn_args.workers,
+                               self,
+                               args,
+                               aislinn_args)
+                        for i in xrange(aislinn_args.workers)]
+        """
+        workers = []
+        for i in xrange(self.aislinn_args.workers):
+            pid = os.fork()
+            if pid != 0:
+                s.close()
+                connection = GeneratorConnection(port)
+                worker = Worker(connection.read_worker_id(),
+                                self.aislinn_args.workers,
+                                connection,
+                                self.args,
+                                self.aislinn_args,
+                                self.process_count)
+                worker.start_controllers()
+                worker.connect_controllers()
+                worker.run()
+                sys.exit(0)
+
+        workers = [ WorkerConnection(s, i)
+                    for i in xrange(self.aislinn_args.workers) ]
+        print workers
+        sys.exit(0)
+
+        """
         for worker in self.workers:
             worker.start_controllers()
 
@@ -163,6 +206,7 @@ class Generator:
                 return False
 
         self.workers[0].start_next_in_queue()
+        """
         return True
 
     def main_cycle(self):
@@ -202,8 +246,8 @@ class Generator:
         except ErrorFound:
             logging.debug("ErrorFound catched")
         finally:
-            for worker in self.workers:
-                worker.kill_controllers()
+            #for worker in self.workers:
+            #    worker.kill_controllers()
             self.end_time = datetime.datetime.now()
         return True
 
@@ -339,3 +383,22 @@ class Generator:
                             pid)
                          for pid in xrange(self.process_count)]
         return Report(self, args, version)
+
+
+class GeneratorConnection(object):
+
+    def __init__(self, port):
+        s = socket.create_connection(("127.0.0.1", port))
+        self.socket = SocketWrapper(s)
+        self.socket.set_no_delay()
+
+    def read_worker_id(self):
+        return int(self.socket.read_line())
+
+
+class WorkerConnection(object):
+
+    def __init__(self, socket, worker_id):
+        s, addr = socket.accept()
+        self.socket = SocketWrapper(s)
+        self.socket.send_data("{}\n".format(worker_id))

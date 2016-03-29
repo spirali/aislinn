@@ -76,19 +76,20 @@ class TransferContext:
 
 class Worker:
 
-    def __init__(
-            self, worker_id, workers_count, generator, args, aislinn_args):
+    def __init__(self, worker_id, workers_count,
+                 generator, args, aislinn_args, process_count):
         self.generator = generator
         self.worker_id = worker_id
+        self.process_count = process_count
         self.gcontext = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
         self.controllers = [Controller(base.paths.VALGRIND_BIN, args)
-                            for i in xrange(generator.process_count)]
+                            for i in xrange(process_count)]
         self.interconnect_sockets = [None] * workers_count
 
         for i, controller in enumerate(self.controllers):
-            controller.name = i + worker_id * generator.process_count
-            controller.profile = generator.profile
+            controller.name = i + worker_id * process_count
+            controller.profile = aislinn_args.profile
 
             if aislinn_args.vgv:
                 controller.verbose = aislinn_args.vgv
@@ -149,11 +150,11 @@ class Worker:
         self.generator.statespace.add_node(initial_node)
         self.generator.statespace.initial_node = initial_node
 
-        gstate = GlobalState(self.generator.process_count)
+        gstate = GlobalState(self.process_count)
         gcontext = GlobalContext(self, initial_node, gstate)
 
         # TODO: Do it in parallel
-        for i in xrange(self.generator.process_count):
+        for i in xrange(self.process_count):
             context = gcontext.get_context(i)
             if not context.initial_run():
                 return False
@@ -164,13 +165,21 @@ class Worker:
 
     def init_nonfirst_worker(self):
         initial_node = Node("init", None)
-        gstate = GlobalState(self.generator.process_count)
+        gstate = GlobalState(self.process_count)
         gcontext = GlobalContext(self, initial_node, gstate)
-        for i in xrange(self.generator.process_count):
+        for i in xrange(self.process_count):
             context = gcontext.get_context(i)
             if not context.initial_run(False):
                 return False
         return True
+
+    def run(self):
+        if self.worker_id == 0:
+            result = self.make_initial_node()
+        else:
+            result = self.init_nonfirst_worker()
+        if not result:
+            raise Exception("Init failed")
 
     def add_to_queue(self, node, gstate, action):
         self.queue.append((node, gstate, action))
