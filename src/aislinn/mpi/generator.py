@@ -43,7 +43,6 @@ class Generator:
     def __init__(self, args, process_count, aislinn_args):
         self.args = args
         self.statespace = StateSpace()
-        self.consts_pool = None
         self.process_count = process_count
         self.error_messages = []
         self.message_sizes = set()
@@ -131,11 +130,6 @@ class Generator:
             return
         self.error_messages.append(error_message)
 
-    def get_const_ptr(self, id):
-        if id == consts.MPI_TAG_UB:
-            return self.consts_pool
-        raise Exception("Invalid const id")
-
     def sanity_check(self):
         for node, gstate in self.queue:
             gstate.sanity_check()
@@ -157,6 +151,12 @@ class Generator:
         s.listen(self.aislinn_args.workers)
         port = s.getsockname()[1]
         return s, port
+
+    def add_node(self, parent, hash):
+        uid = str(self.statespace.nodes_count)
+        node = Node(uid, hash)
+        self.statespace.add(node)
+        return node
 
     def start_workers(self):
         s, port = self.start_listen()
@@ -186,9 +186,15 @@ class Generator:
                 worker.run()
                 sys.exit(0)
 
-        workers = [ WorkerConnection(s, i)
-                    for i in xrange(self.aislinn_args.workers) ]
-        print workers
+        workers = [WorkerDescriptor(s, i)
+                   for i in xrange(self.aislinn_args.workers)]
+        initial_node = Node("init", None)
+        self.statespace.initial_node = initial_node
+
+        line = workers[0].read_line().split()
+        assert line[0] == "STATE"
+        self.add_node(initial_node, line[1])
+
         sys.exit(0)
 
         """
@@ -323,6 +329,10 @@ class Generator:
         for gstate, worker in self.debug_captured_states:
             gstate.dispose()
 
+    """
+    def add_node(self, prev, node):
+
+
     def add_node(self, prev, worker, gstate, do_hash=True):
         if do_hash:
             hash = gstate.compute_hash()
@@ -358,6 +368,7 @@ class Generator:
             context.add_error_and_throw(
                 errormsg.StateCaptured(context, uid=uid))
         return (node, True)
+    """
 
     def create_report(self, args, version):
         for error_message in self.error_messages:
@@ -395,10 +406,16 @@ class GeneratorConnection(object):
     def read_worker_id(self):
         return int(self.socket.read_line())
 
+    def new_state(self, hash):
+        self.socket.send_data("STATE {}\n".format(hash))
 
-class WorkerConnection(object):
+
+class WorkerDescriptor(object):
 
     def __init__(self, socket, worker_id):
         s, addr = socket.accept()
         self.socket = SocketWrapper(s)
         self.socket.send_data("{}\n".format(worker_id))
+
+    def read_line(self):
+        return self.socket.read_line()

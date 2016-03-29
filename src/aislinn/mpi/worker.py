@@ -82,6 +82,7 @@ class Worker:
         self.worker_id = worker_id
         self.process_count = process_count
         self.gcontext = None
+        self.consts_pool = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
         self.controllers = [Controller(base.paths.VALGRIND_BIN, args)
                             for i in xrange(process_count)]
@@ -146,12 +147,14 @@ class Worker:
             controller.connect()
 
     def make_initial_node(self):
+        """
         initial_node = Node("init", None)
         self.generator.statespace.add_node(initial_node)
         self.generator.statespace.initial_node = initial_node
+        """
 
         gstate = GlobalState(self.process_count)
-        gcontext = GlobalContext(self, initial_node, gstate)
+        gcontext = GlobalContext(self, gstate)
 
         # TODO: Do it in parallel
         for i in xrange(self.process_count):
@@ -159,14 +162,17 @@ class Worker:
             if not context.initial_run():
                 return False
 
-        gcontext.make_node()
-        gcontext.add_to_queue(None, False)
+        gcontext.save_states()
+        hash = gstate.compute_hash()
+
+        self.generator.new_state(hash)
         return True
 
     def init_nonfirst_worker(self):
         initial_node = Node("init", None)
         gstate = GlobalState(self.process_count)
         gcontext = GlobalContext(self, initial_node, gstate)
+        # TODO: Do it in parallel
         for i in xrange(self.process_count):
             context = gcontext.get_context(i)
             if not context.initial_run(False):
@@ -514,6 +520,11 @@ class Worker:
         time = datetime.now() - self.generator.init_time
         self.stats_time.append(time.total_seconds())
         self.stats_queue_len.append(len(self.queue))
+
+    def get_const_ptr(self, id):
+        if id == consts.MPI_TAG_UB:
+            return self.consts_pool
+        raise Exception("Invalid const id")
 
     def __repr__(self):
         return "<Worker {0} queue={1}>".format(self.worker_id, len(self.queue))

@@ -34,26 +34,18 @@ class GlobalContext:
 
     init_time = None
 
-    def __init__(self, worker, node, gstate, generator=None):
+    def __init__(self, worker, gstate):
         self.worker = worker
-        self.node = node
         self.gstate = gstate
         self.action = None
 
-        if generator is None:
-            generator = worker.generator
-
-        self.contexts = [None] * generator.process_count
+        self.contexts = [None] * worker.process_count
         self.events = []
         self.data = []
 
-        if generator.debug_arc_times:
-            self.init_time = datetime.datetime.now()
+        #if generator.debug_arc_times:
+        #    self.init_time = datetime.datetime.now()
 
-
-    @property
-    def generator(self):
-        return self.worker.generator
 
     def get_context(self, pid):
         context = self.contexts[pid]
@@ -85,6 +77,7 @@ class GlobalContext:
         self.add_error_message(error_message)
         raise ErrorFound()
 
+    """
     def make_node(self):
         self.save_states()
         node, is_new = self.generator.add_node(
@@ -129,6 +122,7 @@ class GlobalContext:
         self.data = None
         self.contexts = None
         self.action = None
+    """
 
     def add_event(self, event):
         self.events.append(event)

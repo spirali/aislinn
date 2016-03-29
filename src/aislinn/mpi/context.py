@@ -283,8 +283,8 @@ class Context:
                 assert 0, "Invalid reposponse " + repr(result)
 
         # FIXME: Consts pool
-        self.gcontext.generator.consts_pool = convert_type(result[4], "ptr")
-        controller.write_int(self.gcontext.generator.get_const_ptr(
+        self.gcontext.worker.consts_pool = convert_type(result[4], "ptr")
+        controller.write_int(self.gcontext.worker.get_const_ptr(
             consts.MPI_TAG_UB), 0xFFFF)
         function_ptrs = result[5:]  # skip CALL MPI_Init argc argv consts_pool
 
