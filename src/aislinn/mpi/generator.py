@@ -36,6 +36,8 @@ import datetime
 import socket
 import os
 import sys
+import select
+from collections import deque
 
 
 class Generator:
@@ -153,10 +155,21 @@ class Generator:
         return s, port
 
     def add_node(self, parent, hash):
+        node = self.statespace.get_node_by_hash(hash)
+        if node is not None:
+            return node, False
+
+        if self.statespace.nodes_count > self.max_states:
+            logging.info("Maximal number of states reached")
+            if self.debug_compare_states is not None:
+                self.debug_compare()
+            raise ErrorFound()
+
         uid = str(self.statespace.nodes_count)
         node = Node(uid, hash)
-        self.statespace.add(node)
-        return node
+        self.statespace.add_node(node)
+
+        return node, True
 
     def start_workers(self):
         s, port = self.start_listen()
@@ -186,16 +199,18 @@ class Generator:
                 worker.run()
                 sys.exit(0)
 
-        workers = [WorkerDescriptor(s, i)
+        workers = [WorkerDescriptor(self, s, i)
                    for i in xrange(self.aislinn_args.workers)]
         initial_node = Node("init", None)
+        self.statespace.add_node(initial_node)
         self.statespace.initial_node = initial_node
+        workers[0].active_node = initial_node
+        self.workers = workers
 
-        line = workers[0].read_line().split()
+        """line = workers[0].read_line().split()
         assert line[0] == "STATE"
-        self.add_node(initial_node, line[1])
+        node = self.add_node(initial_node, line[1])"""
 
-        sys.exit(0)
 
         """
         for worker in self.workers:
@@ -216,6 +231,17 @@ class Generator:
         return True
 
     def main_cycle(self):
+
+        while True:
+            workers = [ worker for worker in self.workers
+                        if worker.active_node ]
+            if not workers:
+                return
+            workers = poll_workers(workers)
+            for worker in workers:
+                worker.process_command()
+
+        """
         while True:
             controllers = sum((worker.running_controllers()
                                for worker in self.workers if worker.gcontext),
@@ -235,6 +261,7 @@ class Generator:
                 worker.continue_in_execution()
                 if worker.gcontext is None:
                     worker.start_next_in_queue()
+        """
 
     def run(self):
         self.init_time = datetime.datetime.now()
@@ -396,6 +423,7 @@ class Generator:
         return Report(self, args, version)
 
 
+
 class GeneratorConnection(object):
 
     def __init__(self, port):
@@ -412,10 +440,50 @@ class GeneratorConnection(object):
 
 class WorkerDescriptor(object):
 
-    def __init__(self, socket, worker_id):
+    def __init__(self, generator, socket, worker_id):
+        self.generator = generator
+        self.queue = deque()
+        self.active_node = None
         s, addr = socket.accept()
         self.socket = SocketWrapper(s)
+        self.socket.set_no_delay()
         self.socket.send_data("{}\n".format(worker_id))
 
     def read_line(self):
         return self.socket.read_line()
+
+    def fileno(self):
+        return self.socket.socket.fileno()
+
+    def send_command(self, command):
+        self.socket.send_data(command)
+
+    def send_save(self):
+        self.send_command("SAVE\n")
+
+    def process_command(self):
+        command = self.read_line().split()
+        name = command[0]
+        if name == "STATE":
+            print command[1]
+            node, is_new = self.generator.add_node(self.active_node, command[1])
+            if is_new:
+                self.send_save()
+                self.queue.append(node)
+                self.start_next_in_queue()
+            else:
+                self.
+        else:
+            raise Exception("Unknown command: " + repr(command))
+
+    def start_next_in_queue(self):
+
+
+def poll_workers(workers):
+    for worker in workers:
+        if worker.socket.recv_buffer:
+            return [worker]
+    rlist, wlist, xlist = select.select(workers, (), ())
+    return rlist
+
+
