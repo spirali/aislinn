@@ -157,12 +157,6 @@ class GlobalContext:
                 return match
         return None
 
-    def find_nondeterministic_matches(self):
-        results = []
-        for state in self.gstate.states:
-            results.extend(state.find_nondeterministic_matches())
-        return results
-
     def apply_matching(self, matching):
         logging.debug("Apply matching: %s", matching)
         source_pid, s, target_pid, r = matching

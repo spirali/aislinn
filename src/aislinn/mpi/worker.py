@@ -16,15 +16,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
-from action import (ActionMatching,
-                    ActionWaitAny,
-                    ActionWaitSome,
-                    ActionFlag0,
-                    ActionProbePromise,
-                    ActionTestAll)
 from mpi.controller import Controller
 from base.node import Node
-from base.utils import power_set
 from gcontext import GlobalContext
 from globalstate import GlobalState
 from collections import deque
@@ -165,7 +158,10 @@ class Worker:
         gcontext.save_states()
         hash = gstate.compute_hash()
 
-        self.generator.new_state(hash)
+        self.generator.new_state(hash, True)
+        self.queue.append(gcontext.gstate)
+        line = self.generator.read_line()
+        assert line == "NEW"
         return True
 
     def init_nonfirst_worker(self):
@@ -186,6 +182,27 @@ class Worker:
             result = self.init_nonfirst_worker()
         if not result:
             raise Exception("Init failed")
+
+        while True:
+            if self.queue:
+                print "QUEUE"
+                gstate = self.queue.popleft()
+                self.process_state(gstate)
+            else:
+                break
+        print "TERMINATING WORKER"
+
+    def process_state(self, gstate):
+        actions = gstate.get_actions(self)
+        for action in actions:
+            last = action == actions[-1]
+            if last:
+                gs = gstate
+            else:
+                gs = gstate.copy()
+            gcontext = GlobalContext(gs)
+            print gcontext
+            raise Exception("HERE")
 
     def add_to_queue(self, node, gstate, action):
         self.queue.append((node, gstate, action))
@@ -298,66 +315,6 @@ class Worker:
 
             self.buffer_manager.cleanup()
             return running
-
-    def expand_waitsome(self, gcontext, state, actions):
-        indices = state.get_indices_of_tested_and_finished_requests()
-        if not indices:
-            return
-        logging.debug("Expanding waitsome %s", state)
-        for indices in power_set(indices):
-            if not indices:
-                continue  # skip empty set
-            actions.append(ActionWaitSome(state.pid, indices))
-
-    def expand_testall(self, gcontext, state, actions):
-        logging.debug("Expanding testall %s", state)
-        actions.append(ActionFlag0(state.pid))
-        if state.are_tested_requests_finished():
-            actions.append(ActionTestAll(state.pid))
-
-    def expand_waitany(self, gcontext, state, actions):
-        logging.debug("Expanding waitany %s", state)
-        indices = state.get_indices_of_tested_and_finished_requests()
-        if not indices:
-            return
-        for i in indices:
-            actions.append(ActionWaitAny(state.pid, i))
-
-    def expand_probe(self, gcontext, state, actions):
-        logging.debug("Expanding probe %s", state)
-        comm_id, source, tag, status_ptr = state.probe_data
-        if state.get_probe_promise(comm_id, source, tag) is not None:
-            return
-
-        if state.flag_ptr:
-            actions.append(ActionFlag0(state.pid))
-            if source != consts.MPI_ANY_SOURCE:
-                probed = state.probe_deterministic(comm_id, source, tag)
-                if probed:
-                    pid, request = probed
-                    rank = request.comm.group.pid_to_rank(pid)
-                    actions.append(ActionProbePromise(
-                        state.pid, comm_id, source, tag, rank))
-        if source != consts.MPI_ANY_SOURCE:
-            return
-        for pid, request in state.probe_nondeterministic(comm_id, tag):
-            rank = request.comm.group.pid_to_rank(pid)
-            actions.append(ActionProbePromise(
-                state.pid, comm_id, source, tag, rank))
-
-    def get_actions(self, gcontext):
-        actions = [ActionMatching(matching)
-                   for matching in gcontext.find_nondeterministic_matches()]
-        for state in gcontext.gstate.states:
-            if state.status == State.StatusWaitAny:
-                self.expand_waitany(gcontext, state, actions)
-            elif state.status == State.StatusProbe:
-                self.expand_probe(gcontext, state, actions)
-            elif state.status == State.StatusWaitSome:
-                self.expand_waitsome(gcontext, state, actions)
-            elif state.status == State.StatusTest:
-                self.expand_testall(gcontext, state, actions)
-        return actions
 
     def slow_expand(self, gcontext):
         actions = self.get_actions(gcontext)

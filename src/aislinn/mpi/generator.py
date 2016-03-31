@@ -434,8 +434,11 @@ class GeneratorConnection(object):
     def read_worker_id(self):
         return int(self.socket.read_line())
 
-    def new_state(self, hash):
-        self.socket.send_data("STATE {}\n".format(hash))
+    def new_state(self, hash, last):
+        self.socket.send_data("STATE {} {}\n".format(hash, "last" if last else "cont"))
+
+    def read_line(self):
+        return self.socket.read_line()
 
 
 class WorkerDescriptor(object):
@@ -458,25 +461,22 @@ class WorkerDescriptor(object):
     def send_command(self, command):
         self.socket.send_data(command)
 
-    def send_save(self):
-        self.send_command("SAVE\n")
 
     def process_command(self):
         command = self.read_line().split()
         name = command[0]
         if name == "STATE":
-            print command[1]
             node, is_new = self.generator.add_node(self.active_node, command[1])
             if is_new:
-                self.send_save()
+                self.send_command("NEW\n")
                 self.queue.append(node)
-                self.start_next_in_queue()
             else:
-                self.
+                self.send_command("FOUND\n")
+            if command[2] == "last":
+                if self.queue:
+                    self.active_node = self.queue.popleft()
         else:
             raise Exception("Unknown command: " + repr(command))
-
-    def start_next_in_queue(self):
 
 
 def poll_workers(workers):

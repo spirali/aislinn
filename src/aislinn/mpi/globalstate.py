@@ -17,16 +17,20 @@
 #    along with Aislinn.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-
+from action import (ActionMatching,
+                    ActionWaitAny,
+                    ActionWaitSome,
+                    ActionFlag0,
+                    ActionProbePromise,
+                    ActionTestAll)
 import hashlib
-from base.utils import EqMixin
+from base.utils import EqMixin, power_set
 from comm import Communicator, Group, make_comm_world
 import copy
 from state import State
 import consts
 import logging
 import msgpack
-
 
 class GlobalState(EqMixin):
 
@@ -149,3 +153,69 @@ class GlobalState(EqMixin):
     def mpi_leak_check(self, generator, node):
         for state in self.states:
             state.mpi_leak_check(generator, node)
+
+    def find_nondeterministic_matches(self):
+        results = []
+        for state in self.states:
+            results.extend(state.find_nondeterministic_matches())
+        return results
+
+    def get_actions(self, worker):
+        actions = [ActionMatching(matching)
+                   for matching in self.find_nondeterministic_matches()]
+        for state in self.states:
+            if state.status == State.StatusWaitAny:
+                self.expand_waitany(worker, state, actions)
+            elif state.status == State.StatusProbe:
+                self.expand_probe(worker, state, actions)
+            elif state.status == State.StatusWaitSome:
+                self.expand_waitsome(worker, state, actions)
+            elif state.status == State.StatusTest:
+                self.expand_testall(worker, state, actions)
+        return actions
+
+    def expand_waitsome(self, worker, state, actions):
+        indices = state.get_indices_of_tested_and_finished_requests()
+        if not indices:
+            return
+        logging.debug("Expanding waitsome %s", state)
+        for indices in power_set(indices):
+            if not indices:
+                continue  # skip empty set
+            actions.append(ActionWaitSome(state.pid, indices))
+
+    def expand_testall(self, worker, state, actions):
+        logging.debug("Expanding testall %s", state)
+        actions.append(ActionFlag0(state.pid))
+        if state.are_tested_requests_finished():
+            actions.append(ActionTestAll(state.pid))
+
+    def expand_waitany(self, worker, state, actions):
+        logging.debug("Expanding waitany %s", state)
+        indices = state.get_indices_of_tested_and_finished_requests()
+        if not indices:
+            return
+        for i in indices:
+            actions.append(ActionWaitAny(state.pid, i))
+
+    def expand_probe(self, worker, state, actions):
+        logging.debug("Expanding probe %s", state)
+        comm_id, source, tag, status_ptr = state.probe_data
+        if state.get_probe_promise(comm_id, source, tag) is not None:
+            return
+
+        if state.flag_ptr:
+            actions.append(ActionFlag0(state.pid))
+            if source != consts.MPI_ANY_SOURCE:
+                probed = state.probe_deterministic(comm_id, source, tag)
+                if probed:
+                    pid, request = probed
+                    rank = request.comm.group.pid_to_rank(pid)
+                    actions.append(ActionProbePromise(
+                        state.pid, comm_id, source, tag, rank))
+        if source != consts.MPI_ANY_SOURCE:
+            return
+        for pid, request in state.probe_nondeterministic(comm_id, tag):
+            rank = request.comm.group.pid_to_rank(pid)
+            actions.append(ActionProbePromise(
+                state.pid, comm_id, source, tag, rank))
