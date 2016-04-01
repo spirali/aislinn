@@ -54,8 +54,8 @@ class Context:
         return self.gcontext.gstate
 
     @property
-    def generator(self):
-        return self.gcontext.generator
+    def worker(self):
+        return self.gcontext.worker
 
     def save_state_with_hash(self):
         self.state.vg_state = self.controller.save_state_with_hash()
@@ -70,24 +70,24 @@ class Context:
         if commands[1] == "write":
             gcontext = self.gcontext
             fd, data_ptr, size = commands[2:]
-            if fd == "2" and self.gcontext.generator.stderr_mode != "stdout":
-                if gcontext.generator.stderr_mode == "capture":
+            if fd == "2" and self.gcontext.worker.stderr_mode != "stdout":
+                if gcontext.worker.stderr_mode == "capture":
                     gcontext.add_data(
                         STREAM_STDERR, self.state.pid,
                         self.controller.read_mem(data_ptr,
                                                  size))
-                if self.gcontext.generator.stderr_mode == "print":
+                if self.gcontext.worker.stderr_mode == "print":
                     return None
                 else:
                     return size
             if fd == "1" or (fd == "2" and
-                             gcontext.generator.stderr_mode == "stdout"):
-                if gcontext.generator.stdout_mode == "capture":
+                             gcontext.worker.stderr_mode == "stdout"):
+                if gcontext.worker.stdout_mode == "capture":
                     gcontext.add_data(
                         STREAM_STDOUT, self.state.pid,
                         self.controller.read_mem(data_ptr,
                                                  size))
-                if self.gcontext.generator.stdout_mode == "print":
+                if self.gcontext.worker.stdout_mode == "print":
                     return None
                 else:
                     return size
@@ -373,7 +373,7 @@ class Context:
         self.close_requests(range(len(self.state.tested_request_ids)))
 
     def close_requests(self, indices):
-        if self.generator.send_protocol == "full":
+        if self.worker.send_protocol == "full":
             request_ids = []
         else:
             request_ids = None

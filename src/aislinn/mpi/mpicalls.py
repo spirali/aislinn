@@ -811,23 +811,23 @@ def call_collective_operation2(context,
     return True
 
 
-def get_send_type(generator, state, mode, datatype, count):
+def get_send_type(worker, state, mode, datatype, count):
     if mode == "Ssend" \
-            or (mode == "Send" and generator.send_protocol == "rendezvous"):
+            or (mode == "Send" and worker.send_protocol == "rendezvous"):
         return Request.TYPE_SEND_RENDEZVOUS
     elif mode == "Bsend" \
-            or (mode == "Send" and generator.send_protocol == "eager"):
+            or (mode == "Send" and worker.send_protocol == "eager"):
         return Request.TYPE_SEND_EAGER
-    elif generator.send_protocol == "threshold":
+    elif worker.send_protocol == "threshold":
         size = datatype.size * count
-        if size < generator.send_protocol_eager_threshold:
+        if size < worker.send_protocol_eager_threshold:
             return Request.TYPE_SEND_EAGER
-        elif size >= generator.send_protocol_rendezvous_threshold:
+        elif size >= worker.send_protocol_rendezvous_threshold:
             return Request.TYPE_SEND_RENDEZVOUS
         else:
             return Request.TYPE_SEND_STD
     else:
-        assert generator.send_protocol == "full"
+        assert worker.send_protocol == "full"
         return Request.TYPE_SEND_STD
 
 
@@ -842,7 +842,7 @@ def call_send(context, args,
     check.check_rank(context, comm, target, 4, False, True)
 
     send_type = get_send_type(
-        context.gcontext.generator, context.state, mode, datatype, count)
+        context.gcontext.worker, context.state, mode, datatype, count)
     request = SendRequest(context.state.new_request_id(send_type), send_type,
                           comm, target, tag, data_ptr, datatype, count)
     if persistent:

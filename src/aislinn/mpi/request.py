@@ -103,7 +103,7 @@ class SendRequest(Request):
         self.vg_buffer = context.make_buffer_for_one(
             target_pid, self.data_ptr, self.datatype, self.count)
         gcontext = context.gcontext
-        gcontext.generator.message_sizes.add(sz)
+        gcontext.worker.message_sizes.add(sz)
 
     def inc_ref(self):
         if self.vg_buffer:

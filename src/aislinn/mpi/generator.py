@@ -47,13 +47,6 @@ class Generator:
         self.statespace = StateSpace()
         self.process_count = process_count
         self.error_messages = []
-        self.message_sizes = set()
-
-        self.send_protocol = aislinn_args.send_protocol
-        self.send_protocol_eager_threshold = \
-            aislinn_args.send_protocol_eager_threshold
-        self.send_protocol_rendezvous_threshold = \
-            aislinn_args.send_protocol_rendezvous_threshold
 
         self.init_time = None
         self.end_time = None
@@ -82,6 +75,7 @@ class Generator:
         self.aislinn_args = aislinn_args
 
     def get_statistics(self):
+        return None # DEBUG
 
         if self.workers[0].stats_time is None:
             return None
@@ -270,12 +264,16 @@ class Generator:
                 return False
 
             self.main_cycle()
-
+            for worker in self.workers:
+                worker.send_command("QUIT\n")
+            """
             self.memory_leak_check()
             self.final_check()
             if self.send_protocol == "full" and not self.error_messages:
                 self.ndsync_check()
+            """
             self.is_full_statespace = True
+
         except ErrorFound:
             logging.debug("ErrorFound catched")
         finally:
@@ -475,6 +473,13 @@ class WorkerDescriptor(object):
             if command[2] == "last":
                 if self.queue:
                     self.active_node = self.queue.popleft()
+                else:
+                    self.active_node = None
+        elif name == "FINAL":
+            if self.queue:
+                self.active_node = self.queue.popleft()
+            else:
+                self.active_node = None
         else:
             raise Exception("Unknown command: " + repr(command))
 

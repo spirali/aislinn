@@ -23,6 +23,7 @@ from globalstate import GlobalState
 from collections import deque
 from state import State
 from vgtool.controller import BufferManager, make_interconnection_pairs
+from vgtool.controller import poll_controllers
 import base.paths
 import consts
 import errormsg
@@ -77,6 +78,14 @@ class Worker:
         self.gcontext = None
         self.consts_pool = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
+
+        self.send_protocol = aislinn_args.send_protocol
+        self.send_protocol_eager_threshold = \
+            aislinn_args.send_protocol_eager_threshold
+        self.send_protocol_rendezvous_threshold = \
+            aislinn_args.send_protocol_rendezvous_threshold
+        self.message_sizes = set()
+
         self.controllers = [Controller(base.paths.VALGRIND_BIN, args)
                             for i in xrange(process_count)]
         self.interconnect_sockets = [None] * workers_count
@@ -155,6 +164,12 @@ class Worker:
             if not context.initial_run():
                 return False
 
+        self.gcontext = gcontext
+        self.execution_main()
+        self.make_state(True)
+        return True
+
+        """
         gcontext.save_states()
         hash = gstate.compute_hash()
 
@@ -163,6 +178,7 @@ class Worker:
         line = self.generator.read_line()
         assert line == "NEW"
         return True
+        """
 
     def init_nonfirst_worker(self):
         initial_node = Node("init", None)
@@ -185,36 +201,58 @@ class Worker:
 
         while True:
             if self.queue:
-                print "QUEUE"
                 gstate = self.queue.popleft()
                 self.process_state(gstate)
             else:
                 break
-        print "TERMINATING WORKER"
+
+        line = self.generator.read_line()
 
     def process_state(self, gstate):
         actions = gstate.get_actions(self)
+        if not actions:
+            self.generator.socket.send_data("FINAL\n")
+            return
         for action in actions:
             last = action == actions[-1]
             if last:
                 gs = gstate
             else:
                 gs = gstate.copy()
-            gcontext = GlobalContext(gs)
-            print gcontext
-            raise Exception("HERE")
+            self.start_execution(gs, action)
+            self.make_state(last)
 
-    def add_to_queue(self, node, gstate, action):
-        self.queue.append((node, gstate, action))
-
-    def start_gcontext(self, node, gstate, action):
-        logging.debug("Starting gcontext %s %s %s", self, node, gstate)
-        gcontext = GlobalContext(self, node, gstate)
+    def start_execution(self, gstate, action):
+        logging.debug("Starting gcontext %s %s %s", self, gstate)
+        gcontext = GlobalContext(self, gstate)
         self.gcontext = gcontext
         if action:
             action.apply_action(gcontext)
             gcontext.action = action
-        return self.continue_in_execution()
+        self.execution_main()
+
+    def execution_main(self):
+        while True:
+            self.fast_expand()
+            controllers = self.running_controllers()
+            if not controllers:
+                break
+            controllers = poll_controllers(controllers)
+            for c in controllers:
+                context = self.gcontext.get_context(
+                    c.name % self.process_count)
+                logging.debug("Ready controller %s", context)
+                context.process_run_result(c.finish_async())
+
+    def make_state(self, last):
+        self.gcontext.save_states()
+        hash = self.gcontext.gstate.compute_hash()
+        self.generator.new_state(hash, last)
+        line = self.generator.read_line()
+        if line == "NEW":
+            self.queue.append(self.gcontext.gstate)
+        else:
+            assert line == "FOUND"
 
     def check_collective_requests(self, gcontext):
         for state in gcontext.gstate.states:
@@ -296,6 +334,7 @@ class Worker:
                     and self.check_collective_requests(gcontext):
                 continue
 
+            """
             if self.generator.debug_seq:  # DEBUG --debug-seq
                 if all(not gcontext.is_pid_running(state.pid)
                        for state in gcontext.gstate.states):
@@ -305,17 +344,15 @@ class Worker:
                     return False
                 else:
                     return True
+            """
 
-            running = False
             for state in gcontext.gstate.states:
                 if not gcontext.is_pid_running(state.pid):
-                    running |= self.fast_expand_state(gcontext, state)
-                else:
-                    running = True
-
+                    self.fast_expand_state(gcontext, state)
             self.buffer_manager.cleanup()
-            return running
+            return
 
+    """
     def slow_expand(self, gcontext):
         actions = self.get_actions(gcontext)
         if actions:
@@ -323,10 +360,12 @@ class Worker:
                 action.action_index = i
                 gcontext.add_to_queue(action, True)
         return bool(actions)
+    """
 
     def continue_in_execution(self):
-        if self.fast_expand():
-            return True
+        running = self.fast_expand()
+        if running:
+            return running
 
         gcontext = self.gcontext
         gstate = gcontext.gstate
@@ -337,7 +376,7 @@ class Worker:
 
         if not gcontext.make_node():
             gcontext.gstate.dispose()  # Node already explored
-            return False
+            return None
 
         if not self.slow_expand(gcontext):
             node = gcontext.node
@@ -355,7 +394,7 @@ class Worker:
                 node.allocations = sum((state.allocations
                                         for state in gstate.states), [])
         gstate.dispose()
-        return False
+        return None
 
         """
         if self.debug_compare_states is not None \

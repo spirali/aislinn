@@ -236,6 +236,9 @@ def parse_args():
         logging.error("Invalid argument for --search")
         sys.exit(1)
 
+    if args.debug_seq:
+        raise Exception("Now supported now")
+
     if args.send_protocol not in ("full", "eager", "rendezvous"):
         threshold = parse_threshold(args.send_protocol)
         if threshold is None:
@@ -347,6 +350,7 @@ def main():
         generator.statespace.write(args.debug_statespace)
         logging.info("Statespace written into '%s'", args.debug_statespace)
 
+    """
     if args.report_type == "xml" or args.report_type == "html+xml":
         generator.create_report(args, VERSION_STRING).write_xml("report.xml")
         logging.info("Report written into 'report.xml'")
@@ -361,5 +365,6 @@ def main():
         report.write_as_html(generator.create_report(args, VERSION_STRING),
                              "report.html")
         logging.info("Report written into 'report.html'")
+    """
 
 main()
