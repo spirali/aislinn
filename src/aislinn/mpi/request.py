@@ -50,9 +50,6 @@ class Request(EqMixin):
     def is_deterministic(self):
         return True
 
-    def compute_hash(self, hashthread):
-        hashthread.update(str(self.id))
-
     def inc_ref(self):
         pass
 
@@ -126,11 +123,19 @@ class SendRequest(Request):
     def is_send(self):
         return True
 
-    def compute_hash(self, hashthread):
-        Request.compute_hash(self, hashthread)
-        hashthread.update("SR {0}".format(self.send_type))
+    def serialize_to_list(self, lst):
+        lst.append(self.id)
+        lst.append(self.send_type)
+        lst.append(self.comm.comm_id)
+        lst.append(self.target)
+        lst.append(self.tag)
+        lst.append(self.data_ptr)
+        lst.append(self.datatype.type_id)
+        lst.append(self.count)
         if self.vg_buffer:
-            hashthread.update(self.vg_buffer.hash)
+            lst.append(self.vg_buffer.hash)
+        else:
+            lst.append(None)
 
     def is_data_addr(self, addr):
         sz = self.count * self.datatype.size
@@ -158,6 +163,21 @@ class ReceiveRequest(Request):
         self.vg_buffer = None
         self.source_rank = None
         self.source_tag = None
+
+    def serialize_to_list(self, lst):
+        lst.append(self.id)
+        lst.append(self.comm.comm_id)
+        lst.append(self.source)
+        lst.append(self.tag)
+        lst.append(self.data_ptr)
+        lst.append(self.datatype.type_id)
+        lst.append(self.count)
+        if self.vg_buffer:
+            lst.append(self.vg_buffer.hash)
+        else:
+            lst.append(None)
+        lst.append(self.source_rank)
+        lst.append(self.source_tag)
 
     def is_send_recv_not_proc_null(self):
         return self.source != consts.MPI_PROC_NULL
@@ -198,14 +218,6 @@ class ReceiveRequest(Request):
     def is_receive(self):
         return True
 
-    def compute_hash(self, hashthread):
-        Request.compute_hash(self, hashthread)
-        hashthread.update(
-            "RR {0.comm.comm_id} {0.source} {0.tag} "
-            "{0.data_ptr} {0.datatype.type_id} {0.count}".format(self))
-        if self.vg_buffer:
-            hashthread.update(self.vg_buffer.hash)
-
     def is_deterministic(self):
         return self.source != consts.MPI_ANY_SOURCE
 
@@ -228,12 +240,13 @@ class CollectiveRequest(Request):
         self.cc_id = cc_id
         self.comm = comm
 
+    def serialize_to_list(self, lst):
+        lst.append(self.id)
+        lst.append(self.comm.comm_id)
+        lst.append(self.cc_id)
+
     def is_collective(self):
         return True
-
-    def compute_hash(self, hashthread):
-        Request.compute_hash(self, hashthread)
-        hashthread.update("CR {0} {1}".format(self.comm.comm_id, self.cc_id))
 
     def is_data_addr(self, addr):
         # TODO: Implement this method

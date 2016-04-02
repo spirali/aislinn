@@ -89,6 +89,74 @@ class State:
         state.cc_id_counters = copy.copy(self.cc_id_counters)
         return state
 
+    def serialize_to_list(self):
+        # We are implementing own serialization to maintain
+        # hash invariant (it does not hold for pickle)
+        # The problem is mainly vg_state and vg_buffers (in cc and requests)
+
+        assert self.vg_state is not None or self.status == self.StatusFinished
+
+        lst = [self.pid,
+               self.status,
+               self.vg_state.hash if self.vg_state is not None else None,
+               len(self.comms),
+               len(self.groups),
+               len(self.active_requests),
+               len(self.finished_requests),
+               len(self.persistent_requests),
+               len(self.tested_request_ids) if self.tested_request_ids else None,
+               self.tested_requests_pointer,
+               self.tested_requests_status_ptr,
+               self.flag_ptr,
+               self.index_ptr,
+               len(self.user_defined_types),
+               len(self.user_defined_ops),
+               len(self.keyvals),
+               len(self.attrs),
+               len(self.cc_id_counters) if self.cc_id_counters else None,
+               self.probe_data,
+               self.probe_promise,
+               self.finalized,
+               self.immediate_wait,
+               len(self.allocations) if self.allocations else None
+              ]
+
+        for i in self.comms:
+            i.serialize_to_list(lst)
+        for i in self.comms:
+            i.serialize_to_list(lst)
+        for i in self.user_defined_types:
+            i.serialize_to_list(lst)
+        for i in self.user_defined_ops:
+            if i is None:
+                lst.append(None)
+            else:
+                i.serialize_to_list(lst)
+        for i in self.keyvals:
+            if i is None:
+                lst.append(None)
+            else:
+                i.serialize_to_list(lst)
+        for key, value in sorted(self.attrs.items()):
+            lst.append(key[0]) # comm_id
+            lst.append(key[1]) # keyval_id
+            lst.append(value)
+
+        # Requests
+        for i in self.active_requests:
+            i.serialize_to_list(lst)
+        for i in self.finished_requests:
+            i.serialize_to_list(lst)
+        for i in self.persistent_requests:
+            i.serialize_to_list(lst)
+
+        if self.allocations:
+            for i in self.allocations:
+                i.serialize_to_list(lst)
+
+        self.locked_memory.serialize_to_list(lst)
+        return lst
+
     def transfer(self, gstate, transfer_context):
         logging.debug("Transfering state %s", self)
         state = copy.copy(self)
@@ -125,7 +193,7 @@ class State:
                 return keyval
 
     def set_attr(self, context, comm, keyval, value):
-        key = (comm.comm_id, keyval)
+        key = (comm.comm_id, keyval.keyval_id)
         if key in self.attrs:
             self.delete_attr(context, comm, keyval)
         self.attrs = copy.copy(self.attrs)
@@ -133,9 +201,8 @@ class State:
 
     def delete_attr(self, context, comm, keyval):
         self.attrs = copy.copy(self.attrs)
-        key = (comm.comm_id, keyval)
-        value = self.attrs[key]
-        del self.attrs[key]
+        key = (comm.comm_id, keyval.keyval_id)
+        value = self.attrs.pop(key)
         if keyval.delete_fn != consts.MPI_NULL_DELETE_FN:
             context.run_function(
                 keyval.delete_fn,
@@ -143,11 +210,13 @@ class State:
                 comm.comm_id, keyval.keyval_id, value, keyval.extra_ptr)
 
     def get_attr(self, comm, keyval):
-        return self.attrs.get((comm.comm_id, keyval))
+        return self.attrs.get((comm.comm_id, keyval.keyval_id))
 
     def get_comm_attrs(self, comm):
-        for (comm_id, keyval), value in self.attrs.items():
+        for (comm_id, keyval_id), value in self.attrs.items():
             if comm_id == comm.comm_id:
+                keyval = self.get_keyval(keyval_id)
+                assert keyval
                 yield keyval, value
 
     def add_datatype(self, datatype):
@@ -261,58 +330,10 @@ class State:
             self.cc_id_counters = [0] * (2 + len(self.comms))
         self.cc_id_counters[self._cc_id_counter_index(comm)] += 1
 
-    def is_hashable(self):
+    def is_serializable(self):
         # If we are finished, we do not care about exact state
         return self.status == State.StatusFinished or \
             (self.vg_state is not None and self.vg_state.hash is not None)
-
-    def compute_hash(self, hashthread):
-        assert self.is_hashable()
-        if self.status != State.StatusFinished:
-            # If we are finished, we do not care about exact state
-            hashthread.update(self.vg_state.hash)
-        else:
-            for a in self.allocations:
-                a.compute_hash(hashthread)
-        hashthread.update(str(self.pid))
-        hashthread.update(str(self.status))
-        hashthread.update(str(self.cc_id_counters))
-
-        for c in self.comms:
-            c.compute_hash(hashthread)
-
-        if self.tested_request_ids is not None:
-            hashthread.update(str(self.tested_request_ids))
-
-        if self.tested_requests_pointer is not None:
-            hashthread.update(str(self.tested_requests_pointer))
-
-        if self.tested_requests_status_ptr is not None:
-            hashthread.update(str(self.tested_requests_status_ptr))
-
-        if self.flag_ptr is not None:
-            hashthread.update(str(self.flag_ptr))
-
-        if self.index_ptr is not None:
-            hashthread.update(str(self.index_ptr))
-
-        for request in self.active_requests:
-            request.compute_hash(hashthread)
-
-        hashthread.update("finished")
-        self.finished_requests.sort(key=lambda r: r.id)
-        for request in self.finished_requests:
-            request.compute_hash(hashthread)
-
-        for request in self.persistent_requests:
-            request.compute_hash(hashthread)
-
-        for op in self.user_defined_ops:
-            if op is not None:
-                op.compute_hash(hashthread)
-
-        if self.probe_promise:
-            hashthread.update(str(self.probe_promise))
 
     def add_request(self, request):
         self.active_requests = copy.copy(self.active_requests)

@@ -25,3 +25,9 @@ class Keyval:
         self.copy_fn = copy_fn
         self.delete_fn = delete_fn
         self.extra_ptr = extra_ptr
+
+    def serialize_to_list(self, lst):
+        lst.append(self.keyval_id)
+        lst.append(self.copy_fn)
+        lst.append(self.delete_fn)
+        lst.append(self.extra_ptr)

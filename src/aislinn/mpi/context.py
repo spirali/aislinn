@@ -35,9 +35,10 @@ class Allocation:
         self.addr = addr
         self.size = size
 
-    def compute_hash(self, hashthread):
-        hashthread.update("{} {} {}".format(self.pid, self.addr, self.size))
-
+    def serialize_to_list(self, lst):
+        lst.append(self.pid)
+        lst.append(self.addr)
+        lst.append(self.size)
 
 class Context:
 

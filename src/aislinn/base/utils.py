@@ -166,3 +166,6 @@ class Intervals:
            results.append((start, end))
 
         return results
+
+    def serialize_to_list(self, lst):
+        lst.append(self.intervals)

@@ -47,6 +47,9 @@ class BuildinType(Datatype):
         self.size = size
         self.commited = True
 
+    def serialize_to_list(self, lst):
+        lst.append(self.type_id)
+
     def is_buildin(self):
         return True
 
@@ -87,6 +90,12 @@ class ContiguousType(Datatype):
         self.count = count
         self.size = datatype.size * count
 
+    def serialize_to_list(self, lst):
+        lst.append("contiguous")
+        lst.append(self.type_id)
+        self.datatype.serialize_to_list(lst)
+        lst.append(self.count)
+
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         self.datatype.pack(
             controller, pointer, vg_buffer, count * self.count, index)
@@ -122,6 +131,14 @@ class VectorType(Datatype):
         else:
             self.stride = stride * datatype.size
         self.size = datatype.size * count * blocksize
+
+    def serialize_to_list(self, lst):
+        lst.append("vector")
+        lst.append(self.type_id)
+        self.datatype.serialize_to_list(lst)
+        lst.append(self.count)
+        lst.append(self.blocksize)
+        lst.append(self.stride)
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         step_index = self.datatype.size * self.blocksize
@@ -190,6 +207,14 @@ class IndexedType(Datatype):
         self.size = datatype.size * sum(sizes)
         self.unpack_size = max(displ + self.datatype.size * size
                                for size, displ in zip(self.sizes, self.displs))
+
+    def serialize_to_list(self, lst):
+        lst.append("indexed")
+        lst.append(self.type_id)
+        self.datatype.serialize_to_list(lst)
+        lst.append(self.count)
+        lst.append(self.sizes)
+        lst.append(self.displs)
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         for i in xrange(count):
@@ -262,6 +287,13 @@ class StructType(Datatype):
         self.unpack_size = max(displ + datatype.size * count
                                for datatype, count, displ
                                in zip(datatypes, counts, displs))
+
+    def serialize_to_list(self, lst):
+        lst.append("struct")
+        lst.append(self.type_id)
+        lst.append([d.serialize_to_list(lst) for d in self.datatypes])
+        lst.append(self.counts)
+        lst.append(self.displs)
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
         for i in xrange(count):

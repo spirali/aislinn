@@ -35,7 +35,6 @@ class CollectiveOperation:
         self.process_count = comm.group.size
         self.remaining_processes_enter = self.process_count
         self.remaining_processes_complete = self.process_count
-        self.data = None
         logging.debug("New collective operation %s", self)
 
     def check_compatability(self, context, op_class, blocking):
@@ -88,16 +87,14 @@ class CollectiveOperation:
             context.add_error_and_throw(
                 errormsg.RootMismatch(context, value1=self.root, value2=root))
 
-    def compute_hash(self, hashthread):
-        hashthread.update(
-            "{0} {1} {2} {3} {4} {5}".format(
-                self.name,
-                self.comm_id,
-                self.blocking,
-                self.root,
-                self.remaining_processes_complete,
-                self.remaining_processes_enter))
-        self.compute_hash_data(hashthread)
+    def serialize_to_list(self, lst):
+        lst.append(self.name)
+        lst.append(self.comm_id)
+        lst.append(self.blocking)
+        lst.append(self.root)
+        lst.append(self.remaining_processes_complete)
+        lst.append(self.remaining_processes_enter)
+        self.serialize_data_to_list(lst)
 
     @property
     def mpi_name(self):
@@ -147,10 +144,12 @@ class OperationWithBuffers(CollectiveOperation):
             if vg_buffer:
                 vg_buffer.dec_ref()
 
-    def compute_hash_data(self, hashthread):
+    def serialize_data_to_list(self, lst):
         for vg_buffer in self.buffers:
             if vg_buffer:
-                hashthread.update(vg_buffer.hash)
+                lst.append(vg_buffer.hash)
+            else:
+                lst.append(None)
 
     def sanity_check(self):
         CollectiveOperation.sanity_check(self)
@@ -187,7 +186,7 @@ class Barrier(CollectiveOperation):
     def complete_main(self, context, comm):
         pass
 
-    def compute_hash_data(self, hashthread):
+    def serialize_data_to_list(self, lst):
         pass
 
 
@@ -202,6 +201,16 @@ class Gatherv(OperationWithBuffers):
         self.recvcounts = None
         self.recvtype = None
         self.displs = None
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.sendtype.type_id
+                   if self.sendtype else None)
+        lst.append(self.recvbuf)
+        lst.append(self.recvcounts)
+        lst.append(self.recvtype.type_id
+                   if self.recvtype else None)
+        lst.append(self.displs)
 
     def enter_main(self,
                    context,
@@ -242,13 +251,6 @@ class Gatherv(OperationWithBuffers):
                                      recvbuf + displ * self.recvtype.size)
         # Do nothing on non-root processes
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvbuf))
-        hashthread.update(str(self.recvtype.type_id
-                          if self.recvtype else None))
-        hashthread.update(str(self.displs))
-
 
 class Gather(OperationWithBuffers):
 
@@ -259,6 +261,13 @@ class Gather(OperationWithBuffers):
         self.recvbuf = None
         self.recvcount = None
         self.recvtype = None
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbuf)
+        lst.append(self.recvcount)
+        lst.append(self.recvtype.type_id
+                   if self.recvtype else None)
 
     def enter_main(self,
                    context,
@@ -303,13 +312,6 @@ class Gather(OperationWithBuffers):
                                          self.recvbuf + i * self.recvtype.size
                                                           * self.recvcount)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvcount))
-        hashthread.update(str(self.recvtype.type_id
-                          if self.recvtype else None))
-        hashthread.update(str(self.recvbuf))
-
 
 class Allgather(OperationWithBuffers):
 
@@ -320,6 +322,13 @@ class Allgather(OperationWithBuffers):
         self.recvbufs = [None] * self.process_count
         self.recvcounts = [None] * self.process_count
         self.recvtypes = [None] * self.process_count
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbufs)
+        lst.append(self.recvcount)
+        for t in self.recvtypes:
+            lst.append(t.type_id if t else None)
 
     def enter_main(self,
                    context,
@@ -350,12 +359,6 @@ class Allgather(OperationWithBuffers):
                 self.recvbufs[rank] + i * self.recvtypes[rank].size
                 * self.recvcounts[rank])
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvcounts))
-        # FIXME: hash self.recvtypes
-        hashthread.update(str(self.recvbufs))
-
 
 class Allgatherv(OperationWithBuffers):
 
@@ -367,6 +370,14 @@ class Allgatherv(OperationWithBuffers):
         self.recvcounts = [None] * self.process_count
         self.recvtypes = [None] * self.process_count
         self.displs = [None] * self.process_count
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbufs)
+        lst.append(self.recvcount)
+        for t in self.recvtypes:
+            lst.append(t.type_id if t else None)
+        lst.append(self.displs)
 
     def enter_main(self,
                    context,
@@ -402,12 +413,6 @@ class Allgatherv(OperationWithBuffers):
                             count,
                             recvbuf + displ * recvtype.size)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvbufs))
-        hashthread.update(str(self.recvtypes))
-        hashthread.update(str(self.displs))
-
 
 class Scatterv(OperationWithBuffers):
 
@@ -421,6 +426,16 @@ class Scatterv(OperationWithBuffers):
         self.sendtype = None
         self.sendcounts = None
         self.displs = None
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbufs)
+        lst.append(self.recvcounts)
+        for t in self.recvtypes:
+            lst.append(t.type_id if t else None)
+        lst.append(self.sendtype.type_id if self.sendtype else None)
+        lst.append(self.sendcounts)
+        lst.append(self.displs)
 
     def after_copy(self):
         OperationWithBuffers.after_copy(self)
@@ -464,18 +479,6 @@ class Scatterv(OperationWithBuffers):
                                     self.recvbufs[rank],
                                     index)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.sendcounts))
-        hashthread.update(str(self.recvbufs))
-        hashthread.update(str(t.type_id if t else None
-                              for t in self.recvtypes))
-        hashthread.update(str(self.recvcounts))
-        hashthread.update(str(self.displs))
-        hashthread.update(str(self.sendcounts))
-        hashthread.update(str(self.sendtype.type_id
-                              if self.sendtype else None))
-
 
 class Scatter(OperationWithBuffers):
 
@@ -488,6 +491,15 @@ class Scatter(OperationWithBuffers):
         self.recvbufs = [None] * self.process_count
         self.recvcounts = [None] * self.process_count
         self.recvtypes = [None] * self.process_count
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.sendtype.type_id if self.sendtype else None)
+        lst.append(self.sendcount)
+        lst.append(self.recvbufs)
+        lst.append(self.recvcounts)
+        for t in self.recvtypes:
+            lst.append(t.type_id if t else None)
 
     def after_copy(self):
         OperationWithBuffers.after_copy(self)
@@ -533,16 +545,6 @@ class Scatter(OperationWithBuffers):
                                         self.recvbufs[rank],
                                         index)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.sendtype.type_id
-                              if self.sendtype else None))
-        hashthread.update(str(self.sendcount))
-        hashthread.update(str(self.recvbufs))
-        hashthread.update(str(t.type_id if t else None
-                              for t in self.recvtypes))
-        hashthread.update(str(self.recvcounts))
-
 
 class Bcast(OperationWithBuffers):
 
@@ -553,7 +555,13 @@ class Bcast(OperationWithBuffers):
         self.recvbufs = [None] * self.process_count
         self.counts = [None] * self.process_count
         self.datatypes = [None] * self.process_count
-        self.root = None
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbufs)
+        lst.append(self.counts)
+        for t in self.datatypes:
+            lst.append(t.type_id if t else None)
 
     def after_copy(self):
         OperationWithBuffers.after_copy(self)
@@ -588,13 +596,6 @@ class Bcast(OperationWithBuffers):
                                         self.buffers[self.root],
                                         self.counts[rank],
                                         self.recvbufs[rank])
-
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvbufs))
-        hashthread.update(str(self.counts))
-        hashthread.update(str([t.type_id if t else None
-                               for t in self.datatypes]))
 
 
 def execute_reduce_op(context, comm, rank, ccop,
@@ -635,6 +636,13 @@ class Reduce(OperationWithBuffers):
         self.count = None
         self.op = None
 
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbuf)
+        lst.append(self.datatype.type_id if self.datatype else None)
+        lst.append(self.count)
+        lst.append(self.op.op_id if self.op else None)
+
     def enter_main(self,
                    context,
                    comm,
@@ -670,13 +678,6 @@ class Reduce(OperationWithBuffers):
             execute_reduce_op(context, comm, rank,
                               self, self.recvbuf, self.buffers, self.count)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvbuf))
-        hashthread.update(str(self.datatype))
-        hashthread.update(str(self.count))
-        hashthread.update(str(self.op))
-
 
 class AllReduce(OperationWithBuffers):
 
@@ -688,6 +689,13 @@ class AllReduce(OperationWithBuffers):
         self.datatype = None
         self.count = None
         self.op = None
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbufs)
+        lst.append(self.datatype.type_id if self.datatype else None)
+        lst.append(self.count)
+        lst.append(self.op.op_id if self.op else None)
 
     def after_copy(self):
         OperationWithBuffers.after_copy(self)
@@ -724,13 +732,6 @@ class AllReduce(OperationWithBuffers):
         execute_reduce_op(context, comm, rank,
                           self, self.recvbufs[rank], self.buffers, self.count)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvbufs))
-        hashthread.update(str(self.datatype.type_id))
-        hashthread.update(str(self.count))
-        hashthread.update(str(self.op))
-
 
 class ReduceScatter(OperationWithBuffers):
 
@@ -743,6 +744,14 @@ class ReduceScatter(OperationWithBuffers):
         self.counts = None
         self.op = None
         self.final_buffer = None
+
+    def serialize_data_to_list(self, lst):
+        OperationWithBuffers.serialize_data_to_list(self, lst)
+        lst.append(self.recvbufs)
+        lst.append(self.datatype.type_id if self.datatype else None)
+        lst.append(self.count)
+        lst.append(self.op.op_id if self.op else None)
+        lst.append(self.final_buffer)
 
     def after_copy(self):
         OperationWithBuffers.after_copy(self)
@@ -805,12 +814,6 @@ class ReduceScatter(OperationWithBuffers):
                              self.recvbufs[rank],
                              index)
 
-    def compute_hash_data(self, hashthread):
-        OperationWithBuffers.compute_hash_data(self, hashthread)
-        hashthread.update(str(self.recvbufs))
-        hashthread.update(str(self.datatype.type_id))
-        hashthread.update(str(self.counts))
-        hashthread.update(str(self.op))
 
     def dispose(self):
         OperationWithBuffers.dispose(self)
@@ -839,6 +842,12 @@ class CommSplit(CollectiveOperation):
         self.keys = [None] * self.process_count
         self.newcomm_ptrs = [None] * self.process_count
         self.comm_ids = [None] * self.process_count
+
+    def serialize_data_to_list(self, lst):
+        lst.append(self.colors)
+        lst.append(self.keys)
+        lst.append(self.newcomm_ptrs)
+        lst.append(self.comm_ids)
 
     def after_copy(self):
         self.colors = copy.copy(self.colors)
@@ -894,12 +903,6 @@ class CommSplit(CollectiveOperation):
         context.controller.write_int(self.newcomm_ptrs[rank],
                                      comm_id)
 
-    def compute_hash_data(self, hashthread):
-        hashthread.update(str(self.colors))
-        hashthread.update(str(self.keys))
-        hashthread.update(str(self.newcomm_ptrs))
-        hashthread.update(str(self.comm_ids))
-
 
 class CommDup(CollectiveOperation):
 
@@ -909,6 +912,11 @@ class CommDup(CollectiveOperation):
         CollectiveOperation.__init__(self, gstate, comm, blocking, cc_id)
         self.newcomm_ptrs = [None] * self.process_count
         self.newcomm_id = None
+
+    def serialize_data_to_list(self, lst):
+        lst.append(self.newcomm_ptrs)
+        lst.append(self.newcomm_id)
+
 
     def after_copy(self):
         self.newcomm_ptrs = copy.copy(self.newcomm_ptrs)
@@ -936,10 +944,6 @@ class CommDup(CollectiveOperation):
         context.controller.write_int(self.newcomm_ptrs[rank],
                                      self.newcomm_id)
 
-    def compute_hash_data(self, hashthread):
-        hashthread.update(str(self.newcomm_ptrs))
-        hashthread.update(str(self.newcomm_id))
-
 
 class CommCreate(CollectiveOperation):
 
@@ -950,6 +954,11 @@ class CommCreate(CollectiveOperation):
         self.newcomm_ptrs = [None] * self.process_count
         self.group = None
         self.newcomm_id = None
+
+    def serialize_data_to_list(self, lst):
+        lst.append(self.newcomm_ptrs)
+        self.group.serialize_to_list(lst)
+        lst.append(self.newcomm_id)
 
     def after_copy(self):
         self.newcomm_ptrs = copy.copy(self.newcomm_ptrs)
@@ -980,7 +989,3 @@ class CommCreate(CollectiveOperation):
         rank = context.state.get_rank(comm)
         context.controller.write_int(self.newcomm_ptrs[rank],
                                      self.newcomm_id)
-
-    def compute_hash_data(self, hashthread):
-        hashthread.update(str(self.newcomm_ptrs))
-        hashthread.update(str(self.newcomm_id))

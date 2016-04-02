@@ -25,6 +25,7 @@ import copy
 from state import State
 import consts
 import logging
+import msgpack
 
 
 class GlobalState(EqMixin):
@@ -74,17 +75,19 @@ class GlobalState(EqMixin):
         return self.states[pid]
 
     def compute_hash(self):
-        for state in self.states:
-            # If state is not hashed we cannot have a global hash
-            if not state.is_hashable():
-                return None
         hashthread = hashlib.md5()
-        for state in self.states:
-            state.compute_hash(hashthread)
-        if self.collective_operations:
-            for op in self.collective_operations:
-                op.compute_hash(hashthread)
+        hashthread.update(msgpack.dumps(self.serialize_to_list()))
         return hashthread.hexdigest()
+
+    def serialize_to_list(self):
+        lst = [state.serialize_to_list() for state in self.states]
+        if self.collective_operations:
+            lst.append(len(self.collective_operations))
+            for op in self.collective_operations:
+                op.serialize_to_list(lst)
+        else:
+            lst.append(None)
+        return lst
 
     def init_collective_operation(self, op, blocking, index):
         assert index <= len(self.collective_operations)

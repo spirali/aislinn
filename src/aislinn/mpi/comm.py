@@ -27,9 +27,9 @@ class Communicator:
         self.comm_id = comm_id
         self.group = group
 
-    def compute_hash(self, hashthread):
-        hashthread.update(str(self.comm_id))
-        hashthread.update(str(self.group.table))
+    def serialize_to_list(self, lst):
+        lst.append(self.comm_id)
+        self.group.serialize_to_list(lst)
 
 
 class Group(base.utils.EqMixin):
@@ -56,6 +56,10 @@ class Group(base.utils.EqMixin):
             return self.table.index(pid)
         except ValueError:
             return None
+
+    def serialize_to_list(self, lst):
+        lst.append(len(self.table))
+        lst.extend(self.table)
 
     def pids(self):
         return self.table
