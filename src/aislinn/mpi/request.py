@@ -35,8 +35,16 @@ class Request(EqMixin):
 
     stacktrace = None
 
-    def __init__(self, request_id):
+    def __init__(self, request_id, comm):
         self.id = request_id
+        self.comm = comm
+
+    def serialize_to_list(self, lst):
+        lst.append(self.name)
+        lst.append(self.id)
+        lst.append(self.comm.comm_id)
+        lst.append(self.stacktrace)
+
 
     def is_send(self):
         return False
@@ -74,9 +82,8 @@ class SendRequest(Request):
 
     def __init__(self, request_id, send_type,
                  comm, target, tag, data_ptr, datatype, count):
-        Request.__init__(self, request_id)
+        Request.__init__(self, request_id, comm)
         self.send_type = send_type
-        self.comm = comm
         self.target = target
         self.tag = tag
         self.data_ptr = data_ptr
@@ -124,9 +131,8 @@ class SendRequest(Request):
         return True
 
     def serialize_to_list(self, lst):
-        lst.append(self.id)
+        Request.serialize_to_list(self, lst)
         lst.append(self.send_type)
-        lst.append(self.comm.comm_id)
         lst.append(self.target)
         lst.append(self.tag)
         lst.append(self.data_ptr)
@@ -153,8 +159,7 @@ class ReceiveRequest(Request):
 
     def __init__(self, request_id, comm, source, tag,
                  data_ptr, datatype, count):
-        Request.__init__(self, request_id)
-        self.comm = comm
+        Request.__init__(self, request_id, comm)
         self.source = source
         self.tag = tag
         self.data_ptr = data_ptr
@@ -165,8 +170,7 @@ class ReceiveRequest(Request):
         self.source_tag = None
 
     def serialize_to_list(self, lst):
-        lst.append(self.id)
-        lst.append(self.comm.comm_id)
+        Request.serialize_to_list(self, lst)
         lst.append(self.source)
         lst.append(self.tag)
         lst.append(self.data_ptr)
@@ -236,13 +240,11 @@ class CollectiveRequest(Request):
     name = "collective"
 
     def __init__(self, request_id, comm, cc_id):
-        Request.__init__(self, request_id)
+        Request.__init__(self, request_id, comm)
         self.cc_id = cc_id
-        self.comm = comm
 
     def serialize_to_list(self, lst):
-        lst.append(self.id)
-        lst.append(self.comm.comm_id)
+        Request.serialize_to_list(self, lst)
         lst.append(self.cc_id)
 
     def is_collective(self):
@@ -254,3 +256,36 @@ class CollectiveRequest(Request):
 
     def __repr__(self):
         return "<CCRqst comm_id={0.comm.comm_id} cc_id={0.cc_id}>".format(self)
+
+
+def load_request(loader, state):
+    name = loader.get()
+    request_id = loader.get()
+    comm = state.get_comm(loader.get())
+    stacktrace = loader.get()
+
+    if name == "send":
+        request = SendRequest(request_id,
+                              loader.get(),
+                              comm,
+                              loader.get(),
+                              loader.get(),
+                              loader.get(),
+                              state.get_datatype(loader.get()),
+                              loader.get())
+    elif name == "receive":
+        request = ReceiveRequest(request_id,
+                                 comm,
+                                 loader.get(),
+                                 loader.get(),
+                                 loader.get(),
+                                 state.get_datatype(loader.get()),
+                                 loader.get())
+    elif name == "collective":
+        request = CollectiveRequest(request_id, comm, loader.get())
+    else:
+        raise Exception("Unknown requst type: " + repr(name))
+
+    if request is not None:
+        request.stacktrace = stacktrace
+    return request

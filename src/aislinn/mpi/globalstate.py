@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014, 2015 Stanislav Bohm
+#    Copyright (C) 2014, 2015, 2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -30,12 +30,21 @@ import msgpack
 
 class GlobalState(EqMixin):
 
-    def __init__(self,
-                 process_count):
+    def __init__(self, process_count, loader=None):
+        self.comm_world = make_comm_world(process_count)
         self.states = [State(self, i, None) for i in xrange(process_count)]
         self.collective_operations = None
-        self.comm_world = make_comm_world(process_count)
         self.comm_id_counter = consts.MPI_COMM_USERDEF
+
+    def serialize_to_list(self):
+        lst = [state.serialize_to_list() for state in self.states]
+        if self.collective_operations:
+            lst.append(len(self.collective_operations))
+            for op in self.collective_operations:
+                op.serialize_to_list(lst)
+        else:
+            lst.append(None)
+        return lst
 
     def copy(self):
         logging.debug("Copying gstate %s", self)
@@ -78,16 +87,6 @@ class GlobalState(EqMixin):
         hashthread = hashlib.md5()
         hashthread.update(msgpack.dumps(self.serialize_to_list()))
         return hashthread.hexdigest()
-
-    def serialize_to_list(self):
-        lst = [state.serialize_to_list() for state in self.states]
-        if self.collective_operations:
-            lst.append(len(self.collective_operations))
-            for op in self.collective_operations:
-                op.serialize_to_list(lst)
-        else:
-            lst.append(None)
-        return lst
 
     def init_collective_operation(self, op, blocking, index):
         assert index <= len(self.collective_operations)

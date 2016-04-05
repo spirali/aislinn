@@ -32,6 +32,10 @@ class Communicator:
         self.group.serialize_to_list(lst)
 
 
+def load_communicator(loader):
+    return Communicator(loader.get(), load_group(loader))
+
+
 class Group(base.utils.EqMixin):
 
     def __init__(self, table):
@@ -58,11 +62,14 @@ class Group(base.utils.EqMixin):
             return None
 
     def serialize_to_list(self, lst):
-        lst.append(len(self.table))
-        lst.extend(self.table)
+        lst.append(self.table)
 
     def pids(self):
         return self.table
+
+
+def load_group(loader):
+    return Group(loader.get())
 
 
 def comm_compare(comm1, comm2):

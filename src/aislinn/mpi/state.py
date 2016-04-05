@@ -23,6 +23,7 @@ from request import \
     CollectiveRequest
 from base.utils import Intervals
 import errormsg
+import request
 
 import consts
 import copy
@@ -46,48 +47,85 @@ class State:
     # Used only for final state, list of non-freed-memory
     allocations = None
 
-    def __init__(self, gstate, pid, vg_state):
+    def __init__(self, gstate, pid, vg_state, loader=None):
         self.gstate = gstate
-        self.pid = pid
-        self.vg_state = vg_state
-        self.status = State.StatusReady
-        self.comms = []  # <-- Copy on write!
-        self.groups = {}  # <-- Copy on write!
-        self.active_requests = []  # <-- Copy on write!
-        self.finished_requests = []  # <-- Copy on write!
-        self.persistent_requests = []  # <-- Copy on write!
-        self.tested_request_ids = []
-        self.tested_requests_pointer = None
-        self.tested_requests_status_ptr = None
-        self.flag_ptr = None
-        self.index_ptr = None  # Used for Waitany and WaitSome
-        self.user_defined_types = []  # <-- Copy on write!
-        self.user_defined_ops = []  # <-- Copy on write!
-        self.keyvals = []  # <-- Copy on write!
-        self.attrs = {}  # <-- Copy on write!
-        self.cc_id_counters = None
-        self.probe_data = None
-        self.probe_promise = None
-        self.finalized = False
-        self.immediate_wait = False
-        self.locked_memory = Intervals()  # <-- Copy on write!
+        if loader is None:
+            self.pid = pid
+            self.vg_state = vg_state
+            self.status = State.StatusReady
+            self.comms = []  # <-- Copy on write!
+            self.groups = {}  # <-- Copy on write!
+            self.active_requests = []  # <-- Copy on write!
+            self.finished_requests = []  # <-- Copy on write!
+            self.persistent_requests = []  # <-- Copy on write!
+            self.tested_request_ids = []
+            self.tested_requests_pointer = None
+            self.tested_requests_status_ptr = None
+            self.flag_ptr = None
+            self.index_ptr = None  # Used for Waitany and WaitSome
+            self.user_defined_types = []  # <-- Copy on write!
+            self.user_defined_ops = []  # <-- Copy on write!
+            self.keyvals = []  # <-- Copy on write!
+            self.attrs = {}  # <-- Copy on write!
+            self.cc_id_counters = None
+            self.probe_data = None
+            self.probe_promise = None
+            self.finalized = False
+            self.immediate_wait = False
+            self.locked_memory = Intervals()  # <-- Copy on write!
+        else:
+            self.pid = loader.get()
+            self.vg_state = loader.get_object()
+            self.status = loader.get()
+            comms = loader.get()
+            groups = loader.get()
+            active_requests = loader.get()
+            finished_requests = loader.get()
+            persistent_requests = loader.get()
+            self.tested_request_ids = loader.get()
+            self.tested_requests_pointer = loader.get()
+            self.tested_requests_status_ptr = loader.get()
+            self.flag_ptr = loader.get()
+            self.index_ptr = loader.get()
+            user_defined_types = loader.get()
+            user_defined_ops = loader.get()
+            keyvals = loader.get()
+            attrs = loader.get()
+            self.cc_id_counters = loader.get()
+            self.probe_data = loader.get()
+            self.probe_promise = loader.get()
+            self.finalized = loader.get()
+            self.immediate_wait = loader.get()
+            allocations = loader.get()
+
+            self.comms = [comm.load_communicator(loader)
+                          for i in xrange(comms)]
+            self.groups = [comm.load_group(loader) for i in xrange(groups)]
+
+            assert user_defined_types == 0
+            self.user_defined_types = []
+
+            assert user_defined_ops == 0
+            self.user_defined_ops = []
+
+            assert keyvals == 0
+            self.keyvals = []
+
+            assert attrs == 0
+            self.attrs = {}
+
+            # Requests
+            self.active_requests = [request.load_request(loader, self)
+                                    for i in xrange(active_requests)]
+            self.finished_requests = [request.load_request(loader, self)
+                                      for i in xrange(finished_requests)]
+            self.persistent_requests = [request.load_request(loader, self)
+                                        for i in xrange(persistent_requests)]
+            assert allocations is None
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)
         # First two indexes are reserved for MPI_COMM_WORLD and MPI_COMM_SELF
-
-    def copy(self, gstate):
-        logging.debug("Copying state %s", self)
-        if self.vg_state:
-            self.vg_state.inc_ref()
-        state = copy.copy(self)
-        state.gstate = gstate
-        for request in state.active_requests:
-            request.inc_ref()
-        for request in state.finished_requests:
-            request.inc_ref()
-        state.cc_id_counters = copy.copy(self.cc_id_counters)
-        return state
 
     def serialize_to_list(self):
         # We are implementing own serialization to maintain
@@ -104,7 +142,7 @@ class State:
                len(self.active_requests),
                len(self.finished_requests),
                len(self.persistent_requests),
-               len(self.tested_request_ids) if self.tested_request_ids else None,
+               self.tested_request_ids,
                self.tested_requests_pointer,
                self.tested_requests_status_ptr,
                self.flag_ptr,
@@ -113,7 +151,7 @@ class State:
                len(self.user_defined_ops),
                len(self.keyvals),
                len(self.attrs),
-               len(self.cc_id_counters) if self.cc_id_counters else None,
+               self.cc_id_counters,
                self.probe_data,
                self.probe_promise,
                self.finalized,
@@ -123,7 +161,7 @@ class State:
 
         for i in self.comms:
             i.serialize_to_list(lst)
-        for i in self.comms:
+        for i in self.groups:
             i.serialize_to_list(lst)
         for i in self.user_defined_types:
             i.serialize_to_list(lst)
@@ -156,6 +194,19 @@ class State:
 
         self.locked_memory.serialize_to_list(lst)
         return lst
+
+    def copy(self, gstate):
+        logging.debug("Copying state %s", self)
+        if self.vg_state:
+            self.vg_state.inc_ref()
+        state = copy.copy(self)
+        state.gstate = gstate
+        for request in state.active_requests:
+            request.inc_ref()
+        for request in state.finished_requests:
+            request.inc_ref()
+        state.cc_id_counters = copy.copy(self.cc_id_counters)
+        return state
 
     def transfer(self, gstate, transfer_context):
         logging.debug("Transfering state %s", self)

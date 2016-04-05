@@ -169,3 +169,26 @@ class Intervals:
 
     def serialize_to_list(self, lst):
         lst.append(self.intervals)
+
+
+class Loader(object):
+
+    def __init__(self, data, objects=None):
+        self.data = data
+        self.pointer = 0
+        if objects is None:
+            objects = {}
+        self.objects = objects
+
+    def get(self):
+        value = self.data[self.pointer]
+        self.pointer += 1
+        return value
+
+    def get_more(self, count):
+        value = self.data[self.pointer:self.pointer + count]
+        self.pointer += count
+        return value
+
+    def get_object(self):
+        return self.objects[self.get()]
