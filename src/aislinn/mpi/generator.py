@@ -425,8 +425,8 @@ class GeneratorConnection(object):
     def new_state(self, hash, last):
         self.socket.send_data("STATE {} {}\n".format(hash, "last" if last else "cont"))
 
-    def send_port(self, port):
-        self.socket.send_data("{}\n".format(port))
+    def send_ports(self, ports):
+        self.socket.send_data("{}\n".format(" ".join(map(str, ports))))
 
     def read_line(self):
         return self.socket.read_line()
@@ -459,15 +459,16 @@ class WorkerDescriptor(object):
             return
         assert worker != self
         self.send_command("LISTEN {}\n".format(worker.worker_id))
-        port = int(self.read_line())
-        worker.send_command("CONNECT {} {}\n".format(self.worker_id, port))
+        ports = self.read_line()
+        worker.send_command("CONNECT {} {}\n".format(self.worker_id, ports))
 
         worker.has_connection[self.worker_id] = True
         self.has_connection[worker.worker_id] = True
 
     def transfer_gstate(self, worker, hash):
         self.check_connection(worker)
-        self.send_command("TRANSFER {}\n".format(hash))
+        self.send_command("PUSH {} {}\n".format(worker.worker_id, hash))
+        worker.send_command("POP {} {}\n".format(self.worker_id, hash))
 
     def process_command(self):
         command = self.read_line().split()

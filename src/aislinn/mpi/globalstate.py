@@ -92,6 +92,9 @@ class GlobalState(EqMixin):
         hashthread.update(msgpack.dumps(self.serialize_to_list()))
         return hashthread.hexdigest()
 
+    def serialize(self):
+        return msgpack.dumps(self.serialize_to_list())
+
     def init_collective_operation(self, op, blocking, index):
         assert index <= len(self.collective_operations)
         if len(self.collective_operations) == index:

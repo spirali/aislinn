@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2015 Stanislav Bohm
+#    Copyright (C) 2015, 2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -28,6 +28,10 @@ from vgtool.controller import poll_controllers
 import base.paths
 import consts
 import errormsg
+import msgpack
+from vgtool.socketwrapper import SocketWrapper
+
+
 import logging
 import socket
 from datetime import datetime
@@ -203,38 +207,71 @@ class Worker:
             raise Exception("Init failed")
 
         while True:
-            self.process_command()
+            self.process_commands()
             if self.queue:
                 gstate = self.queue.popleft()
                 self.process_state(gstate)
             else:
                 break
 
-    def command_listen(self, worker_id):
+    def listen(self, worker_id):
         s, port = utils.start_listen(0, 1)
-        self.generator.send_port(port)
-        self.worker_sockets[worker_id] = s.accept()
+        try:
+            ports = [c.interconn_listen() for c in self.controllers]
+            ports.append(port)
+            self.generator.send_ports(ports)
+            s2, addr = s.accept()
+            self.worker_sockets[worker_id] = SocketWrapper(s2)
+            self.controller_sockets[worker_id] = \
+                [c.interconn_listen_finish() for c in self.controllers]
+        finally:
+            s.close()
 
-    def process_command(self):
-        command = self.generator.read_line().split()
-        name = command[0]
-        if name == "TRANSFER":
-            gstate = self.gstates[command[1]]
-            print gstate
-        elif name == "LISTEN":
-            worker_id = int(command[1])
-            logging.debug("Listening for connection from worker %s", worker_id)
-            assert worker_id != self.worker_id
-            self.command_listen(worker_id)
-        elif name == "CONNECT":
-            worker_id = int(command[1])
-            port =  int(command[2])
-            logging.debug("Connection to worker %s", worker_id)
-            self.worker_sockets[worker_id] = \
-                socket.create_connection(("127.0.0.1", port))
-        else:
-            raise Exception("Unknown command:" + name)
+    def command_connect(self, command):
+        worker_id = int(command[1])
+        ports = map(int, command[2:-1])
+        port = int(command[-1])
+        assert len(self.controllers) == len(ports)
+        logging.debug("Connection to worker %s", worker_id)
 
+        self.worker_sockets[worker_id] = \
+            SocketWrapper(socket.create_connection(("127.0.0.1", port)))
+        for port, c in zip(ports, self.controllers):
+            host = "127.0.0.1:{0}".format(port)
+            c.interconn_connect(host)
+        self.controller_sockets[worker_id] = \
+            [c.interconn_connect_finish() for c in self.controllers]
+
+    def push_gstate(self, worker_id, gstate):
+        data = gstate.serialize()
+        socket = self.worker_sockets[worker_id]
+        socket.send_data("{}\n{}".format(len(data), data))
+
+    def pop_gstate(self, worker_id, hash):
+        socket = self.worker_sockets[worker_id]
+        size = int(socket.read_line())
+        data = socket.read_data(size)
+        print msgpack.loads(data)
+
+    def process_commands(self):
+        while True:
+            command = self.generator.read_line().split()
+            name = command[0]
+            if name == "PUSH":
+                worker_id = int(command[1])
+                gstate = self.gstates[command[2]]
+                self.push_gstate(worker_id, gstate)
+            elif name == "POP":
+                self.pop_gstate(int(command[1]), command[2])
+            elif name == "LISTEN":
+                worker_id = int(command[1])
+                logging.debug("Listening for connection from worker %s", worker_id)
+                assert worker_id != self.worker_id
+                self.listen(worker_id)
+            elif name == "CONNECT":
+                self.command_connect(command)
+            else:
+                raise Exception("Unknown command:" + name)
         import sys
         sys.exit(1)
 
@@ -477,10 +514,10 @@ class Worker:
 
         assert self.buffer_manager.resource_count == 0
 
+    """
     def interconnect(self, worker):
-        sockets = self.interconnect_sockets[worker.worker_id]
-        if sockets is not None:
-            return  # Already connected
+        sockets = self.controller_sockets[worker.worker_id]
+        assert sockets is not None
         assert self.worker_id != worker.worker_id
         sockets1, sockets2 = make_interconnection_pairs(
             self.controllers, worker.controllers)
@@ -497,6 +534,7 @@ class Worker:
         if action is not None:
             action = action.transfer(transfer_context)
         return gstate, action
+    """
 
     def record_process_start(self, controller_id):
         time = datetime.now() - self.generator.init_time
