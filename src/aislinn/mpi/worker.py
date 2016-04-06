@@ -127,6 +127,7 @@ class Worker:
                 controller.extra_env = {"LD_BIND_NOW": "1"}
 
         self.queue = deque()
+        self.gstates = {}
 
         if aislinn_args.debug_stats:
             self.stats_time = []
@@ -181,9 +182,8 @@ class Worker:
         """
 
     def init_nonfirst_worker(self):
-        initial_node = Node("init", None)
         gstate = GlobalState(self.process_count)
-        gcontext = GlobalContext(self, initial_node, gstate)
+        gcontext = GlobalContext(self, gstate)
         # TODO: Do it in parallel
         for i in xrange(self.process_count):
             context = gcontext.get_context(i)
@@ -203,10 +203,13 @@ class Worker:
             if self.queue:
                 gstate = self.queue.popleft()
                 self.process_state(gstate)
+                self.process_command()
             else:
                 break
 
+    def process_command(self):
         line = self.generator.read_line()
+        print line
 
     def process_state(self, gstate):
         actions = gstate.get_actions(self)
@@ -245,14 +248,16 @@ class Worker:
                 context.process_run_result(c.finish_async())
 
     def make_state(self, last):
-        self.gcontext.save_states()
+        gstate = self.gcontext.gstate
         hash = self.gcontext.gstate.compute_hash()
         self.generator.new_state(hash, last)
         line = self.generator.read_line()
-        if line == "NEW":
-            self.queue.append(self.gcontext.gstate)
+        if line == "SAVE":
+            self.gcontext.save_states()
+            self.gstates[hash] = gstate
+            self.queue.append(gstate)
         else:
-            assert line == "FOUND"
+            assert line == "DROP"
 
     def check_collective_requests(self, gcontext):
         for state in gcontext.gstate.states:

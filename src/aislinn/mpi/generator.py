@@ -466,10 +466,10 @@ class WorkerDescriptor(object):
         if name == "STATE":
             node, is_new = self.generator.add_node(self.active_node, command[1])
             if is_new:
-                self.send_command("NEW\n")
+                self.send_command("SAVE\n")
                 self.queue.append(node)
             else:
-                self.send_command("FOUND\n")
+                self.send_command("DROP\n")
             if command[2] == "last":
                 if self.queue:
                     self.active_node = self.queue.popleft()
