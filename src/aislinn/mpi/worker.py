@@ -18,6 +18,7 @@
 #
 from mpi.controller import Controller
 from base.node import Node
+import base.utils as utils
 from gcontext import GlobalContext
 from globalstate import GlobalState
 from collections import deque
@@ -28,6 +29,7 @@ import base.paths
 import consts
 import errormsg
 import logging
+import socket
 from datetime import datetime
 
 
@@ -88,7 +90,8 @@ class Worker:
 
         self.controllers = [Controller(base.paths.VALGRIND_BIN, args)
                             for i in xrange(process_count)]
-        self.interconnect_sockets = [None] * workers_count
+        self.worker_sockets = [None] * workers_count
+        self.controller_sockets = [None] * workers_count
 
         for i, controller in enumerate(self.controllers):
             controller.name = i + worker_id * process_count
@@ -200,16 +203,40 @@ class Worker:
             raise Exception("Init failed")
 
         while True:
+            self.process_command()
             if self.queue:
                 gstate = self.queue.popleft()
                 self.process_state(gstate)
-                self.process_command()
             else:
                 break
 
+    def command_listen(self, worker_id):
+        s, port = utils.start_listen(0, 1)
+        self.generator.send_port(port)
+        self.worker_sockets[worker_id] = s.accept()
+
     def process_command(self):
-        line = self.generator.read_line()
-        print line
+        command = self.generator.read_line().split()
+        name = command[0]
+        if name == "TRANSFER":
+            gstate = self.gstates[command[1]]
+            print gstate
+        elif name == "LISTEN":
+            worker_id = int(command[1])
+            logging.debug("Listening for connection from worker %s", worker_id)
+            assert worker_id != self.worker_id
+            self.command_listen(worker_id)
+        elif name == "CONNECT":
+            worker_id = int(command[1])
+            port =  int(command[2])
+            logging.debug("Connection to worker %s", worker_id)
+            self.worker_sockets[worker_id] = \
+                socket.create_connection(("127.0.0.1", port))
+        else:
+            raise Exception("Unknown command:" + name)
+
+        import sys
+        sys.exit(1)
 
     def process_state(self, gstate):
         actions = gstate.get_actions(self)
@@ -248,16 +275,20 @@ class Worker:
                 context.process_run_result(c.finish_async())
 
     def make_state(self, last):
+        # !!! TODO:
+        # First hash, then check if save is necessary then save
+        self.gcontext.save_states()
         gstate = self.gcontext.gstate
         hash = self.gcontext.gstate.compute_hash()
         self.generator.new_state(hash, last)
         line = self.generator.read_line()
+        print line
         if line == "SAVE":
-            self.gcontext.save_states()
             self.gstates[hash] = gstate
             self.queue.append(gstate)
         else:
             assert line == "DROP"
+            gstate.dispose()
 
     def check_collective_requests(self, gcontext):
         for state in gcontext.gstate.states:

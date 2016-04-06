@@ -20,7 +20,7 @@
 
 import re
 import ctypes  # Used for int type conversions
-
+import socket
 
 class EqMixin(object):
 
@@ -192,3 +192,15 @@ class Loader(object):
 
     def get_object(self):
         return self.objects[self.get()]
+
+
+def start_listen(port, count):
+    host = "127.0.0.1"
+    port = 0 # Autoassign
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((host, port))
+    s.listen(count)
+    port = s.getsockname()[1]
+    return s, port
+
+

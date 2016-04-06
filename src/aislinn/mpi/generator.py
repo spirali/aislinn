@@ -21,6 +21,7 @@
 from base.arc import STREAM_STDOUT, STREAM_STDERR
 from base.report import Report
 from base.statespace import StateSpace
+import base.utils as utils
 from context import Context
 from gcontext import GlobalContext, ErrorFound
 from mpi.ndsync import NdsyncChecker
@@ -137,17 +138,6 @@ class Generator:
                 return worker
         return None
 
-    def start_listen(self):
-        host = "127.0.0.1"
-        port = 0 # Autoassign
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #if reuse:
-        #    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((host, port))
-        s.listen(self.aislinn_args.workers)
-        port = s.getsockname()[1]
-        return s, port
-
     def add_node(self, parent, hash):
         node = self.statespace.get_node_by_hash(hash)
         if node is not None:
@@ -166,7 +156,7 @@ class Generator:
         return node, True
 
     def start_workers(self):
-        s, port = self.start_listen()
+        s, port = utils.start_listen(0, self.aislinn_args.workers)
 
         """
         self.workers = [Worker(i,
@@ -435,6 +425,9 @@ class GeneratorConnection(object):
     def new_state(self, hash, last):
         self.socket.send_data("STATE {} {}\n".format(hash, "last" if last else "cont"))
 
+    def send_port(self, port):
+        self.socket.send_data("{}\n".format(port))
+
     def read_line(self):
         return self.socket.read_line()
 
@@ -442,10 +435,12 @@ class GeneratorConnection(object):
 class WorkerDescriptor(object):
 
     def __init__(self, generator, socket, worker_id):
+        self.worker_id = worker_id
         self.generator = generator
         self.queue = deque()
         self.active_node = None
         s, addr = socket.accept()
+        self.has_connection = [False] * self.generator.aislinn_args.workers
         self.socket = SocketWrapper(s)
         self.socket.set_no_delay()
         self.socket.send_data("{}\n".format(worker_id))
@@ -459,6 +454,20 @@ class WorkerDescriptor(object):
     def send_command(self, command):
         self.socket.send_data(command)
 
+    def check_connection(self, worker):
+        if self.has_connection[worker.worker_id]:
+            return
+        assert worker != self
+        self.send_command("LISTEN {}\n".format(worker.worker_id))
+        port = int(self.read_line())
+        worker.send_command("CONNECT {} {}\n".format(self.worker_id, port))
+
+        worker.has_connection[self.worker_id] = True
+        self.has_connection[worker.worker_id] = True
+
+    def transfer_gstate(self, worker, hash):
+        self.check_connection(worker)
+        self.send_command("TRANSFER {}\n".format(hash))
 
     def process_command(self):
         command = self.read_line().split()
@@ -475,6 +484,8 @@ class WorkerDescriptor(object):
                     self.active_node = self.queue.popleft()
                 else:
                     self.active_node = None
+            self.transfer_gstate(self.generator.workers[1], command[1])
+
         elif name == "FINAL":
             if self.queue:
                 self.active_node = self.queue.popleft()
