@@ -128,5 +128,31 @@ class VgTransferTests(TestCase):
                 else:
                     assert s > 0
 
+    def test_buffers_pushpull(self):
+        self.program("string")
+        c = self.controller(verbose=0)
+        c.start_and_connect()
+
+        correct_hash = "E807F1FCF82D132F9BB018CA6738A19F"
+        c.make_buffer(123, 10)
+        c.write_data_into_buffer(123, 0, "1234567890")
+        hash = c.hash_buffer(123)
+        assert hash == correct_hash
+
+
+        d = self.controller()
+        d.start_and_connect()
+
+        sockets = make_interconnection((c, d))
+
+        c_to_d = sockets[0][1]
+        d_to_c = sockets[1][0]
+
+        c.push_buffer(c_to_d, 123)
+        d.pull_buffer(d_to_c, 456)
+        hash = d.hash_buffer(456)
+        assert hash == correct_hash
+
+
 if __name__ == "__main__":
     unittest.main()

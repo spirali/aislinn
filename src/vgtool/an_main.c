@@ -2261,6 +2261,23 @@ static void push_page(SocketWriteBuffer *swb, Page *page)
    }
 }
 
+static void push_buffer(Int socket, Buffer *buffer)
+{
+    SizeT size = sizeof(SizeT) + buffer->size;
+    Int written = VG_(write_socket)(socket, &buffer->size, size);
+    tl_assert(written == size);
+}
+
+static void pull_buffer(Int socket, UWord buffer_id)
+{
+    SizeT size;
+    Int read = VG_(read_socket)(socket, &size, sizeof(SizeT));
+    tl_assert(read == sizeof(SizeT));
+    Buffer *buffer = buffer_new(buffer_id, size);
+    read = VG_(read_socket)(socket, (void*) buffer_data(buffer), size);
+    tl_assert(read == size);
+}
+
 static void push_state(Int socket, State *state)
 {
    SocketWriteBuffer swb;
@@ -2832,6 +2849,21 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
          client_free(0, (void*) mem);
          write_message("Ok\n");
          continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CONN_PUSH_BUFFER"))) {
+        Int socket = next_token_int();
+        UWord buffer_id = next_token_uword();
+        Buffer *buffer = buffer_lookup(buffer_id);
+        push_buffer(socket, buffer);
+        continue;
+      }
+
+      if (!VG_(strcmp(cmd, "CONN_PULL_BUFFER"))) {
+        Int socket = next_token_int();
+        UWord buffer_id = next_token_uword();
+        pull_buffer(socket, buffer_id);
+        continue;
       }
 
       if (!VG_(strcmp(cmd, "CONN_PUSH_STATE"))) {

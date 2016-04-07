@@ -395,6 +395,14 @@ class Controller:
         return self.send_and_receive_int("CONN_PULL_STATE {0}\n"
                                          .format(socket))
 
+    def push_buffer(self, socket, buffer_id):
+        """ Send a buffer through an AVT interconnection """
+        self.send_command("CONN_PUSH_BUFFER {0} {1}\n".format(socket, buffer_id))
+
+    def pull_buffer(self, socket, buffer_id):
+        """ Receives a state through an AVT interconnection """
+        self.send_command("CONN_PULL_BUFFER {0} {1}\n".format(socket, buffer_id))
+
     def send_command(self, command):
         """ Send a command to AVT """
         assert command[-1] == "\n", "Command does not end with new line"
