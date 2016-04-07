@@ -135,8 +135,8 @@ class State:
         assert self.vg_state is not None or self.status == self.StatusFinished
 
         lst = [self.pid,
-               self.status,
                self.vg_state.hash if self.vg_state is not None else None,
+               self.status,
                len(self.comms),
                len(self.groups),
                len(self.active_requests),
@@ -758,6 +758,14 @@ class State:
                     else:
                         return i
             i += c
+
+    def collect_buffers(self, lst):
+        for request in self.active_requests:
+            request.collect_buffers(lst)
+        for request in self.finished_requests:
+            request.collect_buffers(lst)
+        for request in self.persistent_requests:
+            request.collect_buffers(lst)
 
     def __repr__(self):
         info = ""

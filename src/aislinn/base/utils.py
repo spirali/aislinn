@@ -191,7 +191,10 @@ class Loader(object):
         return value
 
     def get_object(self):
-        return self.objects[self.get()]
+        value = self.get()
+        if value is None:
+            return None
+        return self.objects[value]
 
 
 def start_listen(port, count):

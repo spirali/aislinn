@@ -24,7 +24,7 @@ from action import (ActionMatching,
                     ActionProbePromise,
                     ActionTestAll)
 import hashlib
-from base.utils import EqMixin, power_set
+from base.utils import EqMixin, power_set, Loader
 from comm import Communicator, Group, make_comm_world
 import copy
 from state import State
@@ -32,11 +32,14 @@ import consts
 import logging
 import msgpack
 
+
 class GlobalState(EqMixin):
 
-    def __init__(self, process_count, loader=None):
+    def __init__(self, process_count, load_list=None, objects=None):
         self.comm_world = make_comm_world(process_count)
-        self.states = [State(self, i, None) for i in xrange(process_count)]
+        self.states = [State(self, i, None,
+                             Loader(load_list[i], objects) if load_list else None)
+                       for i in xrange(process_count)]
         self.collective_operations = None
         self.comm_id_counter = consts.MPI_COMM_USERDEF
 
@@ -91,9 +94,6 @@ class GlobalState(EqMixin):
         hashthread = hashlib.md5()
         hashthread.update(msgpack.dumps(self.serialize_to_list()))
         return hashthread.hexdigest()
-
-    def serialize(self):
-        return msgpack.dumps(self.serialize_to_list())
 
     def init_collective_operation(self, op, blocking, index):
         assert index <= len(self.collective_operations)
@@ -222,3 +222,9 @@ class GlobalState(EqMixin):
             rank = request.comm.group.pid_to_rank(pid)
             actions.append(ActionProbePromise(
                 state.pid, comm_id, source, tag, rank))
+
+    def get_buffers(self):
+        lst = []
+        for state in self.states:
+            state.collect_buffers(lst)
+        return lst

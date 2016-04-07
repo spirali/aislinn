@@ -45,7 +45,6 @@ class Request(EqMixin):
         lst.append(self.comm.comm_id)
         lst.append(self.stacktrace)
 
-
     def is_send(self):
         return False
 
@@ -81,7 +80,7 @@ class SendRequest(Request):
     name = "send"
 
     def __init__(self, request_id, send_type,
-                 comm, target, tag, data_ptr, datatype, count):
+                 comm, target, tag, data_ptr, datatype, count, vg_buffer=None):
         Request.__init__(self, request_id, comm)
         self.send_type = send_type
         self.target = target
@@ -89,7 +88,7 @@ class SendRequest(Request):
         self.data_ptr = data_ptr
         self.datatype = datatype
         self.count = count
-        self.vg_buffer = None
+        self.vg_buffer = vg_buffer
 
     def is_send_recv_not_proc_null(self):
         return self.target != consts.MPI_PROC_NULL
@@ -112,6 +111,10 @@ class SendRequest(Request):
     def dec_ref(self):
         if self.vg_buffer:
             self.vg_buffer.dec_ref()
+
+    def collect_buffers(self, lst):
+        if self.vg_buffer:
+            lst.append(self.vg_buffer)
 
     def transfer(self, transfer_context):
         request = transfer_context.translate_table.get(self)
@@ -208,6 +211,10 @@ class ReceiveRequest(Request):
         if self.vg_buffer:
             self.vg_buffer.dec_ref()
 
+    def collect_buffers(self, lst):
+        if self.vg_buffer:
+            lst.append(self.vg_buffer)
+
     def transfer(self, transfer_context):
         request = transfer_context.translate_table.get(self)
         if request is not None:
@@ -263,7 +270,6 @@ def load_request(loader, state):
     request_id = loader.get()
     comm = state.get_comm(loader.get())
     stacktrace = loader.get()
-
     if name == "send":
         request = SendRequest(request_id,
                               loader.get(),
@@ -272,7 +278,8 @@ def load_request(loader, state):
                               loader.get(),
                               loader.get(),
                               state.get_datatype(loader.get()),
-                              loader.get())
+                              loader.get(),
+                              loader.get_object())
     elif name == "receive":
         request = ReceiveRequest(request_id,
                                  comm,
@@ -281,10 +288,13 @@ def load_request(loader, state):
                                  loader.get(),
                                  state.get_datatype(loader.get()),
                                  loader.get())
+        request.vg_buffer = loader.get_object()
+        request.source_rank = loader.get()
+        request.source_tag = loader.get()
     elif name == "collective":
         request = CollectiveRequest(request_id, comm, loader.get())
     else:
-        raise Exception("Unknown requst type: " + repr(name))
+        raise Exception("Unknown request type: " + repr(name))
 
     if request is not None:
         request.stacktrace = stacktrace

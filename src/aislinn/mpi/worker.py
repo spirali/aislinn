@@ -243,15 +243,45 @@ class Worker:
             [c.interconn_connect_finish() for c in self.controllers]
 
     def push_gstate(self, worker_id, gstate):
-        data = gstate.serialize()
+        for controller in self.controllers:
+            controller.make_buffers()
+        buffers = list(set(gstate.get_buffers()))
+        print buffers
+        data = gstate.serialize_to_list()
         socket = self.worker_sockets[worker_id]
+        data = msgpack.dumps(data)
         socket.send_data("{}\n{}".format(len(data), data))
+        for controller, s, state in zip(self.controllers,
+                                        self.controller_sockets[worker_id],
+                                        gstate.states):
+            if state.vg_state:
+                controller.push_state(s, state.vg_state)
+
+        for b in buffers:
+            for controller in b.controllers:
+                controller.push_bufferx(b)
+
 
     def pop_gstate(self, worker_id, hash):
         socket = self.worker_sockets[worker_id]
         size = int(socket.read_line())
-        data = socket.read_data(size)
-        print msgpack.loads(data)
+        data = msgpack.loads(socket.read_data(size))
+
+        # Hack, this can be fix when we separate
+        # vg_state and hash
+        print data
+        state_hashes = [data[i][1] for i in xrange(self.process_count)]
+        print state_hashes
+
+        objects = {}
+        for controller, s, hash in zip(self.controllers,
+                                       self.controller_sockets[worker_id],
+                                       state_hashes):
+            objects[hash] = controller.pull_state(s, hash)
+            print objects[hash]
+        print data
+        gstate = GlobalState(self.process_count, data, objects)
+        print gstate
 
     def process_commands(self):
         while True:
