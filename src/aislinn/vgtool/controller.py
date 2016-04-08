@@ -574,10 +574,12 @@ class BufferManager(ResourceManager):
             for b in self.pickup_resources_to_clean():
                 b.cleanup()
 
-    def new_buffer(self, data):
+    def new_buffer(self, data=None):
         buffer_id = self.buffer_id_counter
         self.buffer_id_counter += self.buffer_id_step
         buffer = self.new(buffer_id)
+        if data is None:
+            return buffer
         buffer.set_data(data)
         # We add a special referece, this refence is
         # removed when buffer is written into all controllers

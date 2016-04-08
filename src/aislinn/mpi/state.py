@@ -122,6 +122,7 @@ class State:
             self.persistent_requests = [request.load_request(loader, self)
                                         for i in xrange(persistent_requests)]
             assert allocations is None
+            self.locked_memory = Intervals(loader.get())
 
         # cc_id_counters - when first touched, is should be
         # a list of length len(self.cc_id_coutners) = 2 + len(self.comms)

@@ -280,6 +280,8 @@ def load_request(loader, state):
                               state.get_datatype(loader.get()),
                               loader.get(),
                               loader.get_object())
+        if request.vg_buffer:
+            request.vg_buffer.inc_ref()
     elif name == "receive":
         request = ReceiveRequest(request_id,
                                  comm,
@@ -289,6 +291,8 @@ def load_request(loader, state):
                                  state.get_datatype(loader.get()),
                                  loader.get())
         request.vg_buffer = loader.get_object()
+        if request.vg_buffer:
+            request.vg_buffer.inc_ref()
         request.source_rank = loader.get()
         request.source_tag = loader.get()
     elif name == "collective":

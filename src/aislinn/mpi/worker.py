@@ -174,7 +174,7 @@ class Worker:
 
         self.gcontext = gcontext
         self.execution_main()
-        self.make_state(True)
+        self.make_state()
         return True
 
         """
@@ -206,13 +206,7 @@ class Worker:
         if not result:
             raise Exception("Init failed")
 
-        while True:
-            self.process_commands()
-            if self.queue:
-                gstate = self.queue.popleft()
-                self.process_state(gstate)
-            else:
-                break
+        self.process_commands()
 
     def listen(self, worker_id):
         s, port = utils.start_listen(0, 1)
@@ -246,53 +240,67 @@ class Worker:
         for controller in self.controllers:
             controller.make_buffers()
         buffers = list(set(gstate.get_buffers()))
-        print buffers
-        data = gstate.serialize_to_list()
+        buffer_data = []
+        first_id = self.controllers[0].name
+        for b in buffers:
+            controller_ids = [c.name - first_id for c in b.controllers]
+            buffer_data.append((b.hash, b.size, controller_ids))
+        gstate_data = gstate.serialize_to_list()
+        data = msgpack.dumps((buffer_data, gstate_data))
         socket = self.worker_sockets[worker_id]
-        data = msgpack.dumps(data)
         socket.send_data("{}\n{}".format(len(data), data))
+        sockets = self.controller_sockets[worker_id]
         for controller, s, state in zip(self.controllers,
-                                        self.controller_sockets[worker_id],
+                                        sockets,
                                         gstate.states):
             if state.vg_state:
                 controller.push_state(s, state.vg_state)
 
         for b in buffers:
             for controller in b.controllers:
-                controller.push_bufferx(b)
+                controller.push_buffer(sockets[c.name - first_id], b.id)
 
 
-    def pop_gstate(self, worker_id, hash):
+
+    def pull_gstate(self, worker_id):
         socket = self.worker_sockets[worker_id]
         size = int(socket.read_line())
-        data = msgpack.loads(socket.read_data(size))
+        buffer_data, gstate_data = msgpack.loads(socket.read_data(size))
 
         # Hack, this can be fix when we separate
         # vg_state and hash
-        print data
-        state_hashes = [data[i][1] for i in xrange(self.process_count)]
-        print state_hashes
-
+        state_hashes = [gstate_data[i][1] for i in xrange(self.process_count)]
         objects = {}
-        for controller, s, hash in zip(self.controllers,
-                                       self.controller_sockets[worker_id],
-                                       state_hashes):
+        sockets = self.controller_sockets[worker_id]
+        for controller, s, hash in zip(self.controllers, sockets, state_hashes):
             objects[hash] = controller.pull_state(s, hash)
-            print objects[hash]
-        print data
-        gstate = GlobalState(self.process_count, data, objects)
-        print gstate
+
+        for hash, size, controller_ids in buffer_data:
+            b = self.buffer_manager.new_buffer()
+            for i in controller_ids:
+                self.controllers[i].pull_buffer(sockets[i], b.id)
+            b.hash = hash
+            b.size = size
+            objects[hash] = b
+
+        return GlobalState(self.process_count, gstate_data, objects)
 
     def process_commands(self):
         while True:
             command = self.generator.read_line().split()
             name = command[0]
-            if name == "PUSH":
+            if name == "START":
+                gstate, actions = self.gstates[command[1]]
+                action = actions[int(command[2])]
+                gstate = gstate.copy()
+                self.start_execution(gstate, action)
+                self.make_state()
+            elif name == "PUSH":
                 worker_id = int(command[1])
                 gstate = self.gstates[command[2]]
                 self.push_gstate(worker_id, gstate)
             elif name == "POP":
-                self.pop_gstate(int(command[1]), command[2])
+                self.gstates[hash] = self.pull_gstate(int(command[1]))
             elif name == "LISTEN":
                 worker_id = int(command[1])
                 logging.debug("Listening for connection from worker %s", worker_id)
@@ -300,12 +308,13 @@ class Worker:
                 self.listen(worker_id)
             elif name == "CONNECT":
                 self.command_connect(command)
+            elif name == "QUIT":
+                return
             else:
                 raise Exception("Unknown command:" + name)
-        import sys
-        sys.exit(1)
 
-    def process_state(self, gstate):
+    """
+    def process_state(self, gstate, action):
         actions = gstate.get_actions(self)
         if not actions:
             self.generator.socket.send_data("FINAL\n")
@@ -318,6 +327,7 @@ class Worker:
                 gs = gstate.copy()
             self.start_execution(gs, action)
             self.make_state(last)
+    """
 
     def start_execution(self, gstate, action):
         logging.debug("Starting gcontext %s %s %s", self, gstate)
@@ -341,17 +351,17 @@ class Worker:
                 logging.debug("Ready controller %s", context)
                 context.process_run_result(c.finish_async())
 
-    def make_state(self, last):
+    def make_state(self):
         # !!! TODO:
         # First hash, then check if save is necessary then save
         self.gcontext.save_states()
         gstate = self.gcontext.gstate
         hash = self.gcontext.gstate.compute_hash()
-        self.generator.new_state(hash, last)
+        actions = gstate.get_actions(self)
+        self.generator.new_state(hash, len(actions))
         line = self.generator.read_line()
-        print line
         if line == "SAVE":
-            self.gstates[hash] = gstate
+            self.gstates[hash] = (gstate, actions)
             self.queue.append(gstate)
         else:
             assert line == "DROP"

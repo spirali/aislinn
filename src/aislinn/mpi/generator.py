@@ -422,8 +422,8 @@ class GeneratorConnection(object):
     def read_worker_id(self):
         return int(self.socket.read_line())
 
-    def new_state(self, hash, last):
-        self.socket.send_data("STATE {} {}\n".format(hash, "last" if last else "cont"))
+    def new_state(self, hash, n_actions):
+        self.socket.send_data("STATE {} {}\n".format(hash, n_actions))
 
     def send_ports(self, ports):
         self.socket.send_data("{}\n".format(" ".join(map(str, ports))))
@@ -470,28 +470,29 @@ class WorkerDescriptor(object):
         self.send_command("PUSH {} {}\n".format(worker.worker_id, hash))
         worker.send_command("POP {} {}\n".format(self.worker_id, hash))
 
+    def start_next(self, response):
+        if not self.queue:
+            self.active_node = None
+            self.send_command(response)
+            return
+        node, action = self.queue.pop()
+        self.send_command("{}START {} {}\n".format(response, node.hash, action))
+        self.active_node = node
+
     def process_command(self):
         command = self.read_line().split()
         name = command[0]
         if name == "STATE":
             node, is_new = self.generator.add_node(self.active_node, command[1])
             if is_new:
-                self.send_command("SAVE\n")
-                self.queue.append(node)
+                response = "SAVE\n"
+                n_actions = int(command[2])
+                for action in xrange(n_actions):
+                    self.queue.append((node, action))
             else:
-                self.send_command("DROP\n")
-            if command[2] == "last":
-                if self.queue:
-                    self.active_node = self.queue.popleft()
-                else:
-                    self.active_node = None
-            self.transfer_gstate(self.generator.workers[1], command[1])
-
-        elif name == "FINAL":
-            if self.queue:
-                self.active_node = self.queue.popleft()
-            else:
-                self.active_node = None
+                response = "DROP\n"
+            self.start_next(response)
+            #self.transfer_gstate(self.generator.workers[1], command[1])
         else:
             raise Exception("Unknown command: " + repr(command))
 
