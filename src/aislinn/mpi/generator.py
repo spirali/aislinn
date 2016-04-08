@@ -131,10 +131,10 @@ class Generator:
         for node, gstate in self.queue:
             gstate.sanity_check()
 
-    def sleeping_neighbours_of(self, worker_id):
+    def sleeping_neighbours(self, worker_id):
         for i in xrange(1, len(self.workers)):
             worker = self.workers[(i + worker_id) % len(self.workers)]
-            if not worker.queue and not worker.gcontext:
+            if not worker.queue and not worker.active_node:
                 return worker
         return None
 
@@ -466,16 +466,30 @@ class WorkerDescriptor(object):
         self.has_connection[worker.worker_id] = True
 
     def transfer_gstate(self, worker, hash):
+        print "---> Transfering {} => {}".format(self.worker_id, worker.worker_id)
         self.check_connection(worker)
         self.send_command("PUSH {} {}\n".format(worker.worker_id, hash))
         worker.send_command("POP {} {}\n".format(self.worker_id, hash))
 
-    def start_next(self, response):
+    def start_next(self, response=""):
         if not self.queue:
             self.active_node = None
-            self.send_command(response)
+            if response:
+                self.send_command(response)
             return
         node, action = self.queue.pop()
+        while self.queue:
+            worker = self.generator.sleeping_neighbours(self.worker_id)
+            if worker is None:
+                break
+            if response:
+                self.send_command(response)
+                response = ""
+            self.transfer_gstate(self.generator.workers[1], node.hash)
+            node, action = self.queue.pop()
+            worker.queue.append((node, action))
+            worker.start_next()
+
         self.send_command("{}START {} {}\n".format(response, node.hash, action))
         self.active_node = node
 

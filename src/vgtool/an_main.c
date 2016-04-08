@@ -2487,6 +2487,12 @@ static State* pull_state(SocketWrapper *sw, UWord state_id)
    return state;
 }
 
+static void socket_set_no_delay(Int socket) {
+    int one = 1;
+    Int sr = VG_(setsockopt)(socket, VKI_IPPROTO_TCP, VKI_TCP_NODELAY, &one, sizeof(one));
+    tl_assert(sr == 0);
+}
+
 static
 void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
 {
@@ -2916,7 +2922,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
         int client_socket = VG_(accept)(socket, NULL, NULL);
         tl_assert(client_socket >= 0);
         VG_(close)(socket);
-
+        socket_set_no_delay(client_socket);
         SocketWrapper sw;
         sw_init(&sw, client_socket, MAX_CONNECTION_BUFFER_LENGTH);
         UWord connection_id = VG_(sizeXA)(connection_list);
@@ -2929,6 +2935,7 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!VG_(strcmp(cmd, "CONN_CONNECT"))) {
         char *param = next_token();
         Int socket = VG_(connect_via_socket)(param);
+        socket_set_no_delay(socket);
 
         SocketWrapper sw;
         sw_init(&sw, socket, MAX_CONNECTION_BUFFER_LENGTH);

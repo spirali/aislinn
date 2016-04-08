@@ -288,19 +288,25 @@ class Worker:
     def process_commands(self):
         while True:
             command = self.generator.read_line().split()
+            if self.worker_id == 1:
+                print self.worker_id, command
             name = command[0]
             if name == "START":
                 gstate, actions = self.gstates[command[1]]
                 action = actions[int(command[2])]
                 gstate = gstate.copy()
                 self.start_execution(gstate, action)
+                if self.worker_id == 1:
+                    print "END"
+                print self.worker_id, command
                 self.make_state()
             elif name == "PUSH":
                 worker_id = int(command[1])
-                gstate = self.gstates[command[2]]
+                gstate = self.gstates[command[2]][0]
                 self.push_gstate(worker_id, gstate)
             elif name == "POP":
-                self.gstates[hash] = self.pull_gstate(int(command[1]))
+                gstate = self.pull_gstate(int(command[1]))
+                self.gstates[command[2]] = (gstate, gstate.get_actions(self))
             elif name == "LISTEN":
                 worker_id = int(command[1])
                 logging.debug("Listening for connection from worker %s", worker_id)
@@ -341,6 +347,8 @@ class Worker:
     def execution_main(self):
         while True:
             self.fast_expand()
+            if self.worker_id == 1:
+                print "!!!"
             controllers = self.running_controllers()
             if not controllers:
                 break
@@ -446,7 +454,6 @@ class Worker:
             if gcontext.gstate.collective_operations \
                     and self.check_collective_requests(gcontext):
                 continue
-
             """
             if self.generator.debug_seq:  # DEBUG --debug-seq
                 if all(not gcontext.is_pid_running(state.pid)
