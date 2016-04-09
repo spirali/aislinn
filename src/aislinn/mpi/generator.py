@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014, 2015 Stanislav Bohm
+#    Copyright (C) 2014-2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -466,10 +466,10 @@ class WorkerDescriptor(object):
         self.has_connection[worker.worker_id] = True
 
     def transfer_gstate(self, worker, hash):
-        print "---> Transfering {} => {}".format(self.worker_id, worker.worker_id)
+        print "---> Transfering {} => {} | {}".format(self.worker_id, worker.worker_id, hash)
         self.check_connection(worker)
         self.send_command("PUSH {} {}\n".format(worker.worker_id, hash))
-        worker.send_command("POP {} {}\n".format(self.worker_id, hash))
+        worker.send_command("PULL {} {}\n".format(self.worker_id, hash))
 
     def start_next(self, response=""):
         if not self.queue:
@@ -485,10 +485,10 @@ class WorkerDescriptor(object):
             if response:
                 self.send_command(response)
                 response = ""
-            self.transfer_gstate(self.generator.workers[1], node.hash)
-            node, action = self.queue.pop()
+            self.transfer_gstate(worker, node.hash)
             worker.queue.append((node, action))
             worker.start_next()
+            node, action = self.queue.pop()
 
         self.send_command("{}START {} {}\n".format(response, node.hash, action))
         self.active_node = node
@@ -498,9 +498,11 @@ class WorkerDescriptor(object):
         name = command[0]
         if name == "STATE":
             node, is_new = self.generator.add_node(self.active_node, command[1])
+
             if is_new:
                 response = "SAVE\n"
                 n_actions = int(command[2])
+                print "NEW STATE:", self.worker_id, node.hash, n_actions
                 for action in xrange(n_actions):
                     self.queue.append((node, action))
             else:

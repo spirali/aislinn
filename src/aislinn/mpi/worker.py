@@ -272,41 +272,42 @@ class Worker:
         state_hashes = [gstate_data[i][1] for i in xrange(self.process_count)]
         objects = {}
         sockets = self.controller_sockets[worker_id]
-        for controller, s, hash in zip(self.controllers, sockets, state_hashes):
-            objects[hash] = controller.pull_state(s, hash)
 
+        for controller, s, hash in zip(self.controllers, sockets, state_hashes):
+            if hash is not None:
+                objects[hash] = controller.pull_state(s, hash)
         for hash, size, controller_ids in buffer_data:
             b = self.buffer_manager.new_buffer()
-            for i in controller_ids:
-                self.controllers[i].pull_buffer(sockets[i], b.id)
+            controllers = [self.controllers[i] for i in controller_ids]
+            for controller in controllers:
+                controller.pull_buffer(sockets[i], b.id)
             b.hash = hash
             b.size = size
+            b.controllers = controllers
             objects[hash] = b
-
         return GlobalState(self.process_count, gstate_data, objects)
 
     def process_commands(self):
         while True:
             command = self.generator.read_line().split()
-            if self.worker_id == 1:
-                print self.worker_id, command
+            print "Receive:", self.worker_id, command
             name = command[0]
             if name == "START":
                 gstate, actions = self.gstates[command[1]]
                 action = actions[int(command[2])]
                 gstate = gstate.copy()
                 self.start_execution(gstate, action)
-                if self.worker_id == 1:
-                    print "END"
-                print self.worker_id, command
+                print "Finish", self.worker_id
                 self.make_state()
             elif name == "PUSH":
                 worker_id = int(command[1])
                 gstate = self.gstates[command[2]][0]
                 self.push_gstate(worker_id, gstate)
-            elif name == "POP":
+                print "PUSH DONE"
+            elif name == "PULL":
                 gstate = self.pull_gstate(int(command[1]))
                 self.gstates[command[2]] = (gstate, gstate.get_actions(self))
+                print "PULL DONE"
             elif name == "LISTEN":
                 worker_id = int(command[1])
                 logging.debug("Listening for connection from worker %s", worker_id)
@@ -347,8 +348,6 @@ class Worker:
     def execution_main(self):
         while True:
             self.fast_expand()
-            if self.worker_id == 1:
-                print "!!!"
             controllers = self.running_controllers()
             if not controllers:
                 break
