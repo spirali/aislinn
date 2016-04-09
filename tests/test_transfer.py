@@ -52,13 +52,13 @@ class VgTransferTests(TestCase):
 
     def test_printf_pushpull(self):
         self.program("printf")
-        c = self.controller(verbose=1)
+        c = self.controller(verbose=0)
         c.start_and_connect()
         c.run_process()
         state_id = c.save_state()
         h1 = c.hash_state()
 
-        d = self.controller(verbose=1)
+        d = self.controller(verbose=0)
         d.start_and_connect()
         sockets = make_interconnection((c, d))
 
@@ -109,8 +109,8 @@ class VgTransferTests(TestCase):
 
         c_sock = c.interconn_listen_finish()
         d_sock = d.interconn_connect_finish()
-        assert c_sock > 0
-        assert d_sock > 0
+        assert c_sock == 0
+        assert d_sock == 0
 
     def test_interconnect(self):
         self.program("string")
@@ -126,7 +126,7 @@ class VgTransferTests(TestCase):
                 if i == j:
                     assert s is None
                 else:
-                    assert s > 0
+                    assert s >= 0
 
     def test_buffers_pushpull(self):
         self.program("string")

@@ -216,6 +216,9 @@ static VgHashTable *buffer_table;
 
 static Int control_socket = -1;
 
+#define MAX_CONNECTION_BUFFER_LENGTH (1024 * 512)
+static XArray *connection_list;
+
 static struct {
     Bool enable;
     UWord count_instructions;
@@ -258,6 +261,16 @@ typedef
       CET_SYSCALL,
       CET_REPORT,      
    } CommandsEnterType;
+
+typedef
+   struct {
+      HChar *data_ptr;
+      SizeT size;
+      HChar *buffer;
+      SizeT buffer_max_size;
+      Int socket;
+   } SocketWrapper;
+
 
 static void write_message(const char *str);
 static void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer);
@@ -2145,44 +2158,62 @@ static void swb_end(SocketWriteBuffer *swb)
    tl_assert(written == swb->size);
 }
 
-typedef
-   struct {
-      HChar *ptr;
-      Int size;
-      HChar *buffer;
-      Int buffer_size;
-      Int socket;
-   } SocketReadBuffer;
-
-static void srb_init(
-      SocketReadBuffer *srb, void *buffer, SizeT buffer_size, Int socket)
+static void sw_init(SocketWrapper *sw, Int socket, SizeT buffer_max_size)
 {
-   srb->ptr = (HChar*) buffer;
-   srb->buffer = (HChar*) buffer;
-   srb->buffer_size = buffer_size;
-   srb->socket = socket;
-   srb->size = VG_(read_socket)(socket, buffer, buffer_size);
-   tl_assert(srb->size > 0);
+   VG_(memset(sw, 0, sizeof(SocketWrapper)));
+   sw->buffer_max_size = buffer_max_size;
+   sw->socket = socket;
 }
 
-static void* srb_read(SocketReadBuffer *srb, Int size)
+static SizeT socket_read_helper(Int socket, void *mem, SizeT size, SizeT max_size)
 {
-   Int remaining = srb->size - (srb->ptr - srb->buffer);
-   if (remaining < size) {
-      tl_assert(size <= srb->buffer_size);
-      VG_(memmove)(srb->buffer, srb->ptr, remaining);
-      srb->size = remaining;
-      do {
-         Int read = VG_(read_socket)(srb->socket, &srb->buffer[srb->size], srb->buffer_size - srb->size);
-         tl_assert(read > 0);
-         srb->size += read;
-      } while(srb->size < size);
-      srb->ptr = srb->buffer + size;
-      return srb->buffer;
+   tl_assert(size <= max_size);
+   SizeT sz = 0;
+   HChar *data = (HChar*) mem;
+   do {
+      Int read = VG_(read_socket)(socket, data + sz, max_size - sz);
+      tl_assert(read > 0);
+      sz += read;
+   } while(sz < size);
+   return sz;
+}
+
+static void sw_read(SocketWrapper *sw, void *mem, SizeT size)
+{
+   HChar *data_ptr = sw->data_ptr;
+   HChar *m = mem;
+   if (sw->size >= size) {
+      VG_(memcpy)(m, data_ptr, size);
+      sw->size -= size;
+      sw->data_ptr += size;
+      return;
    }
-   HChar *result = srb->ptr;
-   srb->ptr += size;
-   return result;
+
+   if (sw->size) {
+      VG_(memcpy)(m, data_ptr, sw->size);
+      size -= sw->size;
+      m += sw->size;
+      sw->size = 0;
+      sw->data_ptr = sw->buffer;
+   }
+
+   if (size >= sw->buffer_max_size) {
+      socket_read_helper(sw->socket, m, size, size);
+      return;
+   }
+
+   data_ptr = sw->buffer;
+
+   if (data_ptr == NULL) {
+      data_ptr = (HChar*) VG_(malloc)("an.sw_buffer", sw->buffer_max_size);
+      sw->buffer = data_ptr;
+   }
+
+   SizeT sz = socket_read_helper(sw->socket, data_ptr, size, sw->buffer_max_size);
+   VG_(memcpy)(m, data_ptr, size);
+   data_ptr += size;
+   sw->data_ptr = data_ptr;
+   sw->size = sz - size;
 }
 
 static void push_page(SocketWriteBuffer *swb, Page *page)
@@ -2261,29 +2292,27 @@ static void push_page(SocketWriteBuffer *swb, Page *page)
    }
 }
 
-static void push_buffer(Int socket, Buffer *buffer)
+static void push_buffer(SocketWrapper *sw, Buffer *buffer)
 {
     SizeT size = sizeof(SizeT) + buffer->size;
-    Int written = VG_(write_socket)(socket, &buffer->size, size);
+    Int written = VG_(write_socket)(sw->socket, &buffer->size, size);
     tl_assert(written == size);
 }
 
-static void pull_buffer(Int socket, UWord buffer_id)
+static void pull_buffer(SocketWrapper *sw, UWord buffer_id)
 {
     SizeT size;
-    Int read = VG_(read_socket)(socket, &size, sizeof(SizeT));
-    tl_assert(read == sizeof(SizeT));
+    sw_read(sw, &size, sizeof(SizeT));
     Buffer *buffer = buffer_new(buffer_id, size);
-    read = VG_(read_socket)(socket, (void*) buffer_data(buffer), size);
-    tl_assert(read == size);
+    sw_read(sw, (void*) buffer_data(buffer), size);
 }
 
-static void push_state(Int socket, State *state)
+static void push_state(SocketWrapper *sw, State *state)
 {
    SocketWriteBuffer swb;
    Int buffer_size = 160 * 1024;
    void *buffer = VG_(malloc)("an.srb", buffer_size);
-   swb_init(&swb, buffer, buffer_size, socket);
+   swb_init(&swb, buffer, buffer_size, sw->socket);
 
    Word blocks_count;
    void *blocks_ptr;
@@ -2310,12 +2339,12 @@ static void push_state(Int socket, State *state)
    VG_(free)(buffer);
 }
 
-static Page *pull_page(SocketReadBuffer *srb)
+static Page *pull_page(SocketWrapper *sw)
 {
-    TransportPageHeader *page_header =
-          (TransportPageHeader*) srb_read(srb, sizeof(TransportPageHeader));
-    tl_assert(page_header->base % PAGE_SIZE == 0);
-    Page *page = page_new(page_header->base);
+    TransportPageHeader page_header;
+    sw_read(sw, &page_header, sizeof(TransportPageHeader));
+    tl_assert(page_header.base % PAGE_SIZE == 0);
+    Page *page = page_new(page_header.base);
     page->status = INVALID_HASH;
 
     Int j;
@@ -2335,7 +2364,7 @@ static Page *pull_page(SocketReadBuffer *srb)
 
     // Copy flags, because srb_read may overwrite header;
     for (j = 0; j < REAL_PAGES_IN_PAGE; j++) {
-         Int flag = page_header->flags[j];
+         Int flag = page_header.flags[j];
          flags[j] = flag;
          page->page_flags[j] = flag & ~TRANSPORT_PAGEFLAG_MASK;
          Int mflag = flag & TRANSPORT_PAGEFLAG_MASK;
@@ -2356,9 +2385,7 @@ static Page *pull_page(SocketReadBuffer *srb)
     if (defined) {
        page->va = uniform_va[MEM_DEFINED];
        page->va->ref_count++;
-       VG_(memcpy)(page->data,
-                   srb_read(srb, PAGE_SIZE),
-                   PAGE_SIZE);
+       sw_read(sw, page->data, PAGE_SIZE);
        return page;
     }
 
@@ -2379,9 +2406,7 @@ static Page *pull_page(SocketReadBuffer *srb)
     if (rdonly) {
        page->va = uniform_va[MEM_READONLY];
        page->va->ref_count++;
-       VG_(memcpy)(page->data,
-                   srb_read(srb, PAGE_SIZE),
-                   PAGE_SIZE);
+       sw_read(sw, page->data, PAGE_SIZE);
        return page;
     }
 
@@ -2405,9 +2430,7 @@ static Page *pull_page(SocketReadBuffer *srb)
                break;
            case TRANSPORT_PAGEFLAG_VAONLY:
            case TRANSPORT_PAGEFLAG_FULL:
-               VG_(memcpy)(&page->va->vabits[offset],
-                           srb_read(srb, VKI_PAGE_SIZE),
-                           VKI_PAGE_SIZE);
+              sw_read(sw, &page->va->vabits[offset], VKI_PAGE_SIZE);
               break;
            default:
               break;
@@ -2419,9 +2442,7 @@ static Page *pull_page(SocketReadBuffer *srb)
         if (flag != TRANSPORT_PAGEFLAG_NOACCESS
             && flag != TRANSPORT_PAGEFLAG_VAONLY
             && flag != TRANSPORT_PAGEFLAG_UNDEFINED) {
-            VG_(memcpy)(&page->data[j * VKI_PAGE_SIZE],
-                  srb_read(srb, VKI_PAGE_SIZE),
-                  VKI_PAGE_SIZE);
+            sw_read(sw, &page->data[j * VKI_PAGE_SIZE], VKI_PAGE_SIZE);
         } else {
            VG_(memset(&page->data[j * VKI_PAGE_SIZE], 0, VKI_PAGE_SIZE));
         }
@@ -2429,26 +2450,21 @@ static Page *pull_page(SocketReadBuffer *srb)
     return page;
 }
 
-static State* pull_state(Int socket, UWord state_id)
+static State* pull_state(SocketWrapper *sw, UWord state_id)
 {
    State *state = VG_(malloc)("an.state", sizeof(State));
    VG_(memset)(state, 0, sizeof(State));
 
-   SocketReadBuffer srb;
-   const Int buffer_size = 160 * 1024;
-   void *buffer = VG_(malloc)("an.srb", buffer_size);
-   srb_init(&srb, buffer, buffer_size, socket);
-
-   TransportStateHeader *header = (TransportStateHeader*)
-      srb_read(&srb, sizeof(TransportStateHeader));
+   TransportStateHeader header;
+   sw_read(sw, &header, sizeof(TransportStateHeader));
 
    state->id = state_id;
-   state->memimage.pages_count = header->pages_count;
-   state->memimage.answer = header->answer;
-   state->threadstate = header->threadstate;
+   state->memimage.pages_count = header.pages_count;
+   state->memimage.answer = header.answer;
+   state->threadstate = header.threadstate;
 
-   Word pages_count = header->pages_count;
-   Word blocks_count = header->allocation_blocks_count;
+   Word pages_count = header.pages_count;
+   Word blocks_count = header.allocation_blocks_count;
 
    Page **pages = (Page**) VG_(malloc)("an.memimage", pages_count * sizeof(Page*));
    state->memimage.pages = pages;
@@ -2457,17 +2473,17 @@ static State* pull_state(Int socket, UWord state_id)
           (VG_(malloc), "an.allocations", VG_(free), sizeof(AllocationBlock));
 
    VG_(hintSizeXA)(state->memimage.allocation_blocks, blocks_count);
-   AllocationBlock *blocks = \
-         (AllocationBlock*) srb_read(&srb, sizeof(AllocationBlock) * blocks_count);
+
    Int i;
    for (i = 0; i < blocks_count; i++) {
-      VG_(addToXA)(state->memimage.allocation_blocks, &blocks[i]);
+      AllocationBlock block;
+      sw_read(sw, &block, sizeof(AllocationBlock));
+      VG_(addToXA)(state->memimage.allocation_blocks, &block);
    }
 
    for (i = 0; i < pages_count; i++) {
-        pages[i] = pull_page(&srb);
+        pages[i] = pull_page(sw);
    }
-   VG_(free)(buffer);
    return state;
 }
 
@@ -2852,33 +2868,37 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       }
 
       if (!VG_(strcmp(cmd, "CONN_PUSH_BUFFER"))) {
-        Int socket = next_token_int();
+        UWord connection_id = next_token_uword();
         UWord buffer_id = next_token_uword();
         Buffer *buffer = buffer_lookup(buffer_id);
-        push_buffer(socket, buffer);
+        SocketWrapper *sw = (SocketWrapper*) VG_(indexXA)(connection_list, connection_id);
+        push_buffer(sw, buffer);
         continue;
       }
 
       if (!VG_(strcmp(cmd, "CONN_PULL_BUFFER"))) {
-        Int socket = next_token_int();
+        UWord connection_id = next_token_uword();
         UWord buffer_id = next_token_uword();
-        pull_buffer(socket, buffer_id);
+        SocketWrapper *sw = (SocketWrapper*) VG_(indexXA)(connection_list, connection_id);
+        pull_buffer(sw, buffer_id);
         continue;
       }
 
       if (!VG_(strcmp(cmd, "CONN_PUSH_STATE"))) {
-        Int socket = next_token_int();
+        UWord connection_id = next_token_int();
         UWord state_id = next_token_uword();
+        SocketWrapper *sw = (SocketWrapper*) VG_(indexXA)(connection_list, connection_id);
         State *state = (State*) VG_(HT_lookup(state_table, state_id));
         tl_assert(state);
-        push_state(socket, state);
+        push_state(sw, state);
         continue;
       }
 
       if (!VG_(strcmp(cmd, "CONN_PULL_STATE"))) {
-        Int socket = next_token_int();
+        UWord connection_id = next_token_int();
         UWord state_id = make_new_id();
-        State *state = pull_state(socket, state_id);
+        SocketWrapper *sw = (SocketWrapper*) VG_(indexXA)(connection_list, connection_id);
+        State *state = pull_state(sw, state_id);
         VG_(HT_add_node(state_table, state));
         VG_(snprintf(command, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", state->id));
         write_message(command);
@@ -2896,7 +2916,12 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
         int client_socket = VG_(accept)(socket, NULL, NULL);
         tl_assert(client_socket >= 0);
         VG_(close)(socket);
-        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%d\n", client_socket);
+
+        SocketWrapper sw;
+        sw_init(&sw, client_socket, MAX_CONNECTION_BUFFER_LENGTH);
+        UWord connection_id = VG_(sizeXA)(connection_list);
+        VG_(addToXA)(connection_list, &sw);
+        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", connection_id);
         write_message(command);
         continue;
       }
@@ -2904,7 +2929,12 @@ void process_commands(CommandsEnterType cet, Vg_AislinnCallAnswer *answer)
       if (!VG_(strcmp(cmd, "CONN_CONNECT"))) {
         char *param = next_token();
         Int socket = VG_(connect_via_socket)(param);
-        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%d\n", socket);
+
+        SocketWrapper sw;
+        sw_init(&sw, socket, MAX_CONNECTION_BUFFER_LENGTH);
+        UWord connection_id = VG_(sizeXA)(connection_list);
+        VG_(addToXA)(connection_list, &sw);
+        VG_(snprintf)(command, MAX_MESSAGE_BUFFER_LENGTH, "%lu\n", connection_id);
         write_message(command);
         continue;
       }
@@ -3127,6 +3157,7 @@ static void an_post_clo_init(void)
       VG_(exit)(1);
    }
 
+   connection_list = VG_(newXA)(VG_(malloc), "an.connections", VG_(free), sizeof(SocketWrapper));
    state_table = VG_(HT_construct)("an.states");
    buffer_table = VG_(HT_construct)("an.buffers");
    uniform_va[MEM_NOACCESS] = va_new();
