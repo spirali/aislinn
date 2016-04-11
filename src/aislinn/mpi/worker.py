@@ -37,51 +37,19 @@ import socket
 from datetime import datetime
 
 
-
-class TransferContext:
-
-    def __init__(self, worker, sockets, target_worker, target_sockets):
-        self.worker = worker
-        self.sockets = sockets
-        self.target_worker = target_worker
-        self.target_sockets = target_sockets
-        self.translate_table = {}
-
-    def set_translate(self, source, target):
-        assert source not in self.translate_table
-        self.translate_table[source] = target
-
-    def transfer_state(self, pid, vg_state):
-        logging.debug("Transferring state: %s pid: %s", vg_state, pid)
-        controller = self.target_worker.controllers[pid]
-        state = controller.get_cached_state(vg_state.hash)
-        if state is not None:
-            state.inc_ref_revive()
-            return state
-        self.worker.controllers[pid].push_state(self.sockets[pid], vg_state)
-        return controller.pull_state(self.target_sockets[pid], vg_state.hash)
-
-    def transfer_buffer(self, vg_buffer):
-        logging.debug("Transferring buffer: %s", vg_buffer)
-        assert vg_buffer.data is None  # Data are already pushed in clients
-        controllers = self.worker.controllers
-        pids = [controllers.index(c) for c in vg_buffer.controllers]
-        data = vg_buffer.controllers[0].read_buffer(vg_buffer.id)
-        buffer = self.target_worker.buffer_manager.new_buffer(data)
-        buffer.remaining_controllers = len(pids)
-        for pid in pids:
-            self.target_worker.controllers[pid].add_buffer(buffer)
-        return buffer
-
-
 class Worker:
 
-    def __init__(self, worker_id, workers_count,
-                 generator, args, aislinn_args, process_count):
-        self.generator = generator
+    def __init__(self, workers_count,
+                 port, args, aislinn_args, process_count):
+        s = socket.create_connection(("127.0.0.1", port))
+        self.socket = SocketWrapper(s)
+        self.socket.set_no_delay()
+        worker_id = int(self.socket.read_line())
         self.worker_id = worker_id
+
         self.process_count = process_count
         self.gcontext = None
+        self.current_state = None
         self.consts_pool = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
 
@@ -214,7 +182,8 @@ class Worker:
         try:
             ports = [c.interconn_listen() for c in self.controllers]
             ports.append(port)
-            self.generator.send_ports(ports)
+            # Send ports
+            self.socket.send_data("{}\n".format(" ".join(map(str, ports))))
             s2, addr = s.accept()
             self.worker_sockets[worker_id] = SocketWrapper(s2)
             self.controller_sockets[worker_id] = \
@@ -276,9 +245,13 @@ class Worker:
 
         for controller, s, hash in zip(self.controllers, sockets, state_hashes):
             if hash is not None:
+                logging.debug("Pulling state %s", hash)
                 objects[hash] = controller.pull_state(s, hash)
+        buffers = []
         for hash, size, controller_ids in buffer_data:
+            assert controller_ids
             b = self.buffer_manager.new_buffer()
+            buffers.append(b)
             controllers = [self.controllers[i] for i in controller_ids]
             for controller in controllers:
                 controller.pull_buffer(sockets[i], b.id)
@@ -286,31 +259,47 @@ class Worker:
             b.size = size
             b.controllers = controllers
             objects[hash] = b
-        return GlobalState(self.process_count, gstate_data, objects)
+
+        gstate = GlobalState(self.process_count, gstate_data, objects)
+        for b in buffers:
+            b.dec_ref()
+        return gstate
+
+    def dispose_current(self):
+        if self.current_state:
+            self.current_state[1].dispose()
+            self.current_state = None
+            self.cleanup()
 
     def process_commands(self):
         while True:
-            command = self.generator.read_line().split()
-            print "Receive:", self.worker_id, command
+            command = self.socket.read_line().split()
+            logging.debug("Received command: %s", command)
             name = command[0]
-            if name == "START":
+            if name == "SAVE":
+                hash, gstate, actions = self.current_state
+                self.gstates[hash] = (gstate, actions)
+                self.current_state = None
+            elif name == "START":
+                self.dispose_current()
                 gstate, actions = self.gstates[command[1]]
                 action = actions[int(command[2])]
                 gstate = gstate.copy()
                 self.start_execution(gstate, action)
-                print "Finish", self.worker_id
                 self.make_state()
             elif name == "FREE":
-                del self.gstates[command[1]]
+                gstate, actions = self.gstates.pop(command[1])
+                gstate.dispose()
+                self.cleanup()
             elif name == "PUSH":
                 worker_id = int(command[1])
                 gstate = self.gstates[command[2]][0]
                 self.push_gstate(worker_id, gstate)
-                print "PUSH DONE"
             elif name == "PULL":
+                self.dispose_current()
+                self.cleanup()
                 gstate = self.pull_gstate(int(command[1]))
                 self.gstates[command[2]] = (gstate, gstate.get_actions(self))
-                print "PULL DONE"
             elif name == "LISTEN":
                 worker_id = int(command[1])
                 logging.debug("Listening for connection from worker %s", worker_id)
@@ -319,6 +308,9 @@ class Worker:
             elif name == "CONNECT":
                 self.command_connect(command)
             elif name == "FINAL_CHECK":
+                if self.current_state:
+                    self.current_state[1].dispose()
+                    self.current_state = None
                 self.final_check()
                 return
             elif name == "QUIT":
@@ -326,24 +318,8 @@ class Worker:
             else:
                 raise Exception("Unknown command:" + name)
 
-    """
-    def process_state(self, gstate, action):
-        actions = gstate.get_actions(self)
-        if not actions:
-            self.generator.socket.send_data("FINAL\n")
-            return
-        for action in actions:
-            last = action == actions[-1]
-            if last:
-                gs = gstate
-            else:
-                gs = gstate.copy()
-            self.start_execution(gs, action)
-            self.make_state(last)
-    """
-
     def start_execution(self, gstate, action):
-        logging.debug("Starting gcontext %s %s %s", self, gstate)
+        logging.debug("Starting gcontext %s %s", self, gstate)
         gcontext = GlobalContext(self, gstate)
         self.gcontext = gcontext
         if action:
@@ -371,14 +347,9 @@ class Worker:
         gstate = self.gcontext.gstate
         hash = self.gcontext.gstate.compute_hash()
         actions = gstate.get_actions(self)
-        self.generator.new_state(hash, len(actions))
-        line = self.generator.read_line()
-        if line == "SAVE":
-            self.gstates[hash] = (gstate, actions)
-            self.queue.append(gstate)
-        else:
-            assert line == "DROP"
-            gstate.dispose()
+        self.new_state(hash, len(actions))
+        self.current_state = (hash, gstate, actions)
+        self.gcontext = None
 
     def check_collective_requests(self, gcontext):
         for state in gcontext.gstate.states:
@@ -551,6 +522,8 @@ class Worker:
             controller.make_buffers()
         self.cleanup()
 
+        assert len(self.gstates) == 0
+
         for controller in self.controllers:
             # Check there is no memory leak
             assert controller.states_count == 0
@@ -584,6 +557,9 @@ class Worker:
             action = action.transfer(transfer_context)
         return gstate, action
     """
+
+    def new_state(self, hash, n_actions):
+        self.socket.send_data("STATE {} {}\n".format(hash, n_actions))
 
     def record_process_start(self, controller_id):
         time = datetime.now() - self.generator.init_time

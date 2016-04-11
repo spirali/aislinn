@@ -557,7 +557,7 @@ class VgState(Resource):
         return self.manager.controller
 
     def __repr__(self):
-        return "<VgState {0:x} id={1.id} " \
+        return "<VgState {0:x} id={1.id} rc={1.ref_count} " \
                "ctrl={1.controller.name} hash={1.hash}>" \
                .format(id(self), self)
 
@@ -641,8 +641,9 @@ class ControllerWithResources(Controller):
 
     @property
     def states_count(self):
-        assert len(self.state_cache) == self.states.resource_count
-        return self.states.resource_count
+        count = self.states.resource_count
+        assert len(self.state_cache) == count
+        return count
 
     def cleanup_states(self):
         if self.states.not_used_resources:
@@ -673,6 +674,7 @@ class ControllerWithResources(Controller):
             self.restore_state(state)
             assert hash == self.hash_state()
         if hash is not None:
+            assert None is self.state_cache.get(hash)
             state.hash = hash
             self.state_cache[hash] = state
         return state

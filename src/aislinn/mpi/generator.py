@@ -27,6 +27,7 @@ from gcontext import GlobalContext, ErrorFound
 from mpi.ndsync import NdsyncChecker
 from base.node import Node
 from worker import Worker
+from wproxy import WorkerProxy
 from vgtool.controller import poll_controllers
 from vgtool.socketwrapper import SocketWrapper
 
@@ -38,7 +39,7 @@ import socket
 import os
 import sys
 import select
-from collections import deque
+
 
 
 class Generator:
@@ -46,6 +47,7 @@ class Generator:
     def __init__(self, args, process_count, aislinn_args):
         self.args = args
         self.statespace = StateSpace()
+        self.search_tasks = {}
         self.process_count = process_count
         self.error_messages = []
 
@@ -72,7 +74,7 @@ class Generator:
         self.debug_seq = aislinn_args.debug_seq
         self.debug_arc_times = aislinn_args.debug_arc_times
 
-        self.workers = None
+        self.workers = None  # [WorkerProxy]
         self.aislinn_args = aislinn_args
 
     def get_statistics(self):
@@ -127,10 +129,6 @@ class Generator:
             return
         self.error_messages.append(error_message)
 
-    def sanity_check(self):
-        for node, gstate in self.queue:
-            gstate.sanity_check()
-
     def sleeping_neighbours(self, worker_id):
         for i in xrange(1, len(self.workers)):
             worker = self.workers[(i + worker_id) % len(self.workers)]
@@ -155,6 +153,7 @@ class Generator:
 
         return node, True
 
+
     def start_workers(self):
         s, port = utils.start_listen(0, self.aislinn_args.workers)
 
@@ -171,10 +170,8 @@ class Generator:
             pid = os.fork()
             if pid != 0:
                 s.close()
-                connection = GeneratorConnection(port)
-                worker = Worker(connection.read_worker_id(),
-                                self.aislinn_args.workers,
-                                connection,
+                worker = Worker(self.aislinn_args.workers,
+                                port,
                                 self.args,
                                 self.aislinn_args,
                                 self.process_count)
@@ -183,7 +180,7 @@ class Generator:
                 worker.run()
                 sys.exit(0)
 
-        workers = [WorkerDescriptor(self, s, i)
+        workers = [WorkerProxy(self, s, i)
                    for i in xrange(self.aislinn_args.workers)]
         initial_node = Node("init", None)
         self.statespace.add_node(initial_node)
@@ -213,6 +210,8 @@ class Generator:
         self.workers[0].start_next_in_queue()
         """
         return True
+
+
 
     def main_cycle(self):
 
@@ -260,16 +259,14 @@ class Generator:
                 self.ndsync_check()
             """
 
-            #self.final_check()
+            self.final_check()
             self.is_full_statespace = True
 
+            for worker in self.workers:
+                worker.quit()
         except ErrorFound:
             logging.debug("ErrorFound catched")
         finally:
-            if self.workers:
-                for worker in self.workers:
-                    worker.quit()
-
             self.end_time = datetime.datetime.now()
         return True
 
@@ -305,6 +302,7 @@ class Generator:
             self.deterministic_unallocated_memory += a.size
 
     def final_check(self):
+        assert not self.search_tasks
         for worker in self.workers:
             worker.final_check()
         """
@@ -412,117 +410,6 @@ class Generator:
                             pid)
                          for pid in xrange(self.process_count)]
         return Report(self, args, version)
-
-
-
-class GeneratorConnection(object):
-
-    def __init__(self, port):
-        s = socket.create_connection(("127.0.0.1", port))
-        self.socket = SocketWrapper(s)
-        self.socket.set_no_delay()
-
-    def read_worker_id(self):
-        return int(self.socket.read_line())
-
-    def new_state(self, hash, n_actions):
-        self.socket.send_data("STATE {} {}\n".format(hash, n_actions))
-
-    def send_ports(self, ports):
-        self.socket.send_data("{}\n".format(" ".join(map(str, ports))))
-
-    def read_line(self):
-        return self.socket.read_line()
-
-
-class WorkerDescriptor(object):
-
-    def __init__(self, generator, socket, worker_id):
-        self.worker_id = worker_id
-        self.generator = generator
-        self.queue = deque()
-        self.active_node = None
-        s, addr = socket.accept()
-        self.has_connection = [False] * self.generator.aislinn_args.workers
-        self.socket = SocketWrapper(s)
-        self.socket.set_no_delay()
-        self.socket.send_data("{}\n".format(worker_id))
-
-    def read_line(self):
-        return self.socket.read_line()
-
-    def fileno(self):
-        return self.socket.socket.fileno()
-
-    def send_command(self, command):
-        self.socket.send_data(command)
-
-    def quit(self):
-        self.send_command("QUIT\n")
-
-    def final_check(self):
-        self.send_command("FINAL_CHECK\n")
-
-    def free_state(self, hash):
-        self.send_command("FREE {}\n", hash)
-
-    def check_connection(self, worker):
-        if self.has_connection[worker.worker_id]:
-            return
-        assert worker != self
-        self.send_command("LISTEN {}\n".format(worker.worker_id))
-        ports = self.read_line()
-        worker.send_command("CONNECT {} {}\n".format(self.worker_id, ports))
-
-        worker.has_connection[self.worker_id] = True
-        self.has_connection[worker.worker_id] = True
-
-    def transfer_gstate(self, worker, hash):
-        print "---> Transfering {} => {} | {}".format(self.worker_id, worker.worker_id, hash)
-        self.check_connection(worker)
-        self.send_command("PUSH {} {}\n".format(worker.worker_id, hash))
-        worker.send_command("PULL {} {}\n".format(self.worker_id, hash))
-
-    def start_next(self, response=""):
-        if not self.queue:
-            self.active_node = None
-            if response:
-                self.send_command(response)
-            return
-        node, action = self.queue.pop()
-        while self.queue:
-            worker = self.generator.sleeping_neighbours(self.worker_id)
-            if worker is None:
-                break
-            if response:
-                self.send_command(response)
-                response = ""
-            self.transfer_gstate(worker, node.hash)
-            worker.queue.append((node, action))
-            worker.start_next()
-            node, action = self.queue.pop()
-
-        self.send_command("{}START {} {}\n".format(response, node.hash, action))
-        self.active_node = node
-
-    def process_command(self):
-        command = self.read_line().split()
-        name = command[0]
-        if name == "STATE":
-            node, is_new = self.generator.add_node(self.active_node, command[1])
-
-            if is_new:
-                response = "SAVE\n"
-                n_actions = int(command[2])
-                print "NEW STATE:", self.worker_id, node.hash, n_actions
-                for action in xrange(n_actions):
-                    self.queue.append((node, action))
-            else:
-                response = "DROP\n"
-            self.start_next(response)
-            #self.transfer_gstate(self.generator.workers[1], command[1])
-        else:
-            raise Exception("Unknown command: " + repr(command))
 
 
 def poll_workers(workers):
