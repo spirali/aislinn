@@ -227,4 +227,7 @@ class GlobalState(EqMixin):
         lst = []
         for state in self.states:
             state.collect_buffers(lst)
+        if self.collective_operations:
+            for op in self.collective_operations:
+                op.collect_buffers(lst)
         return lst

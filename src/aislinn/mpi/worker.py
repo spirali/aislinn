@@ -207,6 +207,7 @@ class Worker:
             raise Exception("Init failed")
 
         self.process_commands()
+        self.kill_controllers()
 
     def listen(self, worker_id):
         s, port = utils.start_listen(0, 1)
@@ -299,6 +300,8 @@ class Worker:
                 self.start_execution(gstate, action)
                 print "Finish", self.worker_id
                 self.make_state()
+            elif name == "FREE":
+                del self.gstates[command[1]]
             elif name == "PUSH":
                 worker_id = int(command[1])
                 gstate = self.gstates[command[2]][0]
@@ -315,6 +318,9 @@ class Worker:
                 self.listen(worker_id)
             elif name == "CONNECT":
                 self.command_connect(command)
+            elif name == "FINAL_CHECK":
+                self.final_check()
+                return
             elif name == "QUIT":
                 return
             else:
@@ -540,13 +546,10 @@ class Worker:
         for controller in self.controllers:
             controller.cleanup_states()
 
-    def before_final_check(self):
+    def final_check(self):
         for controller in self.controllers:
             controller.make_buffers()
         self.cleanup()
-
-    def final_check(self):
-        assert not self.queue
 
         for controller in self.controllers:
             # Check there is no memory leak

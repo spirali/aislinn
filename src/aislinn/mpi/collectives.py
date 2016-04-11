@@ -96,6 +96,9 @@ class CollectiveOperation:
         lst.append(self.remaining_processes_enter)
         self.serialize_data_to_list(lst)
 
+    def collect_buffers(self, lst):
+        pass
+
     @property
     def mpi_name(self):
         if not self.blocking:
@@ -150,6 +153,11 @@ class OperationWithBuffers(CollectiveOperation):
                 lst.append(vg_buffer.hash)
             else:
                 lst.append(None)
+
+    def collect_buffers(self, lst):
+        for vg_buffer in self.buffers:
+            if vg_buffer:
+                lst.append(vg_buffer)
 
     def sanity_check(self):
         CollectiveOperation.sanity_check(self)

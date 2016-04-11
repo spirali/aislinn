@@ -254,21 +254,22 @@ class Generator:
                 return False
 
             self.main_cycle()
-            for worker in self.workers:
-                worker.send_command("QUIT\n")
             """
             self.memory_leak_check()
-            self.final_check()
             if self.send_protocol == "full" and not self.error_messages:
                 self.ndsync_check()
             """
+
+            #self.final_check()
             self.is_full_statespace = True
 
         except ErrorFound:
             logging.debug("ErrorFound catched")
         finally:
-            #for worker in self.workers:
-            #    worker.kill_controllers()
+            if self.workers:
+                for worker in self.workers:
+                    worker.quit()
+
             self.end_time = datetime.datetime.now()
         return True
 
@@ -304,12 +305,14 @@ class Generator:
             self.deterministic_unallocated_memory += a.size
 
     def final_check(self):
+        for worker in self.workers:
+            worker.final_check()
+        """
         if self.debug_compare_states is not None:
             self.debug_compare()
         for worker in self.workers:
-            worker.before_final_check()
-        for worker in self.workers:
             worker.final_check()
+        """
 
     def debug_compare(self):
         if self.debug_captured_states is None:
@@ -453,6 +456,15 @@ class WorkerDescriptor(object):
 
     def send_command(self, command):
         self.socket.send_data(command)
+
+    def quit(self):
+        self.send_command("QUIT\n")
+
+    def final_check(self):
+        self.send_command("FINAL_CHECK\n")
+
+    def free_state(self, hash):
+        self.send_command("FREE {}\n", hash)
 
     def check_connection(self, worker):
         if self.has_connection[worker.worker_id]:
