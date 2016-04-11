@@ -18,32 +18,19 @@
 #
 
 import base.utils as utils
-import copy
 
 
 class Action(utils.EqMixin):
-
-    action_index = 0
-
-    def transfer(self, transfer_context):
-        return self
+    action_index = None
 
 
-class ActionMatching(utils.EqMixin):
+class ActionMatching(Action):
 
     def __init__(self, matching):
         self.matching = matching
 
     def apply_action(self, gcontext):
         gcontext.apply_matching(self.matching)
-
-    def transfer(self, transfer_context):
-        action = copy.copy(self)
-        source_pid, s, target_pid, r = self.matching
-        s = transfer_context.translate_table[s]
-        r = transfer_context.translate_table[r]
-        action.matching = (source_pid, s, target_pid, r)
-        return action
 
     @property
     def name(self):

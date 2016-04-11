@@ -120,7 +120,6 @@ class WorkerProxy(object):
                 worker.queue.remove(task)
                 worker.free_state(task.node.hash)
 
-
     def process_command(self):
         command = self.read_line().split()
         name = command[0]
@@ -140,7 +139,6 @@ class WorkerProxy(object):
             arc.worker = self.worker_id
             self.active_node.add_arc(arc)
             self.start_next()
-            #self.transfer_gstate(self.generator.workers[1], command[1])
         else:
             raise Exception("Unknown command: " + repr(command))
         self.send_now()

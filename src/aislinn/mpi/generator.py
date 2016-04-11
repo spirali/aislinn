@@ -157,14 +157,6 @@ class Generator:
     def start_workers(self):
         s, port = utils.start_listen(0, self.aislinn_args.workers)
 
-        """
-        self.workers = [Worker(i,
-                               aislinn_args.workers,
-                               self,
-                               args,
-                               aislinn_args)
-                        for i in xrange(aislinn_args.workers)]
-        """
         workers = []
         for i in xrange(self.aislinn_args.workers):
             pid = os.fork()
@@ -187,31 +179,7 @@ class Generator:
         self.statespace.initial_node = initial_node
         workers[0].active_node = initial_node
         self.workers = workers
-
-        """line = workers[0].read_line().split()
-        assert line[0] == "STATE"
-        node = self.add_node(initial_node, line[1])"""
-
-
-        """
-        for worker in self.workers:
-            worker.start_controllers()
-
-        for worker in self.workers:
-            worker.connect_controllers()
-
-        if not self.workers[0].make_initial_node():
-            return False
-
-        for worker in self.workers[1:]:
-            if not worker.init_nonfirst_worker():
-                return False
-
-        self.workers[0].start_next_in_queue()
-        """
         return True
-
-
 
     def main_cycle(self):
 
@@ -223,28 +191,6 @@ class Generator:
             workers = poll_workers(workers)
             for worker in workers:
                 worker.process_command()
-
-        """
-        while True:
-            controllers = sum((worker.running_controllers()
-                               for worker in self.workers if worker.gcontext),
-                              [])
-            logging.debug("Running controllers %s", controllers)
-            if not controllers:
-                return
-            controllers = poll_controllers(controllers)
-            for c in controllers:
-                worker = self.workers[c.name / self.process_count]
-                #if worker.stats_time is not None:
-                #    worker.record_process_stop(c.name % self.process_count)
-                context = worker.gcontext.get_context(
-                    c.name % self.process_count)
-                logging.debug("Ready controller %s", context)
-                context.process_run_result(c.finish_async())
-                worker.continue_in_execution()
-                if worker.gcontext is None:
-                    worker.start_next_in_queue()
-        """
 
     def run(self):
         self.init_time = datetime.datetime.now()
@@ -305,12 +251,6 @@ class Generator:
         assert not self.search_tasks
         for worker in self.workers:
             worker.final_check()
-        """
-        if self.debug_compare_states is not None:
-            self.debug_compare()
-        for worker in self.workers:
-            worker.final_check()
-        """
 
     def debug_compare(self):
         if self.debug_captured_states is None:
@@ -345,47 +285,6 @@ class Generator:
         for gstate, worker in self.debug_captured_states:
             gstate.dispose()
 
-    """
-    def add_node(self, prev, node):
-
-
-    def add_node(self, prev, worker, gstate, do_hash=True):
-        if do_hash:
-            hash = gstate.compute_hash()
-            if hash is not None:
-                node = self.statespace.get_node_by_hash(hash)
-                if node is not None:
-                    return (node, False)
-        else:
-            hash = None
-        uid = str(self.statespace.nodes_count)
-        node = Node(uid, hash)
-        logging.debug("New node %s", node.uid)
-
-        if prev:
-            node.prev = prev
-        self.statespace.add_node(node)
-
-        if self.debug_compare_states is not None \
-                and node.uid in self.debug_compare_states:
-            if self.debug_captured_states is None:
-                self.debug_captured_states = []
-            logging.debug("Capturing %s", node)
-            self.debug_captured_states.append((gstate.copy(), worker))
-
-        if self.statespace.nodes_count > self.max_states:
-            logging.info("Maximal number of states reached")
-            if self.debug_compare_states is not None:
-                self.debug_compare()
-            raise ErrorFound()
-
-        if self.debug_state == uid:
-            context = Context(self, node, None)
-            context.add_error_and_throw(
-                errormsg.StateCaptured(context, uid=uid))
-        return (node, True)
-    """
-
     def create_report(self, args, version):
         for error_message in self.error_messages:
             if error_message.node:
@@ -418,5 +317,4 @@ def poll_workers(workers):
             return [worker]
     rlist, wlist, xlist = select.select(workers, (), ())
     return rlist
-
 

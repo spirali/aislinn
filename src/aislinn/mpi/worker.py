@@ -448,16 +448,6 @@ class Worker:
             self.buffer_manager.cleanup()
             return
 
-    """
-    def slow_expand(self, gcontext):
-        actions = self.get_actions(gcontext)
-        if actions:
-            for i, action in enumerate(actions):
-                action.action_index = i
-                gcontext.add_to_queue(action, True)
-        return bool(actions)
-    """
-
     def continue_in_execution(self):
         running = self.fast_expand()
         if running:
