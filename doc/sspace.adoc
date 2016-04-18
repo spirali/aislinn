@@ -1,0 +1,64 @@
+= Example of State Space
+Stanislav Böhm <stanislav.bohm [at] vsb [dot] cz>
+
+****
+This document demonstrates a construction of a state space for a simple MPI program.
+****
+
+We are going to analyze the following code:
+
+[source, c, linenums]
+----
+#include <mpi.h>
+#include <stdlib.h>
+
+int main(int argc, char **argv) {
+    int rank;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    if (rank == 0) {
+        int *mem1 = (int*) malloc(sizeof(int) * 2);
+        int *mem2 = (int*) malloc(sizeof(int) * 3);
+        int data;
+        MPI_Recv(&data, 1, MPI_INT, MPI_ANY_SOURCE, 1,
+        MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        mem1[data] = 10;
+        MPI_Recv(&data, 1, MPI_INT, MPI_ANY_SOURCE, 1,
+        MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        mem2[data] = 10;
+        free(mem1);
+        free(mem2);
+    }
+
+    if (rank == 1 || rank == 2) {
+        MPI_Ssend(&rank, 1, MPI_INT, 0, 1,
+        MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
+----
+
+In this program, process 0 waits for two messages from any source and processes 1 and 2 send messages to process 0. 
+If the message from process 1 is received first, then no error occurs. 
+If the message from process 2 is received first, then process 0 writes into an invalid memory at line 16.
+
+The following picure shows a state-space graph computed by Aislinn for our program:
+
+image::sspace.png[]
+
+Nodes are global states of the verified application. They are "snapshots" of a current memory content and CPU registers of each process, together with a state of MPI, e.g. messages that are transported between processes. 
+An arc represents a run of the program between two global states. 
+It may generally represent a computation in more processes until the program does not arrive to an "important" state.
+It is a terminal state or a state where are more possible continuations.
+In this moment, states of all processes are captured and the tool checks if an equivalent state was not already discovered by another execution path.
+If the state already exists, then the execution of the current path is terminated; therefore, already processed nodes are not recomputed again.
+
+The first arc between global states 0 and 1 represents initialization of all processes until `MPI_Init` (line 7).
+The arc between global states 1 and 2 represents a computation in all three processes. Therefore, all three local states are changed. The arc between 2 and 3 modifies only the state of process 0, hence process 1 and process 2 are unchanged.
+In state 2, there are two choices how the program may evolve; the message from process 1 is received (the arc to state 3) or the message from process 2 is received (the arc to state 4). 
+During an execution of each arc, correctness of the computation is checked.
+Therefore, the tool is able to discover the problem of the invalid memory writing that happens during the execution of the arc from node 5.
