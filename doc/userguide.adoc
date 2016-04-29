@@ -332,6 +332,10 @@ Set verbosity level. (default: 1)
 * 1 - show INFO messages
 * 2 - show all messages including DEBUG messages
 
+**--logfile=FILENAME**
+
+Set logging into file. If this is not set, `stdout` is used.
+
 === Stream options
 
 **--stderr=MODE**

@@ -1,5 +1,5 @@
 #
-#    Copyright (C) 2014, 2015 Stanislav Bohm
+#    Copyright (C) 2014-2016 Stanislav Bohm
 #
 #    This file is part of Aislinn.
 #
@@ -88,6 +88,10 @@ def parse_args():
                         type=int,
                         default=1,
                         help="Verbosity level (default: 1)")
+
+    parser.add_argument("--logfile",
+                        metavar="FILENAME",
+                        default=None)
 
     parser.add_argument("--heap-size",
                         metavar="SIZE",
@@ -223,7 +227,9 @@ def parse_args():
             sys.exit(1)
 
     logging.basicConfig(format="==AN== %(levelname)s: %(message)s",
-                        level=level)
+                        level=level,
+                        filename=args.logfile)
+
     logging.info("Aislinn v%s", VERSION_STRING)
 
     if args.search != "bfs" and args.search != "dfs":
