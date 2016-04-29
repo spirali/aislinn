@@ -165,7 +165,10 @@ class State:
         for i in self.groups:
             i.serialize_to_list(lst)
         for i in self.user_defined_types:
-            i.serialize_to_list(lst)
+            if i is None:
+                lst.append(None)
+            else:
+                i.serialize_to_list(lst)
         for i in self.user_defined_ops:
             if i is None:
                 lst.append(None)
@@ -494,7 +497,7 @@ class State:
         request = CollectiveRequest(request_id, comm, cc_id)
         self.add_request(request)
         context.event.new_request = request_id
-        if context.gcontext.generator.send_protocol == "full":
+        if context.gcontext.worker.send_protocol == "full":
             context.event.cc = (comm.comm_id, cc_id, comm.group.size)
         return request_id
 

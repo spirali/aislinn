@@ -21,12 +21,12 @@
 from base.arc import STREAM_STDOUT, STREAM_STDERR
 from base.report import Report
 from base.statespace import StateSpace
+import base.paths as paths
 import base.utils as utils
 from context import Context
 from gcontext import GlobalContext, ErrorFound
 from mpi.ndsync import NdsyncChecker
 from base.node import Node
-from worker import Worker
 from wproxy import WorkerProxy
 from vgtool.controller import poll_controllers
 from vgtool.socketwrapper import SocketWrapper
@@ -39,13 +39,14 @@ import socket
 import os
 import sys
 import select
+import subprocess
 
 
 
 class Generator:
 
-    def __init__(self, args, process_count, aislinn_args):
-        self.args = args
+    def __init__(self, run_args, process_count, aislinn_args):
+        self.run_args = run_args
         self.statespace = StateSpace()
         self.search_tasks = {}
         self.process_count = process_count
@@ -57,9 +58,6 @@ class Generator:
 
         self.search = aislinn_args.search
         self.max_states = aislinn_args.max_states
-
-        self.stdout_mode = aislinn_args.stdout
-        self.stderr_mode = aislinn_args.stderr
 
         self.debug_state = aislinn_args.debug_state
         if aislinn_args.debug_compare_states:
@@ -157,20 +155,16 @@ class Generator:
     def start_workers(self):
         s, port = utils.start_listen(0, self.aislinn_args.workers)
 
-        workers = []
+        worker_processes = []
         for i in xrange(self.aislinn_args.workers):
-            pid = os.fork()
-            if pid != 0:
-                s.close()
-                worker = Worker(self.aislinn_args.workers,
-                                port,
-                                self.args,
-                                self.aislinn_args,
-                                self.process_count)
-                worker.start_controllers()
-                worker.connect_controllers()
-                worker.run()
-                sys.exit(0)
+            args = [ paths.AISLINN_BIN,
+                     "--connect=localhost:{}".format(port) ]
+            if self.aislinn_args.logfile:
+                args.append("--logfile={}.{}".format(self.aislinn_args.logfile, i))
+            args.append(self.aislinn_args.program)
+            process = subprocess.Popen(args)
+            worker_processes.append(process)
+        self.worker_processes = worker_processes
 
         workers = [WorkerProxy(self, s, i)
                    for i in xrange(self.aislinn_args.workers)]

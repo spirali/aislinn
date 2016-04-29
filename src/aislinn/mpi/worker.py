@@ -36,16 +36,26 @@ import logging
 import socket
 from datetime import datetime
 
+try:
+    import cPickle as pickle
+except:
+    import pickle
+
 
 class Worker:
 
-    def __init__(self, workers_count,
-                 port, args, aislinn_args, process_count):
-        s = socket.create_connection(("127.0.0.1", port))
+    def __init__(self, addr, port):
+        s = socket.create_connection((addr, port))
         self.socket = SocketWrapper(s)
         self.socket.set_no_delay()
-        worker_id = int(self.socket.read_line())
+        worker_id, size = map(int, self.socket.read_line().split())
         self.worker_id = worker_id
+
+        data = self.socket.read_data(size)
+        args, run_args = pickle.loads(data)
+
+        process_count = args.p
+        workers_count = args.workers
 
         self.process_count = process_count
         self.gcontext = None
@@ -53,37 +63,40 @@ class Worker:
         self.consts_pool = None
         self.buffer_manager = BufferManager(10 + worker_id, workers_count)
 
-        self.send_protocol = aislinn_args.send_protocol
+        self.send_protocol = args.send_protocol
         self.send_protocol_eager_threshold = \
-            aislinn_args.send_protocol_eager_threshold
+            args.send_protocol_eager_threshold
         self.send_protocol_rendezvous_threshold = \
-            aislinn_args.send_protocol_rendezvous_threshold
+            args.send_protocol_rendezvous_threshold
         self.message_sizes = set()
 
-        self.controllers = [Controller(base.paths.VALGRIND_BIN, args)
+        self.controllers = [Controller(base.paths.VALGRIND_BIN, run_args)
                             for i in xrange(process_count)]
         self.worker_sockets = [None] * workers_count
         self.controller_sockets = [None] * workers_count
 
+        self.stdout_mode = args.stdout
+        self.stderr_mode = args.stderr
+
         for i, controller in enumerate(self.controllers):
             controller.name = i + worker_id * process_count
-            controller.profile = aislinn_args.profile
+            controller.profile = args.profile
 
-            if aislinn_args.vgv:
-                controller.verbose = aislinn_args.vgv
+            if args.vgv:
+                controller.verbose = args.vgv
 
-            if aislinn_args.heap_size is not None:
-                controller.heap_size = aislinn_args.heap_size
+            if args.heap_size is not None:
+                controller.heap_size = args.heap_size
 
-            if aislinn_args.redzone_size is not None:
-                controller.redzone_size = aislinn_args.redzone_size
+            if args.redzone_size is not None:
+                controller.redzone_size = args.redzone_size
 
-            if aislinn_args.debug_by_valgrind_tool:
+            if args.debug_by_valgrind_tool:
                 controller.debug_by_valgrind_tool = \
-                    aislinn_args.debug_by_valgrind_tool
+                    args.debug_by_valgrind_tool
 
-            if aislinn_args.debug_vglogfile is not None:
-                prefix = aislinn_args.debug_vglogfile
+            if args.debug_vglogfile is not None:
+                prefix = args.debug_vglogfile
                 filename = prefix + ".out." + str(controller.name)
                 logging.debug(
                     "Openining logfile '%s' for %s", filename, controller)
@@ -104,7 +117,7 @@ class Worker:
         self.queue = deque()
         self.gstates = {}
 
-        if aislinn_args.debug_stats:
+        if args.debug_stats:
             self.stats_time = []
             self.stats_queue_len = []
             self.stats_controller_start = [[] for c in self.controllers]

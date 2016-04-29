@@ -25,6 +25,11 @@ from vgtool.socketwrapper import SocketWrapper
 from collections import deque
 import logging
 
+try:
+    import cPickle as pickle
+except:
+    import pickle
+
 
 class SearchTask(object):
 
@@ -46,7 +51,10 @@ class WorkerProxy(object):
 
         self.socket = SocketWrapper(s)
         self.socket.set_no_delay()
-        self.socket.send_data("{}\n".format(worker_id))
+
+        data = pickle.dumps((generator.aislinn_args, generator.run_args))
+        self.socket.send_data("{} {}\n{}".format(worker_id, len(data), data))
+
         self.command_buffer = []
 
     def read_line(self):
@@ -129,7 +137,7 @@ class WorkerProxy(object):
 
             if is_new:
                 n_actions = int(command[2])
-                if n_actions > 1:
+                if n_actions >= 1:
                     task = SearchTask(node, n_actions, self)
                     #self.generator.search_tasks[hash] = task
                     self.queue.append(task)

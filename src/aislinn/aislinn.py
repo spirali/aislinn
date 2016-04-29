@@ -19,6 +19,8 @@
 
 
 from mpi.generator import Generator
+from mpi.worker import Worker
+
 from base.arc import STREAM_STDOUT, STREAM_STDERR
 import base.report as report
 import base.paths as paths
@@ -52,6 +54,14 @@ def positive_int(value):
         raise argparse.ArgumentTypeError(
             "{} is not a positive value".format(i))
     return i
+
+
+def addr_port(value):
+    """ Parse address in format ADDRESS:PORT """
+    tokens = value.split(":")
+    if len(tokens) != 2:
+        raise argparse.ArgumentTypeError("Invalid format of address")
+    return tokens[0], int(tokens[1])
 
 
 def size_type(value):
@@ -114,6 +124,12 @@ def parse_args():
                         type=positive_int,
                         default=1,
                         help="Number of workers")
+
+    parser.add_argument("--connect",
+                        metavar="ADDR:PORT",
+                        type=addr_port,
+                        default=None,
+                        help="Start worker and connect to a master process")
 
     parser.add_argument("--report-type",
                         metavar="TYPE",
@@ -230,7 +246,8 @@ def parse_args():
                         level=level,
                         filename=args.logfile)
 
-    logging.info("Aislinn v%s", VERSION_STRING)
+    if args.connect is None:
+        logging.info("Aislinn v%s", VERSION_STRING)
 
     if args.search != "bfs" and args.search != "dfs":
         logging.error("Invalid argument for --search")
@@ -293,6 +310,11 @@ def check_program(program):
         program = os.path.join(".", program)
     return program
 
+def run_worker(addr, port, run_args):
+    worker = Worker(addr, port)
+    worker.start_controllers()
+    worker.connect_controllers()
+    worker.run()
 
 def main():
     args = parse_args()
@@ -311,6 +333,10 @@ def main():
         logging.error("Valgrind not found")
         sys.exit(2)
     logging.debug("Path to Valgrind: %s", paths.VALGRIND_BIN)
+
+    if args.connect:
+        run_worker(args.connect[0], args.connect[1], run_args)
+        return
 
     generator = Generator(run_args,
                           args.p,

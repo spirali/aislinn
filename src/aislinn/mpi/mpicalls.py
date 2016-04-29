@@ -728,7 +728,7 @@ def MPI_Comm_free_keyval(context, args):
 def MPI_Comm_get_attr(context, args):
     comm, keyval, value_ptr, flag_ptr = args
     if keyval.keyval_id == consts.MPI_TAG_UB:
-        value = context.generator.get_const_ptr(consts.MPI_TAG_UB)
+        value = context.worker.get_const_ptr(consts.MPI_TAG_UB)
     else:
         value = context.state.get_attr(comm, keyval)
     if value is not None:

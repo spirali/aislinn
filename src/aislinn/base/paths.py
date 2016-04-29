@@ -31,11 +31,14 @@ VALGRIND_INSTALL_BIN = \
     os.path.join(os.path.dirname(AISLINN_ROOT), "bin", "valgrind")
 
 VALGRIND_BIN = None  # Need to be configured
+AISLINN_BIN = None  # Need to be configured
 
 
 def configure():
-    global VALGRIND_BIN
+    global VALGRIND_BIN, AISLINN_BIN
     if os.path.isfile(VALGRIND_LOCAL_BIN):
         VALGRIND_BIN = VALGRIND_LOCAL_BIN
+        AISLINN_BIN = os.path.join(AISLINN_ROOT, "bin", "aislinn")
     elif os.path.isfile(VALGRIND_INSTALL_BIN):
         VALGRIND_BIN = VALGRIND_INSTALL_BIN
+        raise "Need implementation"
