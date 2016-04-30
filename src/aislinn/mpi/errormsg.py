@@ -53,8 +53,6 @@ class ErrorMessage(object):
         if context is not None:
             if context.state:
                 self.pid = context.state.pid
-            context.make_fail_node()
-            self.node = context.gcontext.node
             if context.event:
                 if context.event.stacktrace:
                     self.stacktrace = context.event.stacktrace
@@ -64,7 +62,6 @@ class ErrorMessage(object):
                 self.stacktrace = context.controller.get_stacktrace()
         elif gcontext is not None:
             self.pid = pid
-            self.node = gcontext.node
 
     @property
     def description(self):

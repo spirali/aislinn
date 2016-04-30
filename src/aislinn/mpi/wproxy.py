@@ -147,6 +147,9 @@ class WorkerProxy(object):
             arc.worker = self.worker_id
             self.active_node.add_arc(arc)
             self.start_next()
+        elif name == "ERROR":
+            data = self.socket.read_data(int(command[1]))
+            self.generator.process_error(self, pickle.loads(data))
         else:
             raise Exception("Unknown command: " + repr(command))
         self.send_now()

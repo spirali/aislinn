@@ -70,11 +70,8 @@ class GlobalContext:
                     context.state.status != State.StatusFinished):
                 context.save_state_with_hash()
 
-    def add_error_message(self, error_message):
-        self.generator.add_error_message(error_message)
-
     def add_error_and_throw(self, error_message):
-        self.add_error_message(error_message)
+        self.worker.send_error_message(error_message)
         raise ErrorFound()
 
     """

@@ -216,9 +216,6 @@ class Context:
     def make_node(self):
         self.gcontext.make_node()
 
-    def make_fail_node(self):
-        self.gcontext.make_fail_node()
-
     def run_and_make_node(self):
         self.run()
         self.gcontext.make_node()

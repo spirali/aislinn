@@ -186,6 +186,17 @@ class Generator:
             for worker in workers:
                 worker.process_command()
 
+    def process_error(self, worker, error_message):
+        # Get all workers to command mode
+        workers = [ w for w in self.workers
+                    if w is not worker and w.active_node ]
+        while workers:
+            for w in poll_workers(workers):
+                # Throw away result
+                w.read_line()
+                workers.remove(w)
+        raise Here()
+
     def run(self):
         self.init_time = datetime.datetime.now()
         try:

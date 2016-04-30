@@ -619,6 +619,10 @@ class Worker:
         self.stats_time.append(time.total_seconds())
         self.stats_queue_len.append(len(self.queue))
 
+    def send_error_message(self, error_message):
+        data = pickle.dumps(error_message)
+        self.socket.send_data("ERROR {}\n{}".format(len(data), data))
+
     def get_const_ptr(self, id):
         if id == consts.MPI_TAG_UB:
             return self.consts_pool
