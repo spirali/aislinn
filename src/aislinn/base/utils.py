@@ -125,10 +125,10 @@ class Intervals:
         if intervals is None:
             self.intervals = []
         else:
-            self.intervals = intervals
+            self.intervals = [tuple(i) for i in intervals]
 
     def copy(self):
-        return Intervals(self.intervals[:])
+        return Intervals(self.intervals)
 
     def add(self, start, end):
         area = self.find_free_area(start, end)

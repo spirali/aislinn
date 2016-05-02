@@ -38,6 +38,13 @@ class UserDefinedOperation(Operation):
         lst.append(self.commute)
         lst.append(self.fn_ptr)
 
+    @classmethod
+    def deserialize_from_list(cls, loader):
+        op_id = loader.get()
+        op = UserDefinedOperation(loader.get(), loader.get())
+        op.op_id = op_id
+        return op
+
 
 class BuildinOperation(Operation):
     buildin = True

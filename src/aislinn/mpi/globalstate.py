@@ -62,17 +62,6 @@ class GlobalState(EqMixin):
                 [op.copy() for op in self.collective_operations]
         return gstate
 
-    def transfer(self, transfer_context):
-        logging.debug("Transfering gstate %s", self)
-        gstate = copy.copy(self)
-        gstate.states = [state.transfer(gstate, transfer_context)
-                         for state in self.states]
-        if self.collective_operations is not None:
-            gstate.collective_operations = \
-                [op.transfer(transfer_context)
-                 for op in self.collective_operations]
-        return gstate
-
     @property
     def process_count(self):
         return len(self.states)

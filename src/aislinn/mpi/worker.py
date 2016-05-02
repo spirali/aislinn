@@ -539,28 +539,6 @@ class Worker:
 
         assert self.buffer_manager.resource_count == 0
 
-    """
-    def interconnect(self, worker):
-        sockets = self.controller_sockets[worker.worker_id]
-        assert sockets is not None
-        assert self.worker_id != worker.worker_id
-        sockets1, sockets2 = make_interconnection_pairs(
-            self.controllers, worker.controllers)
-        self.interconnect_sockets[worker.worker_id] = sockets1
-        worker.interconnect_sockets[self.worker_id] = sockets2
-
-    def transfer_gstate_and_action(self, worker, gstate, action):
-        transfer_context = TransferContext(
-            self,
-            self.interconnect_sockets[worker.worker_id],
-            worker,
-            worker.interconnect_sockets[self.worker_id])
-        gstate = gstate.transfer(transfer_context)
-        if action is not None:
-            action = action.transfer(transfer_context)
-        return gstate, action
-    """
-
     def new_state(self, hash, n_actions):
         self.socket.send_data("STATE {} {}\n".format(hash, n_actions))
 
@@ -572,6 +550,7 @@ class Worker:
         time = datetime.now() - self.generator.init_time
         self.stats_controller_stop[controller_id].append(time.total_seconds())
 
+    """
     def start_next_in_queue(self):
         logging.debug("Start_next_in_queue %s", self)
 
@@ -613,6 +592,7 @@ class Worker:
                     worker.start_next_in_queue()
             if self.start_gcontext(node, gstate, action):
                 break
+    """
 
     def record_stats(self):
         time = datetime.now() - self.generator.init_time

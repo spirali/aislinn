@@ -63,14 +63,6 @@ class Request(EqMixin):
     def dec_ref(self):
         pass
 
-    def transfer(self, transfer_context):
-        request = transfer_context.translate_table.get(self)
-        if request is not None:
-            return request
-        request = copy.copy(self)
-        transfer_context.set_translate(self, request)
-        return request
-
     def is_send_recv_not_proc_null(self):
         return False
 
@@ -115,17 +107,6 @@ class SendRequest(Request):
     def collect_buffers(self, lst):
         if self.vg_buffer:
             lst.append(self.vg_buffer)
-
-    def transfer(self, transfer_context):
-        request = transfer_context.translate_table.get(self)
-        if request is not None:
-            request.inc_ref()
-            return request
-        request = Request.transfer(self, transfer_context)
-        if request.vg_buffer:
-            request.vg_buffer = \
-                transfer_context.transfer_buffer(self.vg_buffer)
-        return request
 
     def is_standard_send(self):
         return self.send_type == SendRequest.Standard
@@ -214,17 +195,6 @@ class ReceiveRequest(Request):
     def collect_buffers(self, lst):
         if self.vg_buffer:
             lst.append(self.vg_buffer)
-
-    def transfer(self, transfer_context):
-        request = transfer_context.translate_table.get(self)
-        if request is not None:
-            request.inc_ref()
-            return request
-        request = Request.transfer(self, transfer_context)
-        if request.vg_buffer:
-            request.vg_buffer = \
-                transfer_context.transfer_buffer(self.vg_buffer)
-        return request
 
     def is_receive(self):
         return True

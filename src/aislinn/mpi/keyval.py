@@ -31,3 +31,10 @@ class Keyval:
         lst.append(self.copy_fn)
         lst.append(self.delete_fn)
         lst.append(self.extra_ptr)
+
+    @classmethod
+    def deserialize_from_list(cls, loader):
+        keyval_id = loader.get()
+        keyval = Keyval(loader.get(), loader.get(), loader.get())
+        keyval.keyval_id = keyval_id
+        return keyval

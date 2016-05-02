@@ -90,6 +90,15 @@ class ContiguousType(Datatype):
         self.count = count
         self.size = datatype.size * count
 
+    @classmethod
+    def deserialize_from_list(cls, loader, state):
+        self = ContiguousType.__new__(ContiguousType)
+        self.type_id = loader.get()
+        self.datatype = state.get_datatype(loader.get())
+        self.count = loader.get()
+        self.size = self.datatype.size * self.count
+        return self
+
     def serialize_to_list(self, lst):
         lst.append("contiguous")
         lst.append(self.type_id)
@@ -131,6 +140,17 @@ class VectorType(Datatype):
         else:
             self.stride = stride * datatype.size
         self.size = datatype.size * count * blocksize
+
+    @classmethod
+    def deserialize_from_list(cls, loader, state):
+        self = VectorType.__new__(VectorType)
+        self.type_id = loader.get()
+        self.datatype = state.get_datatype(loader.get())
+        self.count = loader.get()
+        self.blocksize = loader.get()
+        self.stride = loader.get()
+        self.size = self.datatype.size * self.count * self.blocksize
+        return self
 
     def serialize_to_list(self, lst):
         lst.append("vector")
@@ -352,6 +372,16 @@ class StructType(Datatype):
                 if r is not None:
                     return r
             pointer += self.unpack_size
+
+
+def deserialize_datatype(loader, state):
+    name = loader.get()
+    if name == "contiguous":
+        return ContiguousType.deserialize_from_list(loader, state)
+    elif name == "vector":
+        return VectorType.deserialize_from_list(loader, state)
+    else:
+        raise Exception("Invalid type: " + str(name))
 
 
 buildin_types = dict((t.type_id, t) for t in [
