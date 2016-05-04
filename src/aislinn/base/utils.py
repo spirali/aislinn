@@ -173,9 +173,9 @@ class Intervals:
 
 class Loader(object):
 
-    def __init__(self, data, objects=None):
+    def __init__(self, data, objects=None, start=0):
         self.data = data
-        self.pointer = 0
+        self.pointer = start
         if objects is None:
             objects = {}
         self.objects = objects
@@ -207,3 +207,17 @@ def start_listen(port, count):
     return s, port
 
 
+def make_groups(items, key_fn):
+    items.sort(key=key_fn)
+    prev = None
+    lst = None
+    result = []
+    for i in items:
+        key = key_fn(i)
+        if key != prev:
+            lst = [i]
+            result.append((key, lst))
+            prev = key
+        else:
+            lst.append(i)
+    return result

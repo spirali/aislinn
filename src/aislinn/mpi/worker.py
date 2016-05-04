@@ -223,11 +223,19 @@ class Worker:
         for controller in self.controllers:
             controller.make_buffers()
         buffers = list(set(gstate.get_buffers()))
+        groups = utils.make_groups(buffers, lambda b: b.hash)
         buffer_data = []
         first_id = self.controllers[0].name
-        for b in buffers:
-            controller_ids = [c.name - first_id for c in b.controllers]
-            buffer_data.append((b.hash, b.size, controller_ids))
+        for hash, bs in groups:
+            if len(bs) == 1:
+                controllers = bs[0].controllers
+            else:
+                controllers = set()
+                for b in bs:
+                    controllers.update(b.controllers)
+            controller_ids = [c.name - first_id for c in controllers]
+            buffer_data.append((hash, b.size, controller_ids))
+
         gstate_data = gstate.serialize_to_list()
         data = msgpack.dumps((buffer_data, gstate_data))
         socket = self.worker_sockets[worker_id]
@@ -239,11 +247,13 @@ class Worker:
             if state.vg_state:
                 controller.push_state(s, state.vg_state)
 
-        for b in buffers:
-            for controller in b.controllers:
-                controller.push_buffer(sockets[c.name - first_id], b.id)
-
-
+        for hash, bs in groups:
+            controllers = []
+            for b in bs:
+                for controller in b.controllers:
+                    if controller not in controllers:
+                        controller.push_buffer(sockets[c.name - first_id], b.id)
+                        controllers.append(controller)
 
     def pull_gstate(self, worker_id):
         socket = self.worker_sockets[worker_id]
@@ -263,15 +273,16 @@ class Worker:
         buffers = []
         for hash, size, controller_ids in buffer_data:
             assert controller_ids
+            controllers = [self.controllers[i] for i in controller_ids]
+            assert hash not in objects
             b = self.buffer_manager.new_buffer()
             buffers.append(b)
-            controllers = [self.controllers[i] for i in controller_ids]
-            for controller in controllers:
-                controller.pull_buffer(sockets[i], b.id)
             b.hash = hash
             b.size = size
             b.controllers = controllers
             objects[hash] = b
+            for controller in controllers:
+                controller.pull_buffer(sockets[i], b.id)
 
         gstate = GlobalState(self.process_count, gstate_data, objects)
         for b in buffers:

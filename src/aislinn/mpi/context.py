@@ -231,8 +231,6 @@ class Context:
         while True:
             result = result.split()
             if result[0] == "CALL":
-                if not first_worker:
-                    return True
                 if result[1] == "MPI_Initialized":
                     assert len(result) == 3
                     ptr = convert_type(result[2], "ptr")

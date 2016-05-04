@@ -132,9 +132,9 @@ class SendRequest(Request):
         return addr >= self.data_ptr and addr < self.data_ptr + sz
 
     def __repr__(self):
-        return "<SendRqst {0:x} id={1} type={2} comm_id={3} target={4} tag={5}>" \
+        return "<SendRqst {0:x} id={1} type={2} comm_id={3} target={4} tag={5} {6}>" \
             .format(id(self), self.id, self.send_type,
-                    self.comm.comm_id, self.target, self.tag)
+                    self.comm.comm_id, self.target, self.tag, self.vg_buffer)
 
 
 class ReceiveRequest(Request):
@@ -208,7 +208,7 @@ class ReceiveRequest(Request):
 
     def __repr__(self):
         return "<RecvRqst {1:x} id={0.id} source={0.source}, " \
-            "tag={0.tag}, data_ptr={0.data_ptr:x}>" \
+            "tag={0.tag}, data_ptr={0.data_ptr:x} {0.vg_buffer}>" \
             .format(self, id(self))
 
 

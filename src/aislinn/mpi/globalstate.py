@@ -37,11 +37,18 @@ class GlobalState(EqMixin):
 
     def __init__(self, process_count, load_list=None, objects=None):
         self.comm_world = make_comm_world(process_count)
+        self.collective_operations = None
+        self.comm_id_counter = consts.MPI_COMM_USERDEF
+
+        # load_list = [ [serialized s1] ... [serialized sN] cc-ops-count ...
+
         self.states = [State(self, i, None,
                              Loader(load_list[i], objects) if load_list else None)
                        for i in xrange(process_count)]
-        self.collective_operations = None
-        self.comm_id_counter = consts.MPI_COMM_USERDEF
+        if load_list:
+            collective_operations = load_list[process_count]
+            assert not collective_operations
+            # not implemented yet
 
     def serialize_to_list(self):
         lst = [state.serialize_to_list() for state in self.states]
@@ -50,7 +57,7 @@ class GlobalState(EqMixin):
             for op in self.collective_operations:
                 op.serialize_to_list(lst)
         else:
-            lst.append(None)
+            lst.append(0)
         return lst
 
     def copy(self):
