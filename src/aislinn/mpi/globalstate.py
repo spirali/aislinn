@@ -40,18 +40,21 @@ class GlobalState(EqMixin):
         self.collective_operations = None
         self.comm_id_counter = consts.MPI_COMM_USERDEF
 
-        # load_list = [ [serialized s1] ... [serialized sN] cc-ops-count ...
+        # load_list = [ [serialized s1] ... [serialized sN]
+        #               comm_id_counter cc-ops-count ... ]
 
         self.states = [State(self, i, None,
                              Loader(load_list[i], objects) if load_list else None)
                        for i in xrange(process_count)]
         if load_list:
-            collective_operations = load_list[process_count]
+            self.comm_id_counter = load_list[process_count]
+            collective_operations = load_list[process_count + 1]
             assert not collective_operations
             # not implemented yet
 
     def serialize_to_list(self):
         lst = [state.serialize_to_list() for state in self.states]
+        lst.append(self.comm_id_counter)
         if self.collective_operations:
             lst.append(len(self.collective_operations))
             for op in self.collective_operations:

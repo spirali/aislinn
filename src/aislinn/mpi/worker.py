@@ -234,7 +234,7 @@ class Worker:
                 for b in bs:
                     controllers.update(b.controllers)
             controller_ids = [c.name - first_id for c in controllers]
-            buffer_data.append((hash, b.size, controller_ids))
+            buffer_data.append((hash, bs[0].size, controller_ids))
 
         gstate_data = gstate.serialize_to_list()
         data = msgpack.dumps((buffer_data, gstate_data))
@@ -287,6 +287,7 @@ class Worker:
         gstate = GlobalState(self.process_count, gstate_data, objects)
         for b in buffers:
             b.dec_ref()
+        print "PULL ", gstate.compute_hash()
         return gstate
 
     def dispose_current(self):
@@ -322,7 +323,8 @@ class Worker:
             elif name == "PULL":
                 self.dispose_current()
                 self.cleanup()
-                gstate = self.pull_gstate(int(command[1]))
+                worker_id = int(command[1])
+                gstate = self.pull_gstate(worker_id)
                 self.gstates[command[2]] = (gstate, gstate.get_actions(self))
             elif name == "LISTEN":
                 worker_id = int(command[1])

@@ -47,8 +47,10 @@ class BuildinType(Datatype):
         self.size = size
         self.commited = True
 
+    """
     def serialize_to_list(self, lst):
         lst.append(self.type_id)
+    """
 
     def is_buildin(self):
         return True
@@ -94,6 +96,7 @@ class ContiguousType(Datatype):
     def deserialize_from_list(cls, loader, state):
         self = ContiguousType.__new__(ContiguousType)
         self.type_id = loader.get()
+        self.commited = loader.get()
         self.datatype = state.get_datatype(loader.get())
         self.count = loader.get()
         self.size = self.datatype.size * self.count
@@ -102,7 +105,8 @@ class ContiguousType(Datatype):
     def serialize_to_list(self, lst):
         lst.append("contiguous")
         lst.append(self.type_id)
-        self.datatype.serialize_to_list(lst)
+        lst.append(self.commited)
+        lst.append(self.datatype.type_id)
         lst.append(self.count)
 
     def pack(self, controller, pointer, vg_buffer, count, index=0):
@@ -145,6 +149,7 @@ class VectorType(Datatype):
     def deserialize_from_list(cls, loader, state):
         self = VectorType.__new__(VectorType)
         self.type_id = loader.get()
+        self.commited = loader.get()
         self.datatype = state.get_datatype(loader.get())
         self.count = loader.get()
         self.blocksize = loader.get()
@@ -155,7 +160,8 @@ class VectorType(Datatype):
     def serialize_to_list(self, lst):
         lst.append("vector")
         lst.append(self.type_id)
-        self.datatype.serialize_to_list(lst)
+        lst.append(self.commited)
+        lst.append(self.datatype.type_id)
         lst.append(self.count)
         lst.append(self.blocksize)
         lst.append(self.stride)
@@ -231,7 +237,8 @@ class IndexedType(Datatype):
     def serialize_to_list(self, lst):
         lst.append("indexed")
         lst.append(self.type_id)
-        self.datatype.serialize_to_list(lst)
+        lst.append(self.commited)
+        lst.append(self.datatype.type_id)
         lst.append(self.count)
         lst.append(self.sizes)
         lst.append(self.displs)
@@ -311,7 +318,8 @@ class StructType(Datatype):
     def serialize_to_list(self, lst):
         lst.append("struct")
         lst.append(self.type_id)
-        lst.append([d.serialize_to_list(lst) for d in self.datatypes])
+        lst.append(self.commited)
+        lst.append([d.type_id for d in self.datatypes])
         lst.append(self.counts)
         lst.append(self.displs)
 

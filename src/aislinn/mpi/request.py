@@ -66,6 +66,9 @@ class Request(EqMixin):
     def is_send_recv_not_proc_null(self):
         return False
 
+    def collect_buffers(self, lst):
+        pass
+
 
 class SendRequest(Request):
 
