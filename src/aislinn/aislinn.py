@@ -30,7 +30,7 @@ import sys
 import logging
 import platform
 
-VERSION_STRING = "0.4.0"
+VERSION_STRING = "0.5.0"
 
 
 def parse_threshold(value):
