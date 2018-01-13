@@ -40,7 +40,7 @@ class SocketWrapper:
             if not new:
                 raise Exception("Connection closed")
             b += new
-            if len(b) > 40960:
+            if len(b) > 409600:
                 raise Exception("Line too long")
 
     def read_data(self, size):
