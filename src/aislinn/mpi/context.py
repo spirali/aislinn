@@ -123,7 +123,7 @@ class Context:
             return call.run(self, args)
         else:
             raise Exception(
-                "Unkown function call: {0} {1}".format(name, repr(args)))
+                "Unknown function call: {0} {1}".format(name, repr(args)))
 
     def restore_state(self):
         # Restore the state and forget about the restored state
